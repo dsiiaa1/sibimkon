@@ -1,0 +1,343 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
+import { getProjects, getCompanies, createProject } from '@/lib/db'
+import { Project, Company } from '@/lib/mockData'
+import { 
+  Plus, 
+  Folder, 
+  TrendingUp, 
+  Activity, 
+  Users, 
+  ArrowRight,
+  ArrowUpRight,
+  Sparkles,
+  Search
+} from 'lucide-react'
+import { PROJECT_STATUS_LABELS } from '@/lib/utils'
+
+export default function DashboardPage() {
+  const [projects, setProjects] = useState<Project[]>([])
+  const [companies, setCompanies] = useState<Company[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false)
+  
+  // New Project Form
+  const [newTitle, setNewTitle] = useState('')
+  const [newDesc, setNewDesc] = useState('')
+  const [newCompanyId, setNewCompanyId] = useState('')
+  const [newStartDate, setNewStartDate] = useState('2026-06-15')
+  const [newEndDate, setNewEndDate] = useState('2026-09-15')
+
+  useEffect(() => {
+    async function loadData() {
+      const projs = await getProjects()
+      const comps = await getCompanies()
+      setProjects(projs)
+      setCompanies(comps)
+    }
+    loadData()
+  }, [])
+
+  const handleCreateProject = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newTitle || !newCompanyId) return
+
+    const selectedCompany = companies.find(c => c.id === newCompanyId)
+    const newProj = await createProject({
+      title: newTitle,
+      description: newDesc,
+      company_id: newCompanyId,
+      company_name: selectedCompany ? selectedCompany.name : 'Unknown',
+      consultant_id: 'user-1',
+      status: 'define',
+      start_date: newStartDate,
+      target_end_date: newEndDate,
+    })
+
+    setProjects([...projects, newProj])
+    
+    // Close modal & reset fields
+    setShowNewProjectModal(false)
+    setNewTitle('')
+    setNewDesc('')
+    setNewCompanyId('')
+  }
+
+  const filteredProjects = projects.filter(p => 
+    p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.company_name.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  const activeProjectsCount = projects.filter(p => p.status !== 'completed').length
+  const avgImprovement = projects.reduce((acc, p) => acc + ((p.current_score || 0) - (p.baseline_score || 0)), 0) / (projects.length || 1)
+
+  return (
+    <div className="space-y-8 max-w-7xl mx-auto animate-fade-in">
+      {/* Welcome Hero Banner */}
+      <div className="rounded-3xl bg-gradient-to-r from-indigo-900 via-indigo-950 to-slate-900 border border-slate-800 p-6 md:p-8 relative overflow-hidden shadow-xl shadow-indigo-950/20">
+        <div className="absolute right-0 top-0 translate-x-[20%] translate-y-[-20%] w-[350px] h-[350px] rounded-full bg-indigo-500/10 blur-[100px]" />
+        <div className="relative z-10 max-w-xl space-y-4">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 border border-indigo-500/20 text-indigo-300">
+            <Sparkles className="h-3.5 w-3.5" />
+            AI-Powered DMAIC Consultation Platform
+          </div>
+          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white leading-tight">
+            Selamat Datang di SIBIMKON
+          </h1>
+          <p className="text-slate-400 text-sm md:text-base leading-relaxed">
+            Platform terpadu peningkatan produktivitas nasional. Digitalisasi pencatatan masalah, analisis akar penyebab, hingga pemantauan dampak ekonomi secara real-time.
+          </p>
+          <div className="pt-2">
+            <button 
+              onClick={() => setShowNewProjectModal(true)}
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-md hover:bg-indigo-500 hover:shadow-lg transition-all cursor-pointer"
+            >
+              <Plus className="h-4 w-4" />
+              Mulai Proyek Baru
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* KPI Cards Grid */}
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        {/* KPI 1 */}
+        <div className="glass-card rounded-2xl p-6 flex items-center justify-between border border-slate-800 bg-slate-950/40">
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Proyek Aktif</p>
+            <h3 className="text-2xl font-bold text-slate-100">{activeProjectsCount} Proyek</h3>
+            <p className="text-xs text-indigo-400">Dalam pendampingan</p>
+          </div>
+          <div className="h-12 w-12 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+            <Folder className="h-6 w-6" />
+          </div>
+        </div>
+
+        {/* KPI 2 */}
+        <div className="glass-card rounded-2xl p-6 flex items-center justify-between border border-slate-800 bg-slate-950/40">
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Perusahaan Klien</p>
+            <h3 className="text-2xl font-bold text-slate-100">{companies.length} Klien</h3>
+            <p className="text-xs text-cyan-400">Terdaftar di daerah</p>
+          </div>
+          <div className="h-12 w-12 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400">
+            <Users className="h-6 w-6" />
+          </div>
+        </div>
+
+        {/* KPI 3 */}
+        <div className="glass-card rounded-2xl p-6 flex items-center justify-between border border-slate-800 bg-slate-950/40">
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Rata-Rata Index</p>
+            <h3 className="text-2xl font-bold text-slate-100">66.5%</h3>
+            <p className="text-xs text-emerald-400">Productivity index</p>
+          </div>
+          <div className="h-12 w-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+            <Activity className="h-6 w-6" />
+          </div>
+        </div>
+
+        {/* KPI 4 */}
+        <div className="glass-card rounded-2xl p-6 flex items-center justify-between border border-slate-800 bg-slate-950/40">
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Rerata Improvement</p>
+            <h3 className="text-2xl font-bold text-slate-100">+{avgImprovement.toFixed(1)}%</h3>
+            <p className="text-xs text-amber-400">Peningkatan dari baseline</p>
+          </div>
+          <div className="h-12 w-12 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400">
+            <TrendingUp className="h-6 w-6" />
+          </div>
+        </div>
+      </div>
+
+      {/* Projects List Section */}
+      <div className="glass-card rounded-2xl border border-slate-800 bg-slate-950/40 overflow-hidden shadow-lg">
+        {/* Section Header with search */}
+        <div className="p-6 border-b border-slate-800/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-slate-200">Daftar Proyek Pendampingan</h2>
+            <p className="text-xs text-slate-500">Pilih proyek untuk memulai tahapan DMAIC</p>
+          </div>
+
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+            <input
+              type="text"
+              placeholder="Cari proyek atau klien..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 pl-10 pr-4 text-sm text-slate-350 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+            />
+          </div>
+        </div>
+
+        {/* Table list */}
+        <div className="overflow-x-auto">
+          {filteredProjects.length === 0 ? (
+            <div className="p-8 text-center text-slate-500">Tidak ada proyek ditemukan.</div>
+          ) : (
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-950/60 border-b border-slate-800 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  <th className="p-4">Kode / Judul</th>
+                  <th className="p-4">Perusahaan Klien</th>
+                  <th className="p-4">Fase DMAIC</th>
+                  <th className="p-4 text-center">Baseline vs Aktual</th>
+                  <th className="p-4">Target Selesai</th>
+                  <th className="p-4"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800 text-sm">
+                {filteredProjects.map((proj) => {
+                  const statusInfo = PROJECT_STATUS_LABELS[proj.status] || { label: proj.status, color: 'bg-slate-500' }
+                  return (
+                    <tr key={proj.id} className="hover:bg-slate-900/40 transition-colors">
+                      <td className="p-4 max-w-xs">
+                        <span className="text-xs font-mono text-indigo-400">{proj.project_code}</span>
+                        <h4 className="font-semibold text-slate-200 truncate mt-0.5">{proj.title}</h4>
+                      </td>
+                      <td className="p-4 font-medium text-slate-300">
+                        {proj.company_name}
+                      </td>
+                      <td className="p-4">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold text-white ${statusInfo.color}`}>
+                          {statusInfo.label}
+                        </span>
+                      </td>
+                      <td className="p-4 text-center">
+                        <div className="inline-flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1 font-semibold text-xs text-slate-300">
+                          <span>{proj.baseline_score || 0}%</span>
+                          <span className="text-slate-550">→</span>
+                          <span className="text-emerald-400">{proj.current_score || 0}%</span>
+                        </div>
+                      </td>
+                      <td className="p-4 text-slate-400 text-xs font-mono">
+                        {proj.target_end_date}
+                      </td>
+                      <td className="p-4 text-right">
+                        <Link
+                          href={`/projects/${proj.id}/define`}
+                          className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors"
+                        >
+                          Kelola DMAIC
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </Link>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {/* New Project Modal */}
+      {showNewProjectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="w-full max-w-lg bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-200">Mulai Proyek BIMKON Baru</h3>
+              <button 
+                onClick={() => setShowNewProjectModal(false)}
+                className="text-slate-500 hover:text-slate-300 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <form onSubmit={handleCreateProject} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Judul Proyek
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Misal: Reduksi Waste Bahan Baku Cutting Line"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Deskripsi Proyek
+                </label>
+                <textarea
+                  placeholder="Penjelasan singkat fokus improvement..."
+                  value={newDesc}
+                  onChange={(e) => setNewDesc(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm h-20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Pilih Perusahaan Klien
+                </label>
+                <select
+                  required
+                  value={newCompanyId}
+                  onChange={(e) => setNewCompanyId(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
+                >
+                  <option value="">-- Pilih Perusahaan --</option>
+                  {companies.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Tanggal Mulai
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={newStartDate}
+                    onChange={(e) => setNewStartDate(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Target Selesai
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={newEndDate}
+                    onChange={(e) => setNewEndDate(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 flex justify-end gap-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowNewProjectModal(false)}
+                  className="px-4 py-2.5 text-sm font-semibold text-slate-400 hover:text-slate-300 transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 text-sm font-semibold text-white hover:bg-indigo-500 transition-all cursor-pointer shadow-md hover:shadow-indigo-500/10"
+                >
+                  Buat Proyek
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
