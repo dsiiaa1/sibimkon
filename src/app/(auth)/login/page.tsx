@@ -53,8 +53,14 @@ export default function LoginPage() {
       })
     )
     // Set cookie for Next.js middleware bypass
-    document.cookie = "sibimkon_demo_session=true; path=/; max-age=28800"
-    router.push('/dashboard')
+    // Use SameSite=Lax for cross-request compatibility on Vercel
+    const isSecure = window.location.protocol === 'https:'
+    const cookieStr = `sibimkon_demo_session=true; path=/; max-age=28800; SameSite=Lax${isSecure ? '; Secure' : ''}`
+    document.cookie = cookieStr
+    // Small delay to ensure cookie is written before navigation triggers middleware
+    setTimeout(() => {
+      window.location.href = '/dashboard'
+    }, 100)
   }
 
   return (
