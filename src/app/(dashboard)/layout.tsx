@@ -35,35 +35,83 @@ export default function DashboardLayout({
 
   // Auth checking and load mock data
   useEffect(() => {
-    const localUser = localStorage.getItem('sibimkon_user')
-    if (!localUser) {
-      router.push('/login')
-    } else {
-      const parsedUser = JSON.parse(localUser)
-      setUser(parsedUser)
-      
-      // Load initial notifications
-      const baseNotifications = [
-        {
-          id: '1',
-          title: 'Assessment Selesai',
-          message: 'PT Sinar Maju Tekstil telah melengkapi assessment Morale.',
-          time: '5m yang lalu',
-          unread: true,
-          type: 'info'
-        },
-        {
-          id: '2',
-          title: '⚠️ Target KPI Kurang',
-          message: 'KPI "Downtime bottleneck" berada di level warning.',
-          time: '1j yang lalu',
-          unread: true,
-          type: 'warning'
+    async function checkAuth() {
+      const localUser = localStorage.getItem('sibimkon_user')
+      let currentUser = null
+
+      if (localUser) {
+        currentUser = JSON.parse(localUser)
+      } else {
+        // Fallback: Check if there's an active Supabase session
+        try {
+          const { createClient } = await import('@/lib/supabase/client')
+          const supabase = createClient()
+          const { data: { user: sbUser } } = await supabase.auth.getUser()
+
+          if (sbUser) {
+            let fullName = sbUser.user_metadata?.full_name || 'User SIBIMKON'
+            let userRole = sbUser.user_metadata?.role || 'konsultan'
+            let org = sbUser.user_metadata?.company_name || 'SIBIMKON'
+
+            try {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', sbUser.id)
+                .single()
+              if (profile) {
+                fullName = profile.full_name || fullName
+                userRole = profile.role || userRole
+                org = profile.organization || org
+              }
+            } catch (err) {
+              console.warn('Could not fetch profiles table, using user metadata:', err)
+            }
+
+            currentUser = {
+              id: sbUser.id,
+              email: sbUser.email,
+              full_name: fullName,
+              role: userRole,
+              organization: org,
+            }
+            localStorage.setItem('sibimkon_user', JSON.stringify(currentUser))
+          }
+        } catch (err) {
+          console.error('Error verifying Supabase session in layout:', err)
         }
-      ]
-      setNotifications(baseNotifications)
+      }
+
+      if (!currentUser) {
+        router.push('/login')
+      } else {
+        setUser(currentUser)
+        
+        // Load initial notifications
+        const baseNotifications = [
+          {
+            id: '1',
+            title: 'Assessment Selesai',
+            message: 'PT Sinar Maju Tekstil telah melengkapi assessment Morale.',
+            time: '5m yang lalu',
+            unread: true,
+            type: 'info'
+          },
+          {
+            id: '2',
+            title: '⚠️ Target KPI Kurang',
+            message: 'KPI "Downtime bottleneck" berada di level warning.',
+            time: '1j yang lalu',
+            unread: true,
+            type: 'warning'
+          }
+        ]
+        setNotifications(baseNotifications)
+      }
+      setLoading(false)
     }
-    setLoading(false)
+
+    checkAuth()
   }, [router])
 
   const handleLogout = () => {
@@ -131,12 +179,12 @@ export default function DashboardLayout({
         <div className="px-6 py-5 border-b border-slate-800/80 bg-slate-950/40">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-500 to-cyan-500 font-bold text-white shadow-md">
-              {user.full_name[0].toUpperCase()}
+              {(user.full_name?.[0] || '?').toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold truncate text-slate-200">{user.full_name}</p>
               <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                {user.role.replace('_', ' ')}
+                {(user.role || 'user').replace('_', ' ')}
               </span>
             </div>
           </div>

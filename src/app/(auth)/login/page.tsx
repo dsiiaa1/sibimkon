@@ -20,13 +20,45 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient()
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      const { data: { user }, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
       if (signInError) {
         throw signInError
+      }
+
+      if (user) {
+        let fullName = user.user_metadata?.full_name || 'User SIBIMKON'
+        let userRole = user.user_metadata?.role || 'konsultan'
+        let org = user.user_metadata?.company_name || 'SIBIMKON'
+
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single()
+          if (profile) {
+            fullName = profile.full_name || fullName
+            userRole = profile.role || userRole
+            org = profile.organization || org
+          }
+        } catch (err) {
+          console.warn('Could not fetch profiles table, using metadata:', err)
+        }
+
+        localStorage.setItem(
+          'sibimkon_user',
+          JSON.stringify({
+            id: user.id,
+            email: user.email,
+            full_name: fullName,
+            role: userRole,
+            organization: org,
+          })
+        )
       }
 
       router.push('/dashboard')

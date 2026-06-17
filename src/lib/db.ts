@@ -3,11 +3,14 @@
 import { createClient } from './supabase/client'
 import { getMockDB, updateMockDB, Project, Company, ProjectCharter, Assessment, FishboneNode, WhyNode, ActionPlan } from './mockData'
 
-const supabase = createClient()
+const supabase = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+  ? createClient()
+  : null as any
 
 // Helper to check if Supabase is connected and has the tables
 async function checkTableExists(tableName: string): Promise<boolean> {
   try {
+    if (!supabase) return false
     const { error } = await supabase.from(tableName).select('id').limit(1)
     if (error && (error.code === 'PGRST116' || error.message.includes('does not exist'))) {
       return false
