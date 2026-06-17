@@ -3,9 +3,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { getMockDB, updateMockDB, Project, ActionPlan } from '@/lib/mockData'
-import { LineChart, Plus, CheckCircle2, AlertTriangle, Calendar, User, DollarSign, ArrowUpRight, Check, Trash, Upload, FileText, X, Loader2 } from 'lucide-react'
+import { LineChart, Plus, CheckCircle2, AlertTriangle, Calendar, User, DollarSign, ArrowUpRight, Check, Trash, Upload, FileText, X, Loader2, ArrowRight } from 'lucide-react'
 import { ACTION_STATUS_LABELS } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import { updateProjectPhase } from '@/lib/db'
 
 export default function ImprovePage() {
   const router = useRouter()
@@ -264,13 +265,24 @@ export default function ImprovePage() {
           <h1 className="text-2xl font-bold text-slate-100 mt-1">{project.title}</h1>
           <p className="text-xs text-slate-500 mt-0.5">Fase IMPROVE: Eksekusi Action Plan, Upload Bukti, dan Monitoring Progress</p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="inline-flex items-center gap-2 px-5 py-3 bg-indigo-650 hover:bg-indigo-600 text-sm font-semibold rounded-xl text-white transition-colors cursor-pointer shadow-md"
-        >
-          <Plus className="h-4 w-4" />
-          Tambah Action Plan
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={async () => {
+              await updateProjectPhase(projectId, 'control')
+              router.push(`/projects/${projectId}/control`)
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl text-white cursor-pointer"
+            style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
+            Lanjut ke CONTROL <ArrowRight className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="inline-flex items-center gap-2 px-5 py-3 bg-indigo-650 hover:bg-indigo-600 text-sm font-semibold rounded-xl text-white transition-colors cursor-pointer shadow-md"
+          >
+            <Plus className="h-4 w-4" />
+            Tambah Action Plan
+          </button>
+        </div>
       </div>
 
       {/* Action Plans list */}
@@ -558,6 +570,11 @@ export default function ImprovePage() {
                     className="hidden"
                     onChange={(e) => {
                       const file = e.target.files?.[0] || null
+                      if (file && file.size > 50 * 1024 * 1024) {
+                        alert(`File "${file.name}" melebihi batas maksimal 50MB. Pilih file yang lebih kecil.`)
+                        e.target.value = ''
+                        return
+                      }
                       setSelectedFile(file)
                       if (file) setEvidenceName(file.name)
                     }}

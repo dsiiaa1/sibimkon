@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { getProjects, getCompanies } from '@/lib/db'
 import { getMockDB, updateMockDB, Project, Company } from '@/lib/mockData'
-import { Activity, Globe, MapPin, Award, ShieldAlert, ArrowUpRight, Search, Building, Plus } from 'lucide-react'
+import { Activity, Globe, MapPin, Award, Building, Plus } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, AreaChart, Area } from 'recharts'
 
 export default function AdminPanelPage() {
@@ -21,14 +22,15 @@ export default function AdminPanelPage() {
   const [newCompEmployees, setNewCompEmployees] = useState(50)
 
   useEffect(() => {
-    const db = getMockDB()
-    setProjects(db.projects)
-    setCompanies(db.companies)
+    async function loadData() {
+      const [projs, comps] = await Promise.all([getProjects(), getCompanies()])
+      setProjects(projs)
+      setCompanies(comps)
 
-    const localUser = localStorage.getItem('sibimkon_user')
-    if (localUser) {
-      setUser(JSON.parse(localUser))
+      const localUser = localStorage.getItem('sibimkon_user')
+      if (localUser) setUser(JSON.parse(localUser))
     }
+    loadData()
   }, [])
 
   const disnakerProvince = user?.organization?.replace(/Disnaker\s+/i, '') || 'Jawa Barat'
@@ -95,22 +97,55 @@ export default function AdminPanelPage() {
       }))
     : []
 
-  const regionalData = [
-    { name: 'Jawa Barat', Proyek: 12, Klien: 15 },
-    { name: 'Jawa Tengah', Proyek: 8, Klien: 10 },
-    { name: 'Jawa Timur', Proyek: 6, Klien: 8 },
-    { name: 'DKI Jakarta', Proyek: 15, Klien: 18 },
-    { name: 'Banten', Proyek: 5, Klien: 6 }
-  ]
+  // ── Regional data: hitung dari data real projects & companies ──
+  // Kelompokkan perusahaan per provinsi, hitung jumlah proyek per provinsi
+  const regionalData = (() => {
+    const provinceMap: Record<string, { Proyek: number; Klien: number }> = {}
+    companies.forEach((c) => {
+      const prov = c.province || 'Lainnya'
+      if (!provinceMap[prov]) provinceMap[prov] = { Proyek: 0, Klien: 0 }
+      provinceMap[prov].Klien += 1
+    })
+    projects.forEach((p) => {
+      const comp = companies.find((c) => c.id === p.company_id)
+      const prov = comp?.province || 'Lainnya'
+      if (!provinceMap[prov]) provinceMap[prov] = { Proyek: 0, Klien: 0 }
+      provinceMap[prov].Proyek += 1
+    })
+    return Object.entries(provinceMap)
+      .map(([name, val]) => ({ name, ...val }))
+      .sort((a, b) => b.Proyek - a.Proyek)
+      .slice(0, 8) // top 8 provinsi
+  })()
 
-  const growthData = [
-    { month: 'Jan', Proyek: 10 },
-    { month: 'Feb', Proyek: 14 },
-    { month: 'Mar', Proyek: 18 },
-    { month: 'Apr', Proyek: 25 },
-    { month: 'Mei', Proyek: 32 },
-    { month: 'Jun', Proyek: 45 }
-  ]
+  // ── Growth data: hitung kumulatif proyek per bulan dari start_date ──
+  const growthData = (() => {
+    const monthMap: Record<string, number> = {}
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
+    projects.forEach((p) => {
+      if (!p.start_date) return
+      try {
+        const d = new Date(p.start_date)
+        const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`
+        monthMap[key] = (monthMap[key] || 0) + 1
+      } catch { /* skip invalid dates */ }
+    })
+    if (Object.keys(monthMap).length === 0) {
+      // fallback: tampilkan 0 untuk 6 bulan terakhir
+      const now = new Date()
+      return Array.from({ length: 6 }, (_, i) => {
+        const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1)
+        return { month: monthNames[d.getMonth()], Proyek: 0 }
+      })
+    }
+    const sortedKeys = Object.keys(monthMap).sort()
+    let cumulative = 0
+    return sortedKeys.map((key) => {
+      const [, monthIdx] = key.split('-')
+      cumulative += monthMap[key]
+      return { month: monthNames[parseInt(monthIdx)], Proyek: cumulative }
+    })
+  })()
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">

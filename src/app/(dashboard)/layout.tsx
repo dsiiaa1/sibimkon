@@ -108,25 +108,8 @@ export default function DashboardLayout({
       } else {
         setUser(currentUser)
         
-        // Load initial notifications
-        const baseNotifications = [
-          {
-            id: '1',
-            title: 'Assessment Selesai',
-            message: 'PT Sinar Maju Tekstil telah melengkapi assessment Morale.',
-            time: '5m yang lalu',
-            unread: true,
-            type: 'info'
-          },
-          {
-            id: '2',
-            title: '⚠️ Target KPI Kurang',
-            message: 'KPI "Downtime bottleneck" berada di level warning.',
-            time: '1j yang lalu',
-            unread: true,
-            type: 'warning'
-          }
-        ]
+        // Base notifications — generic, tidak menyebut data perusahaan tertentu
+        const baseNotifications: any[] = []
 
         // Load local mock notifications
         const localMock = localStorage.getItem(`sibimkon_mock_notifications_${currentUser.id}`)
@@ -174,9 +157,15 @@ export default function DashboardLayout({
     checkAuth()
   }, [router])
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      const { createClient } = await import('@/lib/supabase/client')
+      const supabase = createClient()
+      await supabase.auth.signOut()
+    } catch (err) {
+      console.warn('Supabase signOut error (non-critical):', err)
+    }
     localStorage.removeItem('sibimkon_user')
-    document.cookie = "sibimkon_demo_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC"
     router.push('/login')
   }
 

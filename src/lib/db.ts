@@ -270,3 +270,25 @@ export async function getActionPlans(projectId: string): Promise<ActionPlan[]> {
     return getMockDB().actionPlans[projectId] || []
   }
 }
+
+// ── Advance DMAIC phase explicitly ──────────────────────────────────────────
+export type DmaicPhase = 'draft' | 'define' | 'measure' | 'analyze' | 'improve' | 'control' | 'completed'
+
+export async function updateProjectPhase(projectId: string, newPhase: DmaicPhase): Promise<void> {
+  try {
+    const hasTable = await checkTableExists('bimkon_projects')
+    if (!hasTable) throw new Error('Table does not exist')
+    const { error } = await supabase
+      .from('bimkon_projects')
+      .update({ status: newPhase, current_phase: newPhase })
+      .eq('id', projectId)
+    if (error) throw error
+  } catch {
+    // Fallback: update mockDB
+    const db = getMockDB()
+    const updated = db.projects.map((p: Project) =>
+      p.id === projectId ? { ...p, status: newPhase } : p
+    )
+    updateMockDB('projects', updated)
+  }
+}

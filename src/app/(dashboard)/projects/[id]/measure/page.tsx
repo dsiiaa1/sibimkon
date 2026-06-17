@@ -2,28 +2,29 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { getMockDB, updateMockDB, Project, Assessment } from '@/lib/mockData'
-import { 
-  TrendingUp, 
-  Save, 
+import { getProjects, getAssessments, saveAssessments, updateProjectPhase } from '@/lib/db'
+import { Project, Assessment } from '@/lib/mockData'
+import {
+  TrendingUp,
+  Save,
   HelpCircle,
-  FileCheck,
   MessageSquareQuote,
   Plus,
-  Trash2
+  Trash2,
+  ArrowRight,
 } from 'lucide-react'
-import { 
-  Radar, 
-  RadarChart, 
-  PolarGrid, 
-  PolarAngleAxis, 
-  PolarRadiusAxis, 
+import {
+  Radar,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
   ResponsiveContainer,
   BarChart,
   Bar,
   XAxis,
   YAxis,
-  Tooltip
+  Tooltip,
 } from 'recharts'
 import { PQCDSM_LABELS } from '@/lib/utils'
 
@@ -33,101 +34,163 @@ export default function MeasurePage() {
   const projectId = params.id as string
 
   const [project, setProject] = useState<Project | null>(null)
-  const [activeDimension, setActiveDimension] = useState<'productivity' | 'quality' | 'cost' | 'delivery' | 'safety' | 'morale'>('productivity')
+  const [activeDimension, setActiveDimension] = useState<
+    'productivity' | 'quality' | 'cost' | 'delivery' | 'safety' | 'morale'
+  >('productivity')
   const [assessments, setAssessments] = useState<Assessment[]>([])
-  const [isSaved, setIsSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState<string | null>(null)
 
-  // VOM State
+  // VOM state — TIDAK ada seed data demo
   const [vomList, setVomList] = useState<any[]>([])
   const [vomDimension, setVomDimension] = useState('productivity')
   const [vomProblem, setVomProblem] = useState('')
   const [vomImpact, setVomImpact] = useState('')
   const [showVomPanel, setShowVomPanel] = useState(false)
 
-  useEffect(() => {
-    const db = getMockDB()
-    const proj = db.projects.find((p: Project) => p.id === projectId)
-    if (!proj) {
-      router.push('/dashboard')
-      return
-    }
-    setProject(proj)
-
-    // Load or initialize assessments
-    const projectAssessments = db.assessments[projectId] || []
-    setAssessments(projectAssessments)
-
-    // Load VOM from localStorage
-    const storedVom = localStorage.getItem(`sibimkon_vom_${projectId}`)
-    if (storedVom) {
-      setVomList(JSON.parse(storedVom))
-    } else {
-      // Default seed data when no VOM captured yet
-      const defaultVom = [
-        { id: 'vom-1', dimension: 'productivity', problem: 'Bottleneck di stasiun sewing line 3', impact: 'OPH turun 15% dari target', priority: 1 },
-        { id: 'vom-2', dimension: 'quality', problem: 'Tingkat defect jahit kerut tinggi', impact: 'Biaya re-work mencapai Rp 25jt/bulan', priority: 2 }
-      ]
-      setVomList(defaultVom)
-      localStorage.setItem(`sibimkon_vom_${projectId}`, JSON.stringify(defaultVom))
-    }
-  }, [projectId, router])
-
-  const handleScoreChange = (dimension: string, questionId: string, value: number) => {
-    const updatedAssessments = assessments.map(assess => {
-      if (assess.dimension === dimension) {
-        const updatedResponses = assess.responses.map(resp => 
-          resp.id === questionId ? { ...resp, score: value } : resp
-        )
-        const total = updatedResponses.reduce((acc, r) => acc + r.score, 0)
-        const max = updatedResponses.reduce((acc, r) => acc + r.max_score, 0)
-        const pct = Math.round((total / max) * 100)
-        return {
-          ...assess,
-          responses: updatedResponses,
-          percentage_score: pct
-        }
-      }
-      return assess
-    })
-    setAssessments(updatedAssessments)
-    setIsSaved(false)
+  // Default assessment template (struktur pertanyaan saja, skor mulai dari 3)
+  const DEFAULT_QUESTIONS: Record<string, Array<{ id: string; question: string; max_score: number }>> = {
+    productivity: [
+      { id: 'P1', question: 'Kelancaran proses produksi', max_score: 5 },
+      { id: 'P2', question: 'Ketersediaan bahan baku', max_score: 5 },
+      { id: 'P3', question: 'Kondisi dan kerusakan mesin/peralatan', max_score: 5 },
+      { id: 'P4', question: 'Pencapaian target produksi', max_score: 5 },
+      { id: 'P5', question: 'Efisiensi penggunaan waktu produksi', max_score: 5 },
+    ],
+    quality: [
+      { id: 'Q1', question: 'Tingkat reject/cacat produk', max_score: 5 },
+      { id: 'Q2', question: 'Keluhan pelanggan/customer', max_score: 5 },
+      { id: 'Q3', question: 'Ketersediaan SOP mutu', max_score: 5 },
+      { id: 'Q4', question: 'Sistem Quality Control', max_score: 5 },
+      { id: 'Q5', question: 'Pencapaian KPI mutu', max_score: 5 },
+    ],
+    cost: [
+      { id: 'C1', question: 'Efisiensi penggunaan bahan/material', max_score: 5 },
+      { id: 'C2', question: 'Efisiensi penggunaan energi', max_score: 5 },
+      { id: 'C3', question: 'Kerugian akibat kerusakan mesin', max_score: 5 },
+      { id: 'C4', question: 'Tingkat overproduction/pemborosan', max_score: 5 },
+      { id: 'C5', question: 'Biaya maintenance dan perbaikan', max_score: 5 },
+    ],
+    delivery: [
+      { id: 'D1', question: 'Ketepatan waktu pengiriman', max_score: 5 },
+      { id: 'D2', question: 'Lead time produksi', max_score: 5 },
+      { id: 'D3', question: 'Keterlambatan penerimaan bahan', max_score: 5 },
+      { id: 'D4', question: 'Keterlambatan proses produksi', max_score: 5 },
+      { id: 'D5', question: 'Ketersediaan stok/inventory', max_score: 5 },
+    ],
+    safety: [
+      { id: 'S1', question: 'Tingkat kecelakaan kerja', max_score: 5 },
+      { id: 'S2', question: 'Ketersediaan dan penggunaan APD', max_score: 5 },
+      { id: 'S3', question: 'Keberadaan dan fungsi P2K3', max_score: 5 },
+      { id: 'S4', question: 'Implementasi SMK3', max_score: 5 },
+      { id: 'S5', question: 'Penilaian risiko K3 berkala', max_score: 5 },
+    ],
+    morale: [
+      { id: 'M1', question: 'Tingkat absensi karyawan', max_score: 5 },
+      { id: 'M2', question: 'Tingkat turnover karyawan', max_score: 5 },
+      { id: 'M3', question: 'Program pelatihan dan pengembangan', max_score: 5 },
+      { id: 'M4', question: 'Kompetensi dan sertifikasi pekerja', max_score: 5 },
+      { id: 'M5', question: 'Sistem reward dan penghargaan', max_score: 5 },
+    ],
   }
 
-  const handleSaveAssessments = () => {
-    const db = getMockDB()
-    db.assessments[projectId] = assessments
+  const buildBlankAssessments = (): Assessment[] =>
+    (Object.keys(DEFAULT_QUESTIONS) as Array<keyof typeof DEFAULT_QUESTIONS>).map((dim) => ({
+      project_id: projectId,
+      dimension: dim as Assessment['dimension'],
+      percentage_score: 60, // skor awal netral 60%
+      responses: DEFAULT_QUESTIONS[dim].map((q) => ({
+        id: q.id,
+        question: q.question,
+        score: 3,
+        max_score: q.max_score,
+        notes: '',
+      })),
+    }))
 
-    // Compute average productivity index
-    const totalPercentage = assessments.reduce((acc, a) => acc + a.percentage_score, 0)
-    const avgIndex = Math.round(totalPercentage / assessments.length)
+  useEffect(() => {
+    async function loadData() {
+      const projects = await getProjects()
+      const proj = projects.find((p: Project) => p.id === projectId)
+      if (!proj) { router.push('/dashboard'); return }
+      setProject(proj)
 
-    // Update project index
-    const updatedProjects = db.projects.map((p: Project) =>
-      p.id === projectId 
-        ? { 
-            ...p, 
-            baseline_score: p.baseline_score || avgIndex, 
-            current_score: avgIndex,
-            status: p.status === 'measure' ? 'analyze' : p.status
-          } 
-        : p
-    )
+      // Muat assessment dari db.ts (Supabase → fallback mockDB)
+      const existingAssessments = await getAssessments(projectId)
+      setAssessments(
+        existingAssessments.length > 0 ? existingAssessments : buildBlankAssessments()
+      )
 
-    updateMockDB('assessments', db.assessments)
-    updateMockDB('projects', updatedProjects)
-    setProject({ ...project!, current_score: avgIndex, status: project!.status === 'measure' ? 'analyze' : project!.status })
-    setIsSaved(true)
-    alert('Assessment PQCDSM berhasil disimpan! Fase proyek diperbarui ke ANALYZE.')
+      // Muat VOM dari localStorage — tidak ada seed demo
+      const storedVom = localStorage.getItem(`sibimkon_vom_${projectId}`)
+      setVomList(storedVom ? JSON.parse(storedVom) : [])
+    }
+    loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId])
+
+  const showSave = (msg: string) => {
+    setSaveMsg(msg)
+    setTimeout(() => setSaveMsg(null), 3000)
+  }
+
+  const handleScoreChange = (dimension: string, questionId: string, value: number) => {
+    const updated = assessments.map((assess) => {
+      if (assess.dimension !== dimension) return assess
+      const updatedResponses = assess.responses.map((resp) =>
+        resp.id === questionId ? { ...resp, score: value } : resp
+      )
+      const total = updatedResponses.reduce((acc, r) => acc + r.score, 0)
+      const max = updatedResponses.reduce((acc, r) => acc + r.max_score, 0)
+      return { ...assess, responses: updatedResponses, percentage_score: Math.round((total / max) * 100) }
+    })
+    setAssessments(updated)
+  }
+
+  const handleSaveAssessments = async () => {
+    setSaving(true)
+    try {
+      await saveAssessments(projectId, assessments)
+
+      const { getMockDB, updateMockDB } = await import('@/lib/mockData')
+      const db = getMockDB()
+      const avgIndex = Math.round(
+        assessments.reduce((acc, a) => acc + a.percentage_score, 0) / assessments.length
+      )
+      const updatedProjects = db.projects.map((p: Project) =>
+        p.id === projectId
+          ? { ...p, baseline_score: p.baseline_score || avgIndex, current_score: avgIndex }
+          : p
+      )
+      updateMockDB('projects', updatedProjects)
+      setProject((prev) => prev ? { ...prev, current_score: avgIndex } : prev)
+      showSave('Assessment PQCDSM berhasil disimpan!')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleAdvanceToAnalyze = async () => {
+    if (!project) return
+    setSaving(true)
+    try {
+      if (project.status === 'measure' || project.status === 'define') {
+        await updateProjectPhase(projectId, 'analyze')
+      }
+      router.push(`/projects/${projectId}/analyze`)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleAddVom = () => {
-    if (!vomProblem) return
+    if (!vomProblem.trim()) return
     const newItem = {
       id: 'vom-' + Math.random().toString(36).substr(2, 9),
       dimension: vomDimension,
       problem: vomProblem,
       impact: vomImpact,
-      priority: vomList.length + 1
+      priority: vomList.length + 1,
     }
     const updated = [...vomList, newItem]
     setVomList(updated)
@@ -145,37 +208,32 @@ export default function MeasurePage() {
   if (!project || assessments.length === 0) {
     return (
       <div className="flex h-64 items-center justify-center text-slate-400">
-        <div className="text-center">
-          <p>Mempersiapkan baseline assessment...</p>
-        </div>
+        <p>Mempersiapkan baseline assessment...</p>
       </div>
     )
   }
 
-  // Formatting data for Radar and Bar charts
-  const chartData = assessments.map(a => {
+  const chartData = assessments.map((a) => {
     const labelInfo = PQCDSM_LABELS[a.dimension] || { label: a.dimension }
-    return {
-      subject: labelInfo.label,
-      Score: a.percentage_score,
-      fullMark: 100
-    }
+    return { subject: labelInfo.label, Score: a.percentage_score, fullMark: 100 }
   })
 
-  const currentDimensionAssessment = assessments.find(a => a.dimension === activeDimension)
+  const currentDimensionAssessment = assessments.find((a) => a.dimension === activeDimension)
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Header bar */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-slate-950/40 p-6 rounded-3xl border border-slate-800/80">
         <div>
           <span className="text-xs font-mono text-indigo-400">{project.project_code}</span>
           <h1 className="text-2xl font-bold text-slate-100 mt-1">{project.title}</h1>
-          <p className="text-xs text-slate-500 mt-0.5">Fase MEASURE: Baseline Assessment PQCDSM &amp; Productivity Index</p>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Fase MEASURE: Baseline Assessment PQCDSM &amp; Productivity Index
+          </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <button
-            onClick={() => setShowVomPanel(v => !v)}
+            onClick={() => setShowVomPanel((v) => !v)}
             className={`inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-xl border transition-colors cursor-pointer ${
               showVomPanel
                 ? 'bg-amber-500/10 border-amber-500/40 text-amber-400'
@@ -184,6 +242,11 @@ export default function MeasurePage() {
           >
             <MessageSquareQuote className="h-4 w-4" />
             Voice of Management
+            {vomList.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/20 text-amber-400">
+                {vomList.length}
+              </span>
+            )}
           </button>
           <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-right">
             <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-bold">Productivity Index</span>
@@ -191,15 +254,36 @@ export default function MeasurePage() {
           </div>
           <button
             onClick={handleSaveAssessments}
-            className="inline-flex items-center gap-2 px-5 py-3 bg-indigo-650 hover:bg-indigo-600 text-sm font-semibold rounded-xl text-white transition-colors cursor-pointer shadow-md"
+            disabled={saving}
+            className="inline-flex items-center gap-2 px-5 py-3 bg-indigo-650 hover:bg-indigo-600 text-sm font-semibold rounded-xl text-white transition-colors cursor-pointer shadow-md disabled:opacity-50"
           >
             <Save className="h-4 w-4" />
-            Simpan Assessment
+            {saving ? 'Menyimpan...' : 'Simpan Assessment'}
           </button>
         </div>
       </div>
 
-      {/* VOM Collapsible Panel */}
+      {/* Save notification */}
+      {saveMsg && (
+        <div className="px-4 py-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-sm text-emerald-400 animate-fade-in">
+          ✅ {saveMsg}
+        </div>
+      )}
+
+      {/* Advance phase banner */}
+      <div className="flex items-center justify-between px-5 py-3.5 rounded-2xl bg-indigo-500/5 border border-indigo-500/15">
+        <div>
+          <p className="text-xs font-semibold text-indigo-300">Fase Saat Ini: <span className="uppercase font-black">MEASURE</span></p>
+          <p className="text-[10px] text-slate-500 mt-0.5">Simpan assessment terlebih dahulu, lalu lanjutkan ke tahap ANALYZE.</p>
+        </div>
+        <button onClick={handleAdvanceToAnalyze} disabled={saving}
+          className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl text-white cursor-pointer disabled:opacity-50"
+          style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
+          Lanjut ke ANALYZE <ArrowRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* VOM Panel */}
       {showVomPanel && (
         <div className="bg-amber-950/10 border border-amber-800/30 rounded-3xl p-6 space-y-5">
           <div className="flex items-center justify-between border-b border-amber-800/20 pb-3">
@@ -207,28 +291,31 @@ export default function MeasurePage() {
               <MessageSquareQuote className="h-5 w-5 text-amber-400" />
               <h2 className="font-bold text-amber-300 text-base">Voice of Management (VOM)</h2>
             </div>
-            <span className="text-[10px] text-amber-500 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded">Gunakan sebagai konteks penilaian kuesioner</span>
+            <span className="text-[10px] text-amber-500 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded">
+              Gunakan sebagai konteks penilaian kuesioner
+            </span>
           </div>
 
-          {/* VOM Input Form */}
+          {/* VOM Input */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-1">Dimensi PQCDSM</label>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-1">
+                Dimensi PQCDSM
+              </label>
               <select
                 value={vomDimension}
                 onChange={(e) => setVomDimension(e.target.value)}
                 className="w-full bg-slate-900 border border-amber-800/30 rounded-lg py-2 px-3 text-sm text-slate-300"
               >
-                <option value="productivity">Productivity</option>
-                <option value="quality">Quality</option>
-                <option value="cost">Cost</option>
-                <option value="delivery">Delivery</option>
-                <option value="safety">Safety</option>
-                <option value="morale">Morale</option>
+                {['productivity', 'quality', 'cost', 'delivery', 'safety', 'morale'].map((d) => (
+                  <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>
+                ))}
               </select>
             </div>
             <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-1">Keluhan / Prioritas Masalah</label>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-1">
+                Keluhan / Prioritas Masalah
+              </label>
               <input
                 type="text"
                 value={vomProblem}
@@ -238,7 +325,9 @@ export default function MeasurePage() {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-1">Dampak (Impact)</label>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-1">
+                Dampak (Impact)
+              </label>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -258,10 +347,17 @@ export default function MeasurePage() {
           </div>
 
           {/* VOM List */}
-          {vomList.length > 0 ? (
+          {vomList.length === 0 ? (
+            <div className="text-center py-6 text-sm text-amber-700 border border-dashed border-amber-800/30 rounded-2xl">
+              Belum ada catatan Voice of Management. Tambahkan masalah prioritas dari perspektif manajemen di atas.
+            </div>
+          ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {vomList.map((item: any, idx: number) => (
-                <div key={item.id} className="flex items-start justify-between bg-amber-950/20 border border-amber-800/30 rounded-2xl p-4 gap-3">
+                <div
+                  key={item.id}
+                  className="flex items-start justify-between bg-amber-950/20 border border-amber-800/30 rounded-2xl p-4 gap-3"
+                >
                   <div className="space-y-1 flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-[9px] font-bold uppercase tracking-wider bg-amber-900/30 border border-amber-700/30 px-2 py-0.5 rounded text-amber-400">
@@ -270,7 +366,9 @@ export default function MeasurePage() {
                       <span className="text-[10px] text-amber-600 font-mono">#{idx + 1}</span>
                     </div>
                     <p className="text-sm font-semibold text-slate-200 leading-snug">{item.problem}</p>
-                    {item.impact && <p className="text-xs text-slate-400">Dampak: {item.impact}</p>}
+                    {item.impact && (
+                      <p className="text-xs text-slate-400">Dampak: {item.impact}</p>
+                    )}
                   </div>
                   <button
                     onClick={() => handleDeleteVom(item.id)}
@@ -281,22 +379,20 @@ export default function MeasurePage() {
                 </div>
               ))}
             </div>
-          ) : (
-            <p className="text-center py-4 text-sm text-amber-700">Belum ada catatan Voice of Management. Tambahkan di atas.</p>
           )}
         </div>
       )}
 
-      {/* Main Grid: Forms and Chart Side-by-side */}
+      {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Col: Questionnaire (8 cols) */}
+        {/* Left: Questionnaire */}
         <div className="lg:col-span-7 space-y-6">
-          {/* Dimension Selector Tabs */}
+          {/* Dimension Tabs */}
           <div className="flex flex-wrap gap-1.5 p-1 bg-slate-950/60 rounded-xl border border-slate-850">
-            {(['productivity', 'quality', 'cost', 'delivery', 'safety', 'morale'] as const).map(dim => {
-              const labelInfo = PQCDSM_LABELS[dim] || { label: dim, color: '#fff', icon: '📝' }
+            {(['productivity', 'quality', 'cost', 'delivery', 'safety', 'morale'] as const).map((dim) => {
+              const labelInfo = PQCDSM_LABELS[dim] || { label: dim, icon: '📝' }
               const active = activeDimension === dim
-              const score = assessments.find(a => a.dimension === dim)?.percentage_score || 0
+              const score = assessments.find((a) => a.dimension === dim)?.percentage_score || 0
               return (
                 <button
                   key={dim}
@@ -311,13 +407,15 @@ export default function MeasurePage() {
                     <span>{labelInfo.icon}</span>
                     <span>{labelInfo.label}</span>
                   </span>
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-indigo-300">{score}%</span>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-indigo-300">
+                    {score}%
+                  </span>
                 </button>
               )
             })}
           </div>
 
-          {/* Questionnaire list */}
+          {/* Questions */}
           <div className="glass-card rounded-3xl border border-slate-800 bg-slate-950/20 p-6 space-y-6">
             <div className="flex items-center justify-between border-b border-slate-850 pb-3">
               <h3 className="font-bold text-slate-200 capitalize">
@@ -327,19 +425,16 @@ export default function MeasurePage() {
                 Bobot: 1.0 (Standard)
               </span>
             </div>
-
             <div className="space-y-6">
-              {currentDimensionAssessment?.responses.map((q, idx) => (
+              {currentDimensionAssessment?.responses.map((q) => (
                 <div key={q.id} className="space-y-3 p-4 rounded-2xl bg-slate-950/30 border border-slate-850">
                   <div className="flex justify-between items-start gap-4">
                     <span className="text-xs font-mono font-bold text-indigo-400">{q.id}</span>
                     <p className="text-sm font-semibold text-slate-200 flex-1 leading-normal">{q.question}</p>
                     <span className="text-xs font-bold text-indigo-300 bg-slate-900 border border-slate-850 px-2 py-0.5 rounded">
-                      Skor: {q.score} / {q.max_score}
+                      {q.score} / {q.max_score}
                     </span>
                   </div>
-
-                  {/* Rating Selector */}
                   <div className="flex items-center gap-2 pt-2">
                     {[1, 2, 3, 4, 5].map((val) => (
                       <button
@@ -355,7 +450,6 @@ export default function MeasurePage() {
                       </button>
                     ))}
                   </div>
-
                   <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
                     <HelpCircle className="h-3 w-3" />
                     <span>1 = Sangat Buruk · 5 = Sangat Baik</span>
@@ -366,15 +460,13 @@ export default function MeasurePage() {
           </div>
         </div>
 
-        {/* Right Col: Charts and Scorecard (5 cols) */}
+        {/* Right: Charts */}
         <div className="lg:col-span-5 space-y-6">
-          {/* Radar Chart */}
           <div className="glass-card rounded-3xl border border-slate-800 bg-slate-950/20 p-6">
             <h3 className="font-bold text-slate-200 mb-4 flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-indigo-400" />
               Radar Chart Produktivitas
             </h3>
-
             <div className="h-64 flex justify-center">
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart cx="50%" cy="50%" outerRadius="80%" data={chartData}>
@@ -387,7 +479,6 @@ export default function MeasurePage() {
             </div>
           </div>
 
-          {/* Bar Chart Summary */}
           <div className="glass-card rounded-3xl border border-slate-800 bg-slate-950/20 p-6">
             <h3 className="font-bold text-slate-200 mb-4">Grafik Batang Skor</h3>
             <div className="h-44">
@@ -395,7 +486,14 @@ export default function MeasurePage() {
                 <BarChart data={chartData}>
                   <XAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 9 }} />
                   <YAxis domain={[0, 100]} tick={{ fill: '#64748b', fontSize: 9 }} />
-                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 8, color: '#fff' }} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#0f172a',
+                      borderColor: '#334155',
+                      borderRadius: 8,
+                      color: '#fff',
+                    }}
+                  />
                   <Bar dataKey="Score" fill="#6366f1" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>

@@ -13,16 +13,25 @@ export default function ProjectsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [showNewProjectModal, setShowNewProjectModal] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string>('unknown')
   
   // New Project Form
   const [newTitle, setNewTitle] = useState('')
   const [newDesc, setNewDesc] = useState('')
   const [newCompanyId, setNewCompanyId] = useState('')
-  const [newStartDate, setNewStartDate] = useState('2026-06-15')
-  const [newEndDate, setNewEndDate] = useState('2026-09-15')
+  const [newStartDate, setNewStartDate] = useState(new Date().toISOString().split('T')[0])
+  const [newEndDate, setNewEndDate] = useState(() => {
+    const d = new Date(); d.setMonth(d.getMonth() + 3); return d.toISOString().split('T')[0]
+  })
 
   useEffect(() => {
     async function loadData() {
+      // Baca user dari session
+      const localUser = localStorage.getItem('sibimkon_user')
+      if (localUser) {
+        const u = JSON.parse(localUser)
+        setCurrentUserId(u.id || 'unknown')
+      }
       const projs = await getProjects()
       const comps = await getCompanies()
       setProjects(projs)
@@ -41,7 +50,7 @@ export default function ProjectsPage() {
       description: newDesc,
       company_id: newCompanyId,
       company_name: selectedCompany ? selectedCompany.name : 'Unknown',
-      consultant_id: 'user-1',
+      consultant_id: currentUserId,
       status: 'define',
       start_date: newStartDate,
       target_end_date: newEndDate,

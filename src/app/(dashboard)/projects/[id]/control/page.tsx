@@ -3,16 +3,20 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { getMockDB, updateMockDB, Project, ActionPlan } from '@/lib/mockData'
-import { 
-  TrendingUp, 
-  AlertTriangle, 
-  CheckCircle2, 
-  ShieldAlert, 
+import {
+  TrendingUp,
+  AlertTriangle,
+  CheckCircle2,
+  ShieldAlert,
   HelpCircle,
   FileCheck,
   Save,
-  Check
+  Check,
+  ArrowRight,
+  Plus,
+  Trash2,
 } from 'lucide-react'
+import { updateProjectPhase } from '@/lib/db'
 import { 
   ResponsiveContainer,
   ComposedChart,
@@ -33,10 +37,13 @@ export default function ControlPage() {
   const [project, setProject] = useState<Project | null>(null)
   const [actionPlans, setActionPlans] = useState<ActionPlan[]>([])
   const [activeTab, setActiveTab] = useState<'kpi' | 'audit' | 'sustainability'>('kpi')
+  const [saveMsg, setSaveMsg] = useState<string | null>(null)
 
   // Audit Checklist state
   const [auditItems, setAuditItems] = useState<any[]>([])
-  
+  const [newAuditTask, setNewAuditTask] = useState('')
+  const [newAuditCategory, setNewAuditCategory] = useState('Production')
+
   // Sustainability Index (PSI) state
   const [peopleScore, setPeopleScore] = useState(70)
   const [processScore, setProcessScore] = useState(65)
@@ -58,12 +65,12 @@ export default function ControlPage() {
     if (savedAudit) {
       setAuditItems(JSON.parse(savedAudit))
     } else {
+      // Template default generik — tidak terikat ke perusahaan tertentu
       const defaultAudit = [
-        { id: 'aud-1', category: 'Production', task: 'SOP Lini Jahit dipasang di setiap mesin', completed: true },
-        { id: 'aud-2', category: 'Production', task: 'Layout penyeimbangan stasiun sewing dipatuhi', completed: false },
-        { id: 'aud-3', category: 'Quality', task: 'QC inline melakukan inspeksi hourly', completed: true },
-        { id: 'aud-4', category: 'Safety', task: 'Operator memakai masker jahit jernih', completed: true },
-        { id: 'aud-5', category: 'Morale', task: 'Sistem reward produktivitas dijalankan bulanan', completed: false }
+        { id: 'aud-1', category: 'Production', task: 'SOP proses produksi dipasang dan dipatuhi di lapangan', completed: false },
+        { id: 'aud-2', category: 'Quality', task: 'Sistem inspeksi mutu (inline/final) berjalan rutin', completed: false },
+        { id: 'aud-3', category: 'Safety', task: 'APD tersedia dan digunakan seluruh operator', completed: false },
+        { id: 'aud-4', category: 'Morale', task: 'Program pelatihan dan reward karyawan berjalan', completed: false },
       ]
       setAuditItems(defaultAudit)
       localStorage.setItem(`sibimkon_audit_${projectId}`, JSON.stringify(defaultAudit))
@@ -88,24 +95,36 @@ export default function ControlPage() {
     localStorage.setItem(`sibimkon_audit_${projectId}`, JSON.stringify(updated))
   }
 
-  const handleSavePSI = () => {
-    const psiObj = {
-      people: peopleScore,
-      process: processScore,
-      system: systemScore,
-      result: resultScore
+  const handleAddAudit = () => {
+    if (!newAuditTask.trim()) return
+    const newItem = {
+      id: 'aud-' + Math.random().toString(36).substr(2, 9),
+      category: newAuditCategory,
+      task: newAuditTask.trim(),
+      completed: false,
     }
+    const updated = [...auditItems, newItem]
+    setAuditItems(updated)
+    localStorage.setItem(`sibimkon_audit_${projectId}`, JSON.stringify(updated))
+    setNewAuditTask('')
+  }
+
+  const handleDeleteAudit = (auditId: string) => {
+    const updated = auditItems.filter(item => item.id !== auditId)
+    setAuditItems(updated)
+    localStorage.setItem(`sibimkon_audit_${projectId}`, JSON.stringify(updated))
+  }
+
+  const handleSavePSI = async () => {
+    const psiObj = { people: peopleScore, process: processScore, system: systemScore, result: resultScore }
     localStorage.setItem(`sibimkon_psi_${projectId}`, JSON.stringify(psiObj))
+    setSaveMsg('Productivity Sustainability Index (PSI) berhasil direkam!')
+    setTimeout(() => setSaveMsg(null), 3000)
+  }
 
-    // Update project state status to completed
-    const db = getMockDB()
-    const updatedProjects = db.projects.map((p: Project) =>
-      p.id === projectId && p.status === 'control' ? { ...p, status: 'completed' } : p
-    )
-    updateMockDB('projects', updatedProjects)
-    setProject({ ...project!, status: project!.status === 'control' ? 'completed' : project!.status })
-
-    alert('Productivity Sustainability Index (PSI) berhasil direkam! Proyek sekarang ditandai sebagai SELESAI.')
+  const handleCompleteProject = async () => {
+    await updateProjectPhase(projectId, 'completed')
+    router.push(`/projects/${projectId}/reports`)
   }
 
   if (!project) return null
@@ -143,13 +162,33 @@ export default function ControlPage() {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
-      {/* Header bar */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-slate-950/40 p-6 rounded-3xl border border-slate-800/80">
         <div>
           <span className="text-xs font-mono text-indigo-400">{project.project_code}</span>
           <h1 className="text-2xl font-bold text-slate-100 mt-1">{project.title}</h1>
           <p className="text-xs text-slate-500 mt-0.5">Fase CONTROL: KPI Dashboard, Audit Kepatuhan, dan Sustainability Index</p>
         </div>
+      </div>
+
+      {/* Save notification */}
+      {saveMsg && (
+        <div className="px-4 py-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-sm text-emerald-400 animate-fade-in">
+          ✅ {saveMsg}
+        </div>
+      )}
+
+      {/* Advance phase banner */}
+      <div className="flex items-center justify-between px-5 py-3.5 rounded-2xl bg-indigo-500/5 border border-indigo-500/15">
+        <div>
+          <p className="text-xs font-semibold text-indigo-300">Fase Saat Ini: <span className="uppercase font-black">CONTROL</span></p>
+          <p className="text-[10px] text-slate-500 mt-0.5">Simpan PSI, lalu selesaikan proyek dan cetak laporan akhir.</p>
+        </div>
+        <button onClick={handleCompleteProject}
+          className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl text-white cursor-pointer"
+          style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}>
+          Selesaikan &amp; Buka Laporan <ArrowRight className="h-3.5 w-3.5" />
+        </button>
       </div>
 
       {/* Tabs */}
@@ -230,6 +269,36 @@ export default function ControlPage() {
               <p className="text-xs text-slate-500">Periksa kepatuhan standardisasi di lapangan pasca perbaikan</p>
             </div>
 
+            {/* ── Form tambah item checklist custom ── */}
+            <div className="bg-slate-950/40 border border-slate-850 rounded-2xl p-4 space-y-3">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tambah Item Checklist</p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <select
+                  value={newAuditCategory}
+                  onChange={(e) => setNewAuditCategory(e.target.value)}
+                  className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500 w-full sm:w-40 shrink-0"
+                >
+                  {['Production', 'Quality', 'Cost', 'Safety', 'Morale', 'Delivery', 'Lainnya'].map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={newAuditTask}
+                  onChange={(e) => setNewAuditTask(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddAudit()}
+                  placeholder="Deskripsi item audit... (Enter untuk simpan)"
+                  className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-xs text-slate-250 focus:outline-none focus:border-indigo-500"
+                />
+                <button
+                  onClick={handleAddAudit}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-bold rounded-xl text-white cursor-pointer shrink-0"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Tambah
+                </button>
+              </div>
+            </div>
+
             {/* Compliance Statistics Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               <div className="p-4 bg-indigo-950/30 border border-indigo-500/20 rounded-2xl flex flex-col justify-between">
@@ -240,7 +309,7 @@ export default function ControlPage() {
                   </span>
                 </div>
                 <div className="w-full bg-slate-900 h-1.5 rounded-full mt-3 overflow-hidden">
-                  <div 
+                  <div
                     className="bg-indigo-500 h-full transition-all duration-300"
                     style={{ width: `${(auditItems.filter(i => i.completed).length / (auditItems.length || 1)) * 100}%` }}
                   />
@@ -256,7 +325,7 @@ export default function ControlPage() {
                   <div className="flex items-center justify-between text-[10px] text-slate-500 mt-2">
                     <span>{catInfo.completed}/{catInfo.total} Selesai</span>
                     <div className="w-16 bg-slate-900 h-1 rounded-full overflow-hidden ml-2">
-                      <div 
+                      <div
                         className="bg-emerald-500 h-full transition-all duration-300"
                         style={{ width: `${catInfo.percentage}%` }}
                       />
@@ -266,31 +335,49 @@ export default function ControlPage() {
               ))}
             </div>
 
-            <div className="space-y-3">
-              {auditItems.map(item => (
-                <div 
-                  key={item.id}
-                  onClick={() => handleToggleAudit(item.id)}
-                  className="flex items-center justify-between p-4 bg-slate-950/40 border border-slate-850 rounded-2xl hover:bg-slate-900/40 transition-colors cursor-pointer"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`h-5 w-5 rounded border flex items-center justify-center transition-all ${
-                      item.completed 
-                        ? 'bg-indigo-600 border-indigo-500 text-white' 
-                        : 'border-slate-800'
-                    }`}>
-                      {item.completed && <Check className="h-3 w-3" />}
+            {/* Checklist items */}
+            {auditItems.length === 0 ? (
+              <div className="text-center py-8 border border-dashed border-slate-800 rounded-2xl text-slate-500 text-sm">
+                Belum ada item checklist. Tambahkan di atas.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {auditItems.map(item => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between p-4 bg-slate-950/40 border border-slate-850 rounded-2xl hover:bg-slate-900/40 transition-colors group"
+                  >
+                    <div
+                      className="flex items-center gap-3 flex-1 cursor-pointer"
+                      onClick={() => handleToggleAudit(item.id)}
+                    >
+                      <div className={`h-5 w-5 rounded border flex items-center justify-center transition-all shrink-0 ${
+                        item.completed
+                          ? 'bg-indigo-600 border-indigo-500 text-white'
+                          : 'border-slate-700'
+                      }`}>
+                        {item.completed && <Check className="h-3 w-3" />}
+                      </div>
+                      <div>
+                        <span className="text-[9px] font-bold uppercase tracking-wider bg-slate-900 border border-slate-850 px-2 py-0.5 rounded text-slate-400">
+                          {item.category}
+                        </span>
+                        <p className={`text-sm font-semibold mt-1 transition-colors ${item.completed ? 'text-slate-500 line-through' : 'text-slate-200'}`}>
+                          {item.task}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-[9px] font-bold uppercase tracking-wider bg-slate-900 border border-slate-850 px-2 py-0.5 rounded text-slate-400">
-                        {item.category}
-                      </span>
-                      <p className="text-sm font-semibold text-slate-200 mt-1">{item.task}</p>
-                    </div>
+                    <button
+                      onClick={() => handleDeleteAudit(item.id)}
+                      className="ml-3 text-slate-700 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-900/20 transition-all opacity-0 group-hover:opacity-100 cursor-pointer shrink-0"
+                      title="Hapus item"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -340,7 +427,7 @@ export default function ControlPage() {
                 className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-650 hover:bg-indigo-600 text-sm font-bold rounded-xl text-white transition-colors cursor-pointer shadow-md"
               >
                 <Save className="h-4 w-4" />
-                Simpan & Selesaikan Proyek
+                Simpan PSI
               </button>
             </div>
           </div>
