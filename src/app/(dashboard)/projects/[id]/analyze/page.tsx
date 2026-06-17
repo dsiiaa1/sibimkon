@@ -497,7 +497,7 @@ export default function AnalyzePage() {
             <div className="border-b border-slate-850 pb-4 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold text-slate-200">AI Productivity Consultant</h2>
-                <p className="text-xs text-slate-500">Konsultasi otomatis didukung Google Gemini AI</p>
+                <p className="text-xs text-slate-500">Didukung Gemini AI — hasil dapat diedit konsultan sebelum diterapkan</p>
               </div>
 
               <button
@@ -592,7 +592,7 @@ export default function AnalyzePage() {
                 <div className="max-w-md mx-auto space-y-2">
                   <h3 className="text-sm font-bold text-slate-350">AI Consultant Siap Menganalisis</h3>
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    AI akan menggabungkan data Profil, Voice of Management, skor kuesioner PQCDSM, dan akar masalah Fishbone/5-Why untuk menghasilkan strategi prioritas yang spesifik.
+                    Gemini AI akan menggabungkan data Profil, Voice of Management, skor PQCDSM, dan akar masalah Fishbone/5-Why untuk menghasilkan strategi prioritas spesifik yang dapat Anda edit sebelum diterapkan.
                   </p>
                 </div>
                 <button

@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { getMockDB, updateMockDB, Project, ActionPlan } from '@/lib/mockData'
-import { LineChart, Plus, CheckCircle2, AlertTriangle, Calendar, User, DollarSign, ArrowUpRight, Check, Trash } from 'lucide-react'
+import { LineChart, Plus, CheckCircle2, AlertTriangle, Calendar, User, DollarSign, ArrowUpRight, Check, Trash, Upload, FileText, X, Loader2 } from 'lucide-react'
 import { ACTION_STATUS_LABELS } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
 
 export default function ImprovePage() {
   const router = useRouter()
@@ -32,6 +33,10 @@ export default function ImprovePage() {
   const [selectedAction, setSelectedAction] = useState<ActionPlan | null>(null)
   const [kpiActualInput, setKpiActualInput] = useState<number>(0)
   const [evidenceName, setEvidenceName] = useState('')
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [uploadProgress, setUploadProgress] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle')
+  const [uploadedFiles, setUploadedFiles] = useState<{name: string, url: string}[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const db = getMockDB()
@@ -110,8 +115,48 @@ export default function ImprovePage() {
     saveActionPlans(updated)
   }
 
-  const handleSaveEvidence = () => {
+  const handleSaveEvidence = async () => {
     if (!selectedAction) return
+    
+    setUploadProgress('uploading')
+    let uploadedFileUrl = ''
+    let uploadedFileName = evidenceName
+
+    // Real Supabase Storage upload
+    if (selectedFile) {
+      try {
+        const supabase = createClient()
+        const filePath = `${projectId}/${selectedAction.id}/${Date.now()}_${selectedFile.name}`
+        
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('evidence-files')
+          .upload(filePath, selectedFile, {
+            cacheControl: '3600',
+            upsert: false
+          })
+
+        if (uploadError) {
+          console.warn('Supabase Storage upload failed, saving locally:', uploadError.message)
+          // Fallback: store file name only in localStorage
+          uploadedFileName = selectedFile.name
+          uploadedFileUrl = 'local://' + selectedFile.name
+        } else {
+          const { data: urlData } = supabase.storage
+            .from('evidence-files')
+            .getPublicUrl(uploadData.path)
+          uploadedFileUrl = urlData.publicUrl
+          uploadedFileName = selectedFile.name
+        }
+      } catch (err) {
+        console.warn('Upload error, fallback to local:', err)
+        uploadedFileName = selectedFile?.name || evidenceName
+        uploadedFileUrl = 'local://' + (selectedFile?.name || evidenceName)
+      }
+    } else if (evidenceName) {
+      uploadedFileName = evidenceName
+      uploadedFileUrl = 'manual://' + evidenceName
+    }
+
     const updated = actionPlans.map(act => 
       act.id === selectedAction.id 
         ? { ...act, kpi_actual: Number(kpiActualInput), progress_percentage: kpiActualInput >= act.kpi_target ? 100 : act.progress_percentage } 
@@ -119,19 +164,64 @@ export default function ImprovePage() {
     )
     saveActionPlans(updated)
 
-    // Save mock evidence file record
-    if (evidenceName) {
+    // Early Warning System: Trigger if KPI slips below baseline
+    const isSlip = selectedAction.kpi_target > selectedAction.kpi_baseline 
+      ? Number(kpiActualInput) < selectedAction.kpi_baseline 
+      : Number(kpiActualInput) > selectedAction.kpi_baseline
+
+    if (isSlip) {
+      const title = `⚠️ Early Warning: ${selectedAction.kpi_name || 'KPI Degradasi'}`
+      const message = `KPI "${selectedAction.kpi_name || selectedAction.title}" berada di level PERINGATAN. Nilai aktual: ${kpiActualInput} ${selectedAction.kpi_unit || ''} (Target: ${selectedAction.kpi_target})`
+      
+      const localUser = localStorage.getItem('sibimkon_user')
+      if (localUser) {
+        const userObj = JSON.parse(localUser)
+        const mockNotifs = JSON.parse(localStorage.getItem(`sibimkon_mock_notifications_${userObj.id}`) || '[]')
+        mockNotifs.unshift({
+          id: 'notif-' + Math.random().toString(36).substr(2, 9),
+          title,
+          message,
+          created_at: new Date().toISOString(),
+          is_read: false,
+          type: 'early_warning'
+        })
+        localStorage.setItem(`sibimkon_mock_notifications_${userObj.id}`, JSON.stringify(mockNotifs))
+        
+        try {
+          const supabase = createClient()
+          supabase.from('notifications').insert({
+            user_id: userObj.id,
+            project_id: projectId,
+            type: 'early_warning',
+            title,
+            message,
+            is_read: false
+          }).then(({ error }) => {
+            if (error) console.warn('Supabase notification insert error:', error.message)
+          })
+        } catch (err) {
+          console.warn('Failed to insert warning to Supabase:', err)
+        }
+      }
+    }
+
+
+    // Save evidence record
+    if (uploadedFileName) {
       const evidenceList = JSON.parse(localStorage.getItem(`sibimkon_evidence_${projectId}`) || '[]')
       evidenceList.push({
         id: 'ev-' + Math.random().toString(36).substr(2, 9),
+        action_id: selectedAction.id,
         action_title: selectedAction.title,
-        file_name: evidenceName,
+        file_name: uploadedFileName,
+        file_url: uploadedFileUrl,
         uploaded_at: new Date().toLocaleDateString('id-ID')
       })
       localStorage.setItem(`sibimkon_evidence_${projectId}`, JSON.stringify(evidenceList))
+      setUploadedFiles(evidenceList.filter((e: any) => e.action_id === selectedAction.id))
     }
 
-    // Update project state if status completes
+    // Update project state if all completed
     const db = getMockDB()
     const allCompleted = updated.every(act => act.status === 'selesai')
     if (allCompleted && project?.status === 'improve') {
@@ -142,9 +232,13 @@ export default function ImprovePage() {
       setProject({ ...project!, status: 'control' })
     }
 
-    setSelectedAction(null)
-    setEvidenceName('')
-    alert('Bukti implementasi & KPI aktual berhasil diverifikasi!')
+    setUploadProgress('done')
+    setTimeout(() => {
+      setSelectedAction(null)
+      setEvidenceName('')
+      setSelectedFile(null)
+      setUploadProgress('idle')
+    }, 1200)
   }
 
   const handleDeleteAction = (actionId: string) => {
@@ -454,29 +548,76 @@ export default function ImprovePage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Upload Bukti File (Foto / Dokumen)</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Upload Bukti Implementasi (Foto / Dokumen)</label>
                 <div className="flex flex-col gap-2">
+                  {/* Hidden file input */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,video/mp4,.pdf,.doc,.docx"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null
+                      setSelectedFile(file)
+                      if (file) setEvidenceName(file.name)
+                    }}
+                  />
+                  
+                  {/* Upload button area */}
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border border-dashed border-slate-700 hover:border-indigo-500 rounded-xl p-4 text-center text-xs text-slate-500 hover:bg-indigo-500/5 transition-all cursor-pointer"
+                  >
+                    {selectedFile ? (
+                      <div className="flex items-center justify-center gap-2 text-indigo-400">
+                        <FileText className="h-4 w-4" />
+                        <span className="font-semibold truncate max-w-[200px]">{selectedFile.name}</span>
+                        <span className="text-[10px] text-slate-500">({(selectedFile.size / 1024).toFixed(1)} KB)</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-1.5">
+                        <Upload className="h-5 w-5 text-slate-600" />
+                        <span>Klik untuk pilih file (foto, PDF, video)</span>
+                        <span className="text-[10px]">Maks 50MB — JPG, PNG, PDF, MP4, DOCX</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Manual name input fallback */}
                   <input
                     type="text"
-                    placeholder="Nama file bukti (misal: SOP_preventive_obras.pdf)"
-                    value={evidenceName}
-                    onChange={(e) => setEvidenceName(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-250 focus:outline-none"
+                    placeholder="Atau ketik nama dokumen manual (misal: SOP_Obras.pdf)"
+                    value={selectedFile ? '' : evidenceName}
+                    onChange={(e) => {
+                      if (!selectedFile) setEvidenceName(e.target.value)
+                    }}
+                    disabled={!!selectedFile}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-250 focus:outline-none disabled:opacity-50"
                   />
-                  <div className="border border-dashed border-slate-800 rounded-xl p-4 text-center text-xs text-slate-500 hover:bg-slate-900/40 transition-colors cursor-pointer">
-                    Pilih file gambar/PDF (Maks 50MB)
-                  </div>
+
+                  {selectedFile && (
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedFile(null); setEvidenceName('') }}
+                      className="flex items-center gap-1 text-[10px] text-red-400 hover:text-red-300 cursor-pointer"
+                    >
+                      <X className="h-3 w-3" /> Hapus pilihan file
+                    </button>
+                  )}
                 </div>
               </div>
 
               <div className="pt-4 flex justify-end gap-3 border-t border-slate-800">
-                <button type="button" onClick={() => setSelectedAction(null)} className="px-4 py-2 text-xs text-slate-400">Batal</button>
+                <button type="button" onClick={() => { setSelectedAction(null); setSelectedFile(null); setEvidenceName('') }} className="px-4 py-2 text-xs text-slate-400">Batal</button>
                 <button
                   type="button"
                   onClick={handleSaveEvidence}
-                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-xs font-bold text-white transition-colors cursor-pointer shadow-md"
+                  disabled={uploadProgress === 'uploading'}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-xs font-bold text-white transition-colors cursor-pointer shadow-md disabled:opacity-60 flex items-center gap-2"
                 >
-                  Kirim & Verifikasi
+                  {uploadProgress === 'uploading' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {uploadProgress === 'done' && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />}
+                  {uploadProgress === 'uploading' ? 'Mengupload...' : uploadProgress === 'done' ? 'Tersimpan!' : 'Upload & Verifikasi'}
                 </button>
               </div>
             </div>

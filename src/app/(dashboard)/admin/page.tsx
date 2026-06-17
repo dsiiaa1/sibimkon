@@ -1,26 +1,99 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getMockDB, Project, Company } from '@/lib/mockData'
-import { Activity, Globe, MapPin, Award, ShieldAlert, ArrowUpRight, Search, Building } from 'lucide-react'
+import { getMockDB, updateMockDB, Project, Company } from '@/lib/mockData'
+import { Activity, Globe, MapPin, Award, ShieldAlert, ArrowUpRight, Search, Building, Plus } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, AreaChart, Area } from 'recharts'
 
 export default function AdminPanelPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [searchQuery, setSearchQuery] = useState('')
+  const [user, setUser] = useState<any>(null)
+
+  // Potential company registration form states
+  const [showAddCompanyModal, setShowAddCompanyModal] = useState(false)
+  const [newCompName, setNewCompName] = useState('')
+  const [newCompField, setNewCompField] = useState('')
+  const [newCompProvince, setNewCompProvince] = useState('Jawa Barat')
+  const [newCompCity, setNewCompCity] = useState('')
+  const [newCompAddress, setNewCompAddress] = useState('')
+  const [newCompEmployees, setNewCompEmployees] = useState(50)
 
   useEffect(() => {
     const db = getMockDB()
     setProjects(db.projects)
     setCompanies(db.companies)
+
+    const localUser = localStorage.getItem('sibimkon_user')
+    if (localUser) {
+      setUser(JSON.parse(localUser))
+    }
   }, [])
 
-  // National metrics calculation
-  const totalProjects = projects.length
-  const totalCompanies = companies.length
-  const avgImprovement = projects.reduce((acc, p) => acc + ((p.current_score || 0) - (p.baseline_score || 0)), 0) / (totalProjects || 1)
-  const completedProjects = projects.filter(p => p.status === 'completed' || p.status === 'control').length
+  const disnakerProvince = user?.organization?.replace(/Disnaker\s+/i, '') || 'Jawa Barat'
+  const isAdminDisnaker = user?.role === 'admin_disnaker'
+
+  // Filtered lists
+  const displayCompanies = isAdminDisnaker 
+    ? companies.filter(c => c.province.toLowerCase() === disnakerProvince.toLowerCase())
+    : companies
+
+  const displayProjects = isAdminDisnaker
+    ? projects.filter(p => {
+        const comp = companies.find(c => c.id === p.company_id)
+        return comp?.province.toLowerCase() === disnakerProvince.toLowerCase()
+      })
+    : projects
+
+  // Metrics calculation
+  const totalProjects = displayProjects.length
+  const totalCompanies = displayCompanies.length
+  const avgImprovement = displayProjects.reduce((acc, p) => acc + ((p.current_score || 0) - (p.baseline_score || 0)), 0) / (totalProjects || 1)
+  const completedProjects = displayProjects.filter(p => p.status === 'completed' || p.status === 'control').length
+
+  const handleRegisterPotentialCompany = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newCompName) return
+
+    const newCompany: Company = {
+      id: 'comp-' + Math.random().toString(36).substr(2, 9),
+      name: newCompName,
+      address: newCompAddress,
+      province: newCompProvince,
+      city: newCompCity,
+      business_field: newCompField,
+      total_employees: Number(newCompEmployees),
+      certifications: []
+    }
+
+    const db = getMockDB()
+    const updated = [...db.companies, newCompany]
+    updateMockDB('companies', updated)
+    setCompanies(updated)
+    
+    setShowAddCompanyModal(false)
+    // Reset fields
+    setNewCompName('')
+    setNewCompField('')
+    setNewCompCity('')
+    setNewCompAddress('')
+    setNewCompEmployees(50)
+
+    alert('Perusahaan Potensial berhasil didaftarkan dalam program pembinaan Disnaker!')
+  }
+
+  // Regional chart data for Disnaker
+  const cityGroupedData = isAdminDisnaker
+    ? Array.from(new Set(displayCompanies.map(c => c.city))).map(city => ({
+        name: city || 'Lainnya',
+        Klien: displayCompanies.filter(c => c.city === city).length,
+        Proyek: displayProjects.filter(p => {
+          const comp = companies.find(c => c.id === p.company_id)
+          return comp?.city === city
+        }).length
+      }))
+    : []
 
   const regionalData = [
     { name: 'Jawa Barat', Proyek: 12, Klien: 15 },
@@ -46,19 +119,41 @@ export default function AdminPanelPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
             <Globe className="h-6 w-6 text-indigo-400" />
-            Panel Admin Nasional Kemnaker RI
+            {isAdminDisnaker ? `Panel Admin Wilayah — Disnaker ${disnakerProvince}` : 'Panel Admin Nasional Kemnaker RI'}
           </h1>
-          <p className="text-xs text-slate-500">Monitoring real-time Program Bimbingan Konsultansi Peningkatan Produktivitas skala nasional</p>
+          <p className="text-xs text-slate-500">
+            {isAdminDisnaker 
+              ? `Monitoring real-time Program Bimbingan Konsultansi Peningkatan Produktivitas di wilayah ${disnakerProvince}`
+              : 'Monitoring real-time Program Bimbingan Konsultansi Peningkatan Produktivitas skala nasional'
+            }
+          </p>
         </div>
+        {isAdminDisnaker && (
+          <div className="sm:ml-auto">
+            <button 
+              onClick={() => {
+                setNewCompProvince(disnakerProvince)
+                setShowAddCompanyModal(true)
+              }}
+              className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all cursor-pointer transform hover:-translate-y-0.5"
+              style={{background: 'linear-gradient(135deg, #b8860b, #d4a017, #f4c430)', color: 'var(--navy-950)', boxShadow: '0 6px 20px rgba(212,160,23,0.20)'}}
+            >
+              <Plus className="h-4 w-4" />
+              Daftarkan Perusahaan Potensial
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Grid statistics cards */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <div className="glass-card rounded-2xl p-6 flex items-center justify-between border border-slate-800 bg-slate-950/40">
           <div className="space-y-1">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Nasional Proyek</span>
-            <h3 className="text-2xl font-bold text-slate-100">{totalProjects * 15} Proyek</h3>
-            <p className="text-xs text-indigo-400">Di 34 Provinsi</p>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              {isAdminDisnaker ? 'Proyek Wilayah' : 'Nasional Proyek'}
+            </span>
+            <h3 className="text-2xl font-bold text-slate-100">{totalProjects} Proyek</h3>
+            <p className="text-xs text-indigo-400">{isAdminDisnaker ? `Provinsi ${disnakerProvince}` : 'Di 34 Provinsi'}</p>
           </div>
           <div className="h-12 w-12 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400">
             <Globe className="h-6 w-6" />
@@ -67,9 +162,9 @@ export default function AdminPanelPage() {
 
         <div className="glass-card rounded-2xl p-6 flex items-center justify-between border border-slate-800 bg-slate-950/40">
           <div className="space-y-1">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Perusahaan Mitra</span>
-            <h3 className="text-2xl font-bold text-slate-100">{totalCompanies * 20} Perusahaan</h3>
-            <p className="text-xs text-cyan-400">Usaha Mikro, Kecil, Menengah</p>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Perusahaan Klien</span>
+            <h3 className="text-2xl font-bold text-slate-100">{totalCompanies} Klien</h3>
+            <p className="text-xs text-cyan-400">Binaan Terdaftar</p>
           </div>
           <div className="h-12 w-12 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400">
             <Building className="h-6 w-6" />
@@ -79,8 +174,8 @@ export default function AdminPanelPage() {
         <div className="glass-card rounded-2xl p-6 flex items-center justify-between border border-slate-800 bg-slate-950/40">
           <div className="space-y-1">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Sertifikat Terbit</span>
-            <h3 className="text-2xl font-bold text-slate-100">{completedProjects * 10} Lembar</h3>
-            <p className="text-xs text-emerald-400">QR-code terverifikasi</p>
+            <h3 className="text-2xl font-bold text-slate-100">{completedProjects} Lembar</h3>
+            <p className="text-xs text-emerald-400">E-Sertifikat terverifikasi</p>
           </div>
           <div className="h-12 w-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
             <Award className="h-6 w-6" />
@@ -91,7 +186,7 @@ export default function AdminPanelPage() {
           <div className="space-y-1">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Avg Improvement</span>
             <h3 className="text-2xl font-bold text-slate-100">+{avgImprovement.toFixed(1)}%</h3>
-            <p className="text-xs text-amber-400">Skala Efisiensi Nasional</p>
+            <p className="text-xs text-amber-400">Efisiensi Pendampingan</p>
           </div>
           <div className="h-12 w-12 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400">
             <Activity className="h-6 w-6" />
@@ -104,21 +199,47 @@ export default function AdminPanelPage() {
         
         {/* Regional Bar Chart */}
         <div className="glass-card rounded-3xl border border-slate-800 bg-slate-950/20 p-6">
-          <h3 className="font-bold text-slate-200 mb-4 flex items-center gap-2">
-            <MapPin className="h-4 w-4 text-indigo-400" />
-            Sebaran Wilayah (Top 5 Provinsi)
-          </h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={regionalData}>
-                <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                <YAxis tick={{ fill: '#64748b', fontSize: 10 }} />
-                <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 8 }} />
-                <Bar dataKey="Proyek" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Klien" fill="#06b6d4" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          {isAdminDisnaker ? (
+            <>
+              <h3 className="font-bold text-slate-200 mb-4 flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-indigo-400" />
+                Sebaran Klien & Proyek per Kota/Kabupaten
+              </h3>
+              <div className="h-64">
+                {cityGroupedData.length === 0 ? (
+                  <p className="text-center py-10 text-xs text-slate-500">Belum ada data proyek per kota.</p>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={cityGroupedData}>
+                      <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                      <YAxis tick={{ fill: '#64748b', fontSize: 10 }} />
+                      <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 8 }} />
+                      <Bar dataKey="Proyek" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Klien" fill="#06b6d4" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <h3 className="font-bold text-slate-200 mb-4 flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-indigo-400" />
+                Sebaran Wilayah (Top 5 Provinsi)
+              </h3>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={regionalData}>
+                    <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                    <YAxis tick={{ fill: '#64748b', fontSize: 10 }} />
+                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: 8 }} />
+                    <Bar dataKey="Proyek" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Klien" fill="#06b6d4" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Growth Area Chart */}
@@ -145,6 +266,123 @@ export default function AdminPanelPage() {
           </div>
         </div>
       </div>
+
+      {/* Add Potential Company Modal (For Admin Disnaker) */}
+      {showAddCompanyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in" style={{background: 'rgba(2,6,15,0.80)', backdropFilter: 'blur(8px)'}}>
+          <div className="w-full max-w-lg rounded-3xl overflow-hidden" style={{background: 'var(--navy-900)', border: '1px solid var(--border-base)', boxShadow: '0 30px 80px rgba(0,0,0,0.60)'}}>
+            <div className="px-6 py-4 flex items-center justify-between" style={{borderBottom: '1px solid var(--border-base)', background: 'var(--navy-950)'}}>
+              <h3 className="text-lg font-bold" style={{color: 'var(--text-primary)'}}>Daftarkan Perusahaan Pembinaan Potensial</h3>
+              <button 
+                onClick={() => setShowAddCompanyModal(false)}
+                className="text-lg font-light transition-colors text-slate-400 hover:text-slate-250"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <form onSubmit={handleRegisterPotentialCompany} className="p-6 space-y-4 text-slate-200">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Nama Perusahaan Klien
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="PT Sinar Gemilang"
+                  value={newCompName}
+                  onChange={(e) => setNewCompName(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Bidang Usaha
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Tekstil / Makanan"
+                    value={newCompField}
+                    onChange={(e) => setNewCompField(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Jumlah Tenaga Kerja
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    value={newCompEmployees}
+                    onChange={(e) => setNewCompEmployees(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Provinsi (Yurisdiksi)
+                  </label>
+                  <input
+                    type="text"
+                    disabled
+                    value={newCompProvince}
+                    className="w-full bg-slate-950 border border-slate-850 rounded-xl px-4 py-2.5 text-slate-500 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Kota / Kabupaten
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Bandung / Karawang"
+                    value={newCompCity}
+                    onChange={(e) => setNewCompCity(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Alamat Kantor/Pabrik
+                </label>
+                <textarea
+                  required
+                  placeholder="Jl. Sukarno Hatta No. 123..."
+                  value={newCompAddress}
+                  onChange={(e) => setNewCompAddress(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm h-16"
+                />
+              </div>
+
+              <div className="pt-4 flex justify-end gap-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowAddCompanyModal(false)}
+                  className="px-4 py-2.5 text-sm font-semibold text-slate-400 hover:text-slate-355 transition-colors animate-fade-in"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-indigo-650 text-sm font-semibold text-white hover:bg-indigo-600 transition-all cursor-pointer shadow-md hover:shadow-indigo-500/10"
+                >
+                  Daftarkan Mitra
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

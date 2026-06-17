@@ -22,7 +22,7 @@ export default function RegisterPage() {
 
     try {
       const supabase = createClient()
-      const { error: signUpError } = await supabase.auth.signUp({
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -36,18 +36,40 @@ export default function RegisterPage() {
 
       if (signUpError) throw signUpError
 
+      // Upsert profile record explicitly as fallback if trigger not set up
+      if (data?.user) {
+        try {
+          await supabase.from('profiles').upsert({
+            id: data.user.id,
+            full_name: name,
+            email: email,
+            role: role,
+            organization: role === 'perusahaan' ? companyName : 'Konsultan BIMKON',
+            is_active: true,
+          }, { onConflict: 'id' })
+        } catch (profileErr) {
+          console.warn('Could not insert profile, trigger will handle it:', profileErr)
+        }
+      }
+
       router.push('/login?registered=true')
     } catch (err: any) {
-      console.warn('Supabase sign up error, fall backing to mock registration:', err.message)
-      // Save local mock registration state
-      localStorage.setItem('sibimkon_user', JSON.stringify({
-        id: 'mock-user-' + Math.random().toString(36).substr(2, 9),
-        email,
-        full_name: name,
-        role,
-        organization: role === 'perusahaan' ? companyName : 'Konsultan Mandiri'
-      }))
-      router.push('/dashboard')
+      // If Supabase not configured, use demo mode
+      if (err.message?.includes('not configured') || err.message?.includes('Invalid API') || err.message?.includes('fetch')) {
+        console.warn('Supabase not reachable, using demo mode:', err.message)
+        localStorage.setItem('sibimkon_user', JSON.stringify({
+          id: 'demo-user-' + Math.random().toString(36).substr(2, 9),
+          email,
+          full_name: name,
+          role,
+          organization: role === 'perusahaan' ? companyName : 'Konsultan Mandiri'
+        }))
+        const cookieStr = `sibimkon_demo_session=true; path=/; max-age=28800; SameSite=Lax`
+        document.cookie = cookieStr
+        setTimeout(() => { window.location.href = '/dashboard' }, 100)
+      } else {
+        setError(err.message || 'Terjadi kesalahan. Silakan coba lagi.')
+      }
     } finally {
       setLoading(false)
     }

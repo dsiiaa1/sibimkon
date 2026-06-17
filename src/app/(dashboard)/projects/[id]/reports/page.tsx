@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { getMockDB, Project, ActionPlan } from '@/lib/mockData'
+import { getMockDB, Project, ActionPlan, Assessment } from '@/lib/mockData'
+import { generateFinalReport, generateCertificate } from '@/lib/pdf-generator'
 import { FileText, Award, ShieldCheck, Download, Edit3, CheckCircle2 } from 'lucide-react'
 
 export default function ReportsPage() {
@@ -12,6 +13,7 @@ export default function ReportsPage() {
 
   const [project, setProject] = useState<Project | null>(null)
   const [actionPlans, setActionPlans] = useState<ActionPlan[]>([])
+  const [assessments, setAssessments] = useState<Assessment[]>([])
   
   // Signature states
   const [consultantSigned, setConsultantSigned] = useState(false)
@@ -31,22 +33,35 @@ export default function ReportsPage() {
     }
     setProject(proj)
     setActionPlans(db.actionPlans[projectId] || [])
+    setAssessments(db.assessments[projectId] || [])
   }, [projectId, router])
 
   const handleDownloadPDF = () => {
+    if (!project) return
     setPdfLoading(true)
-    setTimeout(() => {
+    try {
+      const doc = generateFinalReport(project, assessments, actionPlans)
+      doc.save(`Laporan_Akhir_${project.project_code}.pdf`)
+    } catch (error) {
+      console.error(error)
+      alert('Gagal membuat PDF: ' + (error instanceof Error ? error.message : String(error)))
+    } finally {
       setPdfLoading(false)
-      alert('Laporan Produktivitas Akhir (7 Bab) berhasil dibuat dan diunduh!')
-    }, 2000)
+    }
   }
 
   const handleDownloadCert = () => {
+    if (!project) return
     setCertLoading(true)
-    setTimeout(() => {
+    try {
+      const doc = generateCertificate(project)
+      doc.save(`E-Sertifikat_${project.company_name.replace(/\s+/g, '_')}.pdf`)
+    } catch (error) {
+      console.error(error)
+      alert('Gagal membuat Sertifikat: ' + (error instanceof Error ? error.message : String(error)))
+    } finally {
       setCertLoading(false)
-      alert('E-Sertifikat Kemnaker berhasil dibuat dan diunduh!')
-    }, 1500)
+    }
   }
 
   if (!project) return null

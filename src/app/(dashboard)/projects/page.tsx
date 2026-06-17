@@ -2,19 +2,59 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { getMockDB, Project } from '@/lib/mockData'
+import { getProjects, getCompanies, createProject } from '@/lib/db'
+import { Project, Company } from '@/lib/mockData'
 import { FolderKanban, Search, Plus, Calendar, ArrowRight, Activity } from 'lucide-react'
 import { PROJECT_STATUS_LABELS } from '@/lib/utils'
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([])
+  const [companies, setCompanies] = useState<Company[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false)
+  
+  // New Project Form
+  const [newTitle, setNewTitle] = useState('')
+  const [newDesc, setNewDesc] = useState('')
+  const [newCompanyId, setNewCompanyId] = useState('')
+  const [newStartDate, setNewStartDate] = useState('2026-06-15')
+  const [newEndDate, setNewEndDate] = useState('2026-09-15')
 
   useEffect(() => {
-    const mockDB = getMockDB()
-    setProjects(mockDB.projects)
+    async function loadData() {
+      const projs = await getProjects()
+      const comps = await getCompanies()
+      setProjects(projs)
+      setCompanies(comps)
+    }
+    loadData()
   }, [])
+
+  const handleCreateProject = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newTitle || !newCompanyId) return
+
+    const selectedCompany = companies.find(c => c.id === newCompanyId)
+    const newProj = await createProject({
+      title: newTitle,
+      description: newDesc,
+      company_id: newCompanyId,
+      company_name: selectedCompany ? selectedCompany.name : 'Unknown',
+      consultant_id: 'user-1',
+      status: 'define',
+      start_date: newStartDate,
+      target_end_date: newEndDate,
+    })
+
+    setProjects([...projects, newProj])
+    
+    // Close modal & reset fields
+    setShowNewProjectModal(false)
+    setNewTitle('')
+    setNewDesc('')
+    setNewCompanyId('')
+  }
 
   const filteredProjects = projects.filter(p => {
     const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -32,6 +72,16 @@ export default function ProjectsPage() {
             Proyek BIMKON
           </h1>
           <p className="text-xs text-slate-500">Kelola dan pantau seluruh pendampingan aktif perusahaan</p>
+        </div>
+        <div className="sm:ml-auto">
+          <button 
+            onClick={() => setShowNewProjectModal(true)}
+            className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all cursor-pointer transform hover:-translate-y-0.5"
+            style={{background: 'linear-gradient(135deg, #b8860b, #d4a017, #f4c430)', color: 'var(--navy-950)', boxShadow: '0 6px 20px rgba(212,160,23,0.20)'}}
+          >
+            <Plus className="h-4 w-4" />
+            Mulai Proyek Baru
+          </button>
         </div>
       </div>
 
@@ -120,6 +170,111 @@ export default function ProjectsPage() {
           )
         })}
       </div>
+
+      {/* New Project Modal */}
+      {showNewProjectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in" style={{background: 'rgba(2,6,15,0.80)', backdropFilter: 'blur(8px)'}}>
+          <div className="w-full max-w-lg rounded-3xl overflow-hidden" style={{background: 'var(--navy-900)', border: '1px solid var(--border-base)', boxShadow: '0 30px 80px rgba(0,0,0,0.60)'}}>
+            <div className="px-6 py-4 flex items-center justify-between" style={{borderBottom: '1px solid var(--border-base)', background: 'var(--navy-950)'}}>
+              <h3 className="text-lg font-bold" style={{color: 'var(--text-primary)'}}>Mulai Proyek BIMKON Baru</h3>
+              <button 
+                onClick={() => setShowNewProjectModal(false)}
+                className="text-lg font-light transition-colors text-slate-400 hover:text-slate-250"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <form onSubmit={handleCreateProject} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Judul Proyek
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Misal: Reduksi Waste Bahan Baku Cutting Line"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Deskripsi Proyek
+                </label>
+                <textarea
+                  placeholder="Penjelasan singkat fokus improvement..."
+                  value={newDesc}
+                  onChange={(e) => setNewDesc(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm h-20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Pilih Perusahaan Klien
+                </label>
+                <select
+                  required
+                  value={newCompanyId}
+                  onChange={(e) => setNewCompanyId(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
+                >
+                  <option value="">-- Pilih Perusahaan --</option>
+                  {companies.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Tanggal Mulai
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={newStartDate}
+                    onChange={(e) => setNewStartDate(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Target Selesai
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={newEndDate}
+                    onChange={(e) => setNewEndDate(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 flex justify-end gap-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowNewProjectModal(false)}
+                  className="px-4 py-2.5 text-sm font-semibold text-slate-400 hover:text-slate-350 transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-indigo-650 text-sm font-semibold text-white hover:bg-indigo-600 transition-all cursor-pointer shadow-md hover:shadow-indigo-500/10"
+                >
+                  Buat Proyek
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

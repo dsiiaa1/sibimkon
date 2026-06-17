@@ -132,6 +132,15 @@ export default function ControlPage() {
     return false
   })
 
+  // Group compliance by category
+  const categories = Array.from(new Set(auditItems.map(item => item.category)))
+  const categoryCompliance = categories.map(cat => {
+    const items = auditItems.filter(item => item.category === cat)
+    const completed = items.filter(item => item.completed).length
+    const percentage = Math.round((completed / items.length) * 100) || 0
+    return { category: cat, percentage, completed, total: items.length }
+  })
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Header bar */}
@@ -219,6 +228,42 @@ export default function ControlPage() {
             <div className="border-b border-slate-850 pb-4">
               <h2 className="text-lg font-bold text-slate-200">Audit Kepatuhan Implementasi</h2>
               <p className="text-xs text-slate-500">Periksa kepatuhan standardisasi di lapangan pasca perbaikan</p>
+            </div>
+
+            {/* Compliance Statistics Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="p-4 bg-indigo-950/30 border border-indigo-500/20 rounded-2xl flex flex-col justify-between">
+                <div>
+                  <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider block">Kepatuhan Total</span>
+                  <span className="text-2xl font-black text-white mt-1 block">
+                    {Math.round((auditItems.filter(i => i.completed).length / (auditItems.length || 1)) * 100)}%
+                  </span>
+                </div>
+                <div className="w-full bg-slate-900 h-1.5 rounded-full mt-3 overflow-hidden">
+                  <div 
+                    className="bg-indigo-500 h-full transition-all duration-300"
+                    style={{ width: `${(auditItems.filter(i => i.completed).length / (auditItems.length || 1)) * 100}%` }}
+                  />
+                </div>
+              </div>
+
+              {categoryCompliance.map((catInfo, idx) => (
+                <div key={idx} className="p-4 bg-slate-950/40 border border-slate-850 rounded-2xl flex flex-col justify-between">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">{catInfo.category}</span>
+                    <span className="text-xl font-bold text-slate-200 mt-1 block">{catInfo.percentage}%</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 mt-2">
+                    <span>{catInfo.completed}/{catInfo.total} Selesai</span>
+                    <div className="w-16 bg-slate-900 h-1 rounded-full overflow-hidden ml-2">
+                      <div 
+                        className="bg-emerald-500 h-full transition-all duration-300"
+                        style={{ width: `${catInfo.percentage}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
 
             <div className="space-y-3">

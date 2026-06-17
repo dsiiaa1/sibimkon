@@ -3,35 +3,42 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { getMockDB, updateMockDB, Project, Company, ProjectCharter } from '@/lib/mockData'
-import { FileCheck, Building2, ClipboardList, Plus, Save, Trash } from 'lucide-react'
+import { FileCheck, Building2, Plus, Save, Trash } from 'lucide-react'
 
 export default function DefinePage() {
   const router = useRouter()
   const params = useParams()
   const projectId = params.id as string
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'charter' | 'vom'>('profile')
+  const [activeTab, setActiveTab] = useState<'profile' | 'charter'>('profile')
   const [project, setProject] = useState<Project | null>(null)
   const [company, setCompany] = useState<Company | null>(null)
   const [charter, setCharter] = useState<ProjectCharter | null>(null)
-  const [vomList, setVomList] = useState<any[]>([])
+
 
   // Company Profile form state
   const [compName, setCompName] = useState('')
   const [compAddress, setCompAddress] = useState('')
   const [compEmployees, setCompEmployees] = useState(0)
   const [compField, setCompField] = useState('')
+  const [compProduct, setCompProduct] = useState('')
+  const [compKadin, setCompKadin] = useState('tidak_aktif')
+  const [compUnion, setCompUnion] = useState('')
+  const [compPkb, setCompPkb] = useState('tidak_ada')
+  const [compCertifications, setCompCertifications] = useState<string[]>([])
+  const [newCert, setNewCert] = useState('')
 
   // Charter form state
   const [charterProblem, setCharterProblem] = useState('')
   const [charterObjectives, setCharterObjectives] = useState('')
   const [charterTarget, setCharterTarget] = useState('')
   const [charterScope, setCharterScope] = useState('')
+  const [teamMembers, setTeamMembers] = useState<Array<{ name: string; position: string; role: string }>>([])
+  const [newMemberName, setNewMemberName] = useState('')
+  const [newMemberPos, setNewMemberPos] = useState('')
+  const [newMemberRole, setNewMemberRole] = useState('')
   
-  // VOM Form state
-  const [vomDimension, setVomDimension] = useState('productivity')
-  const [vomProblem, setVomProblem] = useState('')
-  const [vomImpact, setVomImpact] = useState('')
+
 
   useEffect(() => {
     const db = getMockDB()
@@ -49,6 +56,11 @@ export default function DefinePage() {
       setCompAddress(comp.address)
       setCompEmployees(comp.total_employees)
       setCompField(comp.business_field)
+      setCompProduct((comp as any).main_product || '')
+      setCompKadin((comp as any).kadin_membership || 'tidak_aktif')
+      setCompUnion((comp as any).labor_union || '')
+      setCompPkb((comp as any).pkb_status || 'tidak_ada')
+      setCompCertifications(comp.certifications || [])
     }
 
     const chart = db.charters[projectId] || {
@@ -64,19 +76,8 @@ export default function DefinePage() {
     setCharterObjectives(chart.objectives)
     setCharterTarget(chart.productivity_target)
     setCharterScope(chart.scope)
+    setTeamMembers(chart.team_members || [])
 
-    // Set voice of management list
-    const vom = localStorage.getItem(`sibimkon_vom_${projectId}`)
-    if (vom) {
-      setVomList(JSON.parse(vom))
-    } else {
-      const defaultVom = [
-        { id: 'vom-1', dimension: 'productivity', problem: 'Bottleneck di stasiun sewing line 3', impact: 'OPH turun 15% dari target', priority: 1 },
-        { id: 'vom-2', dimension: 'quality', problem: 'Tingkat defect jahit kerut tinggi', impact: 'Biaya re-work mencapai Rp 25jt/bulan', priority: 2 }
-      ]
-      setVomList(defaultVom)
-      localStorage.setItem(`sibimkon_vom_${projectId}`, JSON.stringify(defaultVom))
-    }
   }, [projectId, router])
 
   const handleSaveCompany = () => {
@@ -84,7 +85,18 @@ export default function DefinePage() {
     const db = getMockDB()
     const updatedCompanies = db.companies.map((c: Company) => 
       c.id === company.id 
-        ? { ...c, name: compName, address: compAddress, total_employees: compEmployees, business_field: compField }
+        ? { 
+            ...c, 
+            name: compName, 
+            address: compAddress, 
+            total_employees: compEmployees, 
+            business_field: compField,
+            main_product: compProduct,
+            kadin_membership: compKadin,
+            labor_union: compUnion,
+            pkb_status: compPkb,
+            certifications: compCertifications
+          }
         : c
     )
     updateMockDB('companies', updatedCompanies)
@@ -106,7 +118,7 @@ export default function DefinePage() {
       objectives: charterObjectives,
       productivity_target: charterTarget,
       scope: charterScope,
-      team_members: charter?.team_members || []
+      team_members: teamMembers
     }
     
     db.charters[projectId] = updatedCharter
@@ -121,27 +133,34 @@ export default function DefinePage() {
     alert('Project Charter berhasil disimpan! Fase proyek diperbarui ke MEASURE.')
   }
 
-  const handleAddVom = () => {
-    if (!vomProblem) return
-    const newItem = {
-      id: 'vom-' + Math.random().toString(36).substr(2, 9),
-      dimension: vomDimension,
-      problem: vomProblem,
-      impact: vomImpact,
-      priority: vomList.length + 1
-    }
-    const updatedList = [...vomList, newItem]
-    setVomList(updatedList)
-    localStorage.setItem(`sibimkon_vom_${projectId}`, JSON.stringify(updatedList))
-    setVomProblem('')
-    setVomImpact('')
+  const handleAddMember = () => {
+    if (!newMemberName) return
+    const updated = [...teamMembers, { name: newMemberName, position: newMemberPos, role: newMemberRole }]
+    setTeamMembers(updated)
+    setNewMemberName('')
+    setNewMemberPos('')
+    setNewMemberRole('')
   }
 
-  const handleDeleteVom = (id: string) => {
-    const updatedList = vomList.filter(item => item.id !== id)
-    setVomList(updatedList)
-    localStorage.setItem(`sibimkon_vom_${projectId}`, JSON.stringify(updatedList))
+  const handleDeleteMember = (idx: number) => {
+    const updated = teamMembers.filter((_, i) => i !== idx)
+    setTeamMembers(updated)
   }
+
+  const handleAddCert = () => {
+    if (!newCert) return
+    if (compCertifications.includes(newCert)) return
+    const updated = [...compCertifications, newCert]
+    setCompCertifications(updated)
+    setNewCert('')
+  }
+
+  const handleDeleteCert = (certName: string) => {
+    const updated = compCertifications.filter(c => c !== certName)
+    setCompCertifications(updated)
+  }
+
+
 
   if (!project || !company) return null
 
@@ -160,8 +179,7 @@ export default function DefinePage() {
       <div className="flex gap-2 border-b border-slate-800">
         {[
           { id: 'profile', name: 'Profil Perusahaan', icon: Building2 },
-          { id: 'charter', name: 'Project Charter', icon: FileCheck },
-          { id: 'vom', name: 'Voice of Management', icon: ClipboardList }
+          { id: 'charter', name: 'Project Charter', icon: FileCheck }
         ].map((tab) => (
           <button
             key={tab.id}
@@ -202,12 +220,14 @@ export default function DefinePage() {
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm"
                 />
               </div>
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Alamat</label>
-                <textarea
-                  value={compAddress}
-                  onChange={(e) => setCompAddress(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm h-20"
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Produk Utama</label>
+                <input
+                  type="text"
+                  value={compProduct}
+                  onChange={(e) => setCompProduct(e.target.value)}
+                  placeholder="Misal: Pakaian Jadi, Keripik Tempe"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm"
                 />
               </div>
               <div>
@@ -219,8 +239,80 @@ export default function DefinePage() {
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm"
                 />
               </div>
+              <div className="md:col-span-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Alamat</label>
+                <textarea
+                  value={compAddress}
+                  onChange={(e) => setCompAddress(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm h-16"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Keanggotaan KADIN/APINDO</label>
+                <select
+                  value={compKadin}
+                  onChange={(e) => setCompKadin(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm"
+                >
+                  <option value="tidak_aktif">Tidak Aktif / Bukan Anggota</option>
+                  <option value="kadin">Anggota KADIN</option>
+                  <option value="apindo">Anggota APINDO</option>
+                  <option value="keduanya">Anggota KADIN & APINDO</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Serikat Pekerja</label>
+                <input
+                  type="text"
+                  value={compUnion}
+                  onChange={(e) => setCompUnion(e.target.value)}
+                  placeholder="Nama Serikat Pekerja (kosongkan jika tidak ada)"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Perjanjian Kerja Bersama (PKB)</label>
+                <select
+                  value={compPkb}
+                  onChange={(e) => setCompPkb(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm"
+                >
+                  <option value="tidak_ada">Belum Ada PKB</option>
+                  <option value="ada_aktif">Ada (Aktif)</option>
+                  <option value="proses_perpanjangan">Dalam Proses Perpanjangan</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Daftar Sertifikasi (ISO, SMK3, dll)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newCert}
+                    onChange={(e) => setNewCert(e.target.value)}
+                    placeholder="Tambah Sertifikasi..."
+                    className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddCert}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-xs font-bold rounded-xl text-indigo-400"
+                  >
+                    Tambah
+                  </button>
+                </div>
+                {compCertifications.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2.5">
+                    {compCertifications.map(c => (
+                      <span key={c} className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-900 border border-slate-850 rounded text-xs text-slate-300 font-medium">
+                        {c}
+                        <button type="button" onClick={() => handleDeleteCert(c)} className="text-red-400 hover:text-red-350 text-[10px]">✕</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="pt-4 flex justify-end">
+            <div className="pt-4 flex justify-end border-t border-slate-850/80">
               <button
                 onClick={handleSaveCompany}
                 className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-650 text-sm font-semibold rounded-xl text-white hover:bg-indigo-600 transition-colors cursor-pointer shadow-md"
@@ -275,7 +367,100 @@ export default function DefinePage() {
                 />
               </div>
             </div>
-            <div className="pt-4 flex justify-end">
+
+            {/* Tim Pelaksana Section */}
+            <div className="space-y-4 pt-6 border-t border-slate-850">
+              <h3 className="text-sm font-bold text-slate-300">Tim Pelaksana Improvement (Perusahaan)</h3>
+              
+              {/* Form Input Anggota Tim */}
+              <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-2xl grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Nama Anggota</label>
+                  <input
+                    type="text"
+                    value={newMemberName}
+                    onChange={(e) => setNewMemberName(e.target.value)}
+                    placeholder="Budi Santoso"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-350"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Jabatan Perusahaan</label>
+                  <input
+                    type="text"
+                    value={newMemberPos}
+                    onChange={(e) => setNewMemberPos(e.target.value)}
+                    placeholder="Supervisor Sewing"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-350"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Peran dalam Tim</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newMemberRole}
+                      onChange={(e) => setNewMemberRole(e.target.value)}
+                      placeholder="Team Leader / Member"
+                      className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-350"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddMember}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-550 text-xs font-bold rounded-xl text-white cursor-pointer"
+                    >
+                      Tambah
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tabel Anggota Tim */}
+              <div className="overflow-x-auto bg-slate-950/20 border border-slate-850 rounded-2xl">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-950 border-b border-slate-850 text-slate-400 font-bold uppercase tracking-wider">
+                      <th className="p-3">No</th>
+                      <th className="p-3">Nama</th>
+                      <th className="p-3">Jabatan</th>
+                      <th className="p-3">Peran Tim</th>
+                      <th className="p-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-850 text-slate-300">
+                    {teamMembers.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="p-4 text-center text-slate-500 italic">Belum ada anggota tim terdaftar.</td>
+                      </tr>
+                    ) : (
+                      teamMembers.map((member, idx) => (
+                        <tr key={idx} className="hover:bg-slate-900/20">
+                          <td className="p-3 font-mono">{idx + 1}</td>
+                          <td className="p-3 font-bold text-slate-200">{member.name}</td>
+                          <td className="p-3">{member.position}</td>
+                          <td className="p-3">
+                            <span className="px-2 py-0.5 rounded bg-indigo-950 text-indigo-400 border border-indigo-900/50">
+                              {member.role || 'Member'}
+                            </span>
+                          </td>
+                          <td className="p-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteMember(idx)}
+                              className="text-red-400 hover:text-red-350"
+                            >
+                              Hapus
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="pt-4 flex justify-end border-t border-slate-850/80">
               <button
                 onClick={handleSaveCharter}
                 className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-650 text-sm font-semibold rounded-xl text-white hover:bg-indigo-600 transition-colors cursor-pointer shadow-md"
@@ -287,93 +472,7 @@ export default function DefinePage() {
           </div>
         )}
 
-        {activeTab === 'vom' && (
-          <div className="space-y-6">
-            <h2 className="text-lg font-bold text-slate-200 border-b border-slate-850 pb-3">Voice of Management (VOM)</h2>
-            
-            {/* Input Form */}
-            <div className="bg-slate-950/60 border border-slate-850 p-5 rounded-2xl space-y-4">
-              <h3 className="text-sm font-bold text-slate-300">Catat Keluhan Manajemen Baru</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Dimensi</label>
-                  <select
-                    value={vomDimension}
-                    onChange={(e) => setVomDimension(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg py-2 px-3 text-sm text-slate-350"
-                  >
-                    <option value="productivity">Productivity (Produktivitas)</option>
-                    <option value="quality">Quality (Mutu)</option>
-                    <option value="cost">Cost (Biaya)</option>
-                    <option value="delivery">Delivery (Pengiriman)</option>
-                    <option value="safety">Safety (K3)</option>
-                    <option value="morale">Morale (Absensi/Turnover)</option>
-                  </select>
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Deskripsi Kendala Utama</label>
-                  <input
-                    type="text"
-                    value={vomProblem}
-                    onChange={(e) => setVomProblem(e.target.value)}
-                    placeholder="Apa masalah utamanya?"
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-250 focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-                <div className="md:col-span-3">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Dampak (Impact)</label>
-                  <input
-                    type="text"
-                    value={vomImpact}
-                    onChange={(e) => setVomImpact(e.target.value)}
-                    placeholder="Apa dampak finansial atau operasionalnya?"
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-250 focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end pt-2">
-                <button
-                  onClick={handleAddVom}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-bold rounded-xl text-white transition-colors cursor-pointer"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Tambah VOM
-                </button>
-              </div>
-            </div>
 
-            {/* List */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-bold text-slate-300">Daftar Prioritas Kendala Awal</h3>
-              {vomList.length === 0 ? (
-                <p className="text-center py-6 text-xs text-slate-500">Belum ada data Voice of Management.</p>
-              ) : (
-                <div className="space-y-3">
-                  {vomList.map((item, idx) => (
-                    <div key={item.id} className="flex items-center justify-between bg-slate-950/40 border border-slate-850 p-4 rounded-xl">
-                      <div className="space-y-1 flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[9px] font-bold uppercase tracking-wider bg-slate-900 border border-slate-850 px-2 py-0.5 rounded text-indigo-400">
-                            {item.dimension}
-                          </span>
-                          <span className="text-[10px] text-slate-500 font-mono">Prioritas #{idx + 1}</span>
-                        </div>
-                        <h4 className="text-sm font-bold text-slate-200 mt-1 truncate">{item.problem}</h4>
-                        {item.impact && <p className="text-xs text-slate-400">Dampak: {item.impact}</p>}
-                      </div>
-                      <button
-                        onClick={() => handleDeleteVom(item.id)}
-                        className="text-red-500 hover:text-red-400 p-2 hover:bg-slate-900 rounded-xl transition-all cursor-pointer ml-4"
-                      >
-                        <Trash className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )

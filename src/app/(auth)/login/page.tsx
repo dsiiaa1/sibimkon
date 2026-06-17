@@ -96,23 +96,29 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-1 flex-col justify-center py-12 sm:px-6 lg:px-8 bg-gradient-to-tr from-slate-900 via-indigo-950 to-slate-950 text-white relative overflow-hidden">
+    <div className="flex min-h-screen flex-1 flex-col justify-center py-12 sm:px-6 lg:px-8 text-white relative overflow-hidden" style={{background: 'linear-gradient(135deg, var(--navy-950) 0%, #080f22 50%, var(--dark-900) 100%)'}}>
       {/* Decorative gradient glowing spots */}
-      <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full bg-indigo-500/10 blur-[120px]" />
-      <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] rounded-full bg-cyan-500/10 blur-[120px]" />
+      <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full" style={{background: 'radial-gradient(circle, rgba(212,160,23,0.06) 0%, transparent 70%)', filter: 'blur(60px)'}} />
+      <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] rounded-full" style={{background: 'radial-gradient(circle, rgba(212,160,23,0.04) 0%, transparent 70%)', filter: 'blur(60px)'}} />
+      {/* Gold line at top */}
+      <div className="absolute top-0 left-0 right-0 h-px" style={{background: 'linear-gradient(90deg, transparent, rgba(212,160,23,0.4), transparent)'}} />
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md z-10">
-        <div className="flex justify-center text-5xl mb-4">🛡️</div>
-        <h2 className="text-center text-3xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-200 via-white to-cyan-200">
+        <div className="flex justify-center mb-4">
+          <div className="h-14 w-14 rounded-2xl flex items-center justify-center text-2xl font-black shadow-lg" style={{background: 'linear-gradient(135deg, #b8860b, #f4c430)', color: 'var(--navy-950)'}}>
+            S
+          </div>
+        </div>
+        <h2 className="text-center text-3xl font-extrabold tracking-tight" style={{background: 'linear-gradient(135deg, #f4c430, #fce9a0, #d4a017)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text'}}>
           SIBIMKON
         </h2>
-        <p className="mt-2 text-center text-sm text-slate-400">
+        <p className="mt-2 text-center text-sm" style={{color: 'var(--text-muted)'}}>
           Sistem Informasi Bimbingan Konsultansi Peningkatan Produktivitas
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md z-10 px-4 sm:px-0">
-        <div className="glass-card bg-slate-900/60 border border-slate-800/80 rounded-2xl py-8 px-6 shadow-2xl backdrop-blur-xl sm:px-10 animate-fade-in">
+        <div className="rounded-2xl py-8 px-6 sm:px-10 animate-fade-in" style={{background: 'rgba(10,22,40,0.80)', border: '1px solid var(--border-base)', boxShadow: '0 25px 60px rgba(0,0,0,0.50), inset 0 1px 0 rgba(212,160,23,0.06)', backdropFilter: 'blur(20px)'}}>
           {error && (
             <div className="mb-4 rounded-lg bg-red-500/15 border border-red-500/30 p-3 text-sm text-red-400">
               {error}
@@ -133,7 +139,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@company.com"
-                className="mt-1 block w-full rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3 text-white placeholder-slate-500 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-all outline-none"
+                className="mt-1 block w-full rounded-xl px-4 py-3 sm:text-sm transition-all outline-none" style={{background: 'rgba(5,10,24,0.8)', border: '1px solid var(--border-base)', color: 'var(--text-primary)'}}
               />
             </div>
 
@@ -150,12 +156,12 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="mt-1 block w-full rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3 text-white placeholder-slate-500 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-all outline-none"
+                className="mt-1 block w-full rounded-xl px-4 py-3 sm:text-sm transition-all outline-none" style={{background: 'rgba(5,10,24,0.8)', border: '1px solid var(--border-base)', color: 'var(--text-primary)'}}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="block text-sm font-medium mb-2" style={{color: 'var(--text-secondary)'}}>
                 Pilih Role (Untuk Demo Mode)
               </label>
               <div className="grid grid-cols-2 gap-2">
@@ -169,11 +175,17 @@ export default function LoginPage() {
                     key={item.id}
                     type="button"
                     onClick={() => setRole(item.id as any)}
-                    className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all ${
-                      role === item.id
-                        ? 'border-indigo-500 bg-indigo-500/20 text-white'
-                        : 'border-slate-800 bg-slate-950/30 text-slate-400 hover:bg-slate-850'
-                    }`}
+                    style={role === item.id ? {
+                      border: '1px solid rgba(212,160,23,0.55)',
+                      background: 'rgba(212,160,23,0.15)',
+                      color: 'var(--gold-400)',
+                      fontWeight: 700
+                    } : {
+                      border: '1px solid var(--border-base)',
+                      background: 'rgba(5,10,24,0.5)',
+                      color: 'var(--text-muted)'
+                    }}
+                    className="px-3 py-2 rounded-lg text-xs font-medium transition-all"
                   >
                     {item.name}
                   </button>
@@ -187,9 +199,10 @@ export default function LoginPage() {
                   id="remember-me"
                   name="remember-me"
                   type="checkbox"
-                  className="h-4 w-4 rounded border-slate-800 bg-slate-950 text-indigo-600 focus:ring-indigo-500"
+                  className="h-4 w-4 rounded"
+                  style={{borderColor: 'var(--border-base)', background: 'var(--navy-900)', accentColor: 'var(--gold-400)'}}
                 />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-slate-400">
+                <label htmlFor="remember-me" className="ml-2 block text-sm" style={{color: 'var(--text-muted)'}}>
                   Ingat Saya
                 </label>
               </div>
@@ -208,7 +221,8 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="flex w-full justify-center rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 hover:from-indigo-600 hover:to-cyan-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 disabled:opacity-50 transition-all cursor-pointer transform hover:-translate-y-0.5"
+                className="flex w-full justify-center rounded-xl px-4 py-3 text-sm font-bold disabled:opacity-50 transition-all cursor-pointer transform hover:-translate-y-0.5"
+                style={{background: 'linear-gradient(135deg, #b8860b, #d4a017, #f4c430)', color: 'var(--navy-950)', boxShadow: '0 6px 24px rgba(212,160,23,0.30)'}}
               >
                 {loading ? 'Mengautentikasi...' : 'Masuk Aplikasi'}
               </button>
@@ -218,10 +232,10 @@ export default function LoginPage() {
           <div className="mt-6">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-800" />
+                <div className="w-full" style={{borderTop: '1px solid var(--border-base)'}} />
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="bg-slate-900/60 px-2 text-slate-400">Atau gunakan</span>
+                <span className="px-2" style={{background: 'transparent', color: 'var(--text-muted)'}}>Atau gunakan</span>
               </div>
             </div>
 
@@ -229,16 +243,17 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={handleDemoLogin}
-                className="flex w-full justify-center items-center rounded-xl border border-dashed border-slate-700 bg-slate-950/20 px-4 py-3 text-sm font-medium text-indigo-300 hover:bg-slate-950/40 hover:text-white transition-all cursor-pointer"
+                className="flex w-full justify-center items-center rounded-xl px-4 py-3 text-sm font-semibold transition-all cursor-pointer"
+                style={{border: '1px dashed rgba(212,160,23,0.35)', background: 'rgba(212,160,23,0.04)', color: 'var(--gold-300)'}}
               >
                 Masuk Instan dengan Demo Mode ⚡
               </button>
             </div>
           </div>
 
-          <p className="mt-6 text-center text-xs text-slate-500">
+          <p className="mt-6 text-center text-xs" style={{color: 'var(--text-muted)'}}>
             Belum terdaftar?{' '}
-            <Link href="/register" className="font-semibold text-indigo-400 hover:text-indigo-300">
+            <Link href="/register" className="font-semibold transition-colors" style={{color: 'var(--gold-400)'}}>
               Daftar Perusahaan Baru
             </Link>
           </p>

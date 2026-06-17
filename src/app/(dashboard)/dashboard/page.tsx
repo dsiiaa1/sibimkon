@@ -76,23 +76,27 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8 max-w-7xl mx-auto animate-fade-in">
       {/* Welcome Hero Banner */}
-      <div className="rounded-3xl bg-gradient-to-r from-indigo-900 via-indigo-950 to-slate-900 border border-slate-800 p-6 md:p-8 relative overflow-hidden shadow-xl shadow-indigo-950/20">
-        <div className="absolute right-0 top-0 translate-x-[20%] translate-y-[-20%] w-[350px] h-[350px] rounded-full bg-indigo-500/10 blur-[100px]" />
+      <div className="rounded-3xl p-6 md:p-8 relative overflow-hidden" style={{background: 'linear-gradient(135deg, var(--navy-800) 0%, var(--navy-950) 70%, var(--dark-900) 100%)', border: '1px solid var(--border-base)', boxShadow: '0 20px 60px rgba(0,0,0,0.4)'}}>
+        <div className="absolute right-0 top-0 translate-x-[20%] translate-y-[-20%] w-[400px] h-[400px] rounded-full" style={{background: 'rgba(212,160,23,0.04)', filter: 'blur(80px)'}} />
+        <div className="absolute left-[40%] bottom-0 w-[300px] h-[200px] rounded-full" style={{background: 'rgba(212,160,23,0.03)', filter: 'blur(60px)'}} />
+        {/* Gold shimmer line */}
+        <div className="absolute top-0 left-0 right-0 h-px" style={{background: 'linear-gradient(90deg, transparent, rgba(212,160,23,0.5), transparent)'}} />
         <div className="relative z-10 max-w-xl space-y-4">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 border border-indigo-500/20 text-indigo-300">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold" style={{background: 'rgba(212,160,23,0.10)', border: '1px solid rgba(212,160,23,0.22)', color: 'var(--gold-400)'}}>
             <Sparkles className="h-3.5 w-3.5" />
             AI-Powered DMAIC Consultation Platform
           </div>
-          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white leading-tight">
+          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight leading-tight" style={{color: 'var(--text-primary)'}}>
             Selamat Datang di SIBIMKON
           </h1>
-          <p className="text-slate-400 text-sm md:text-base leading-relaxed">
+          <p className="text-sm md:text-base leading-relaxed" style={{color: 'var(--text-muted)'}}>
             Platform terpadu peningkatan produktivitas nasional. Digitalisasi pencatatan masalah, analisis akar penyebab, hingga pemantauan dampak ekonomi secara real-time.
           </p>
           <div className="pt-2">
             <button 
               onClick={() => setShowNewProjectModal(true)}
-              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-md hover:bg-indigo-500 hover:shadow-lg transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold transition-all cursor-pointer transform hover:-translate-y-0.5"
+              style={{background: 'linear-gradient(135deg, #b8860b, #d4a017, #f4c430)', color: 'var(--navy-950)', boxShadow: '0 6px 20px rgba(212,160,23,0.30)'}}
             >
               <Plus className="h-4 w-4" />
               Mulai Proyek Baru
@@ -104,71 +108,72 @@ export default function DashboardPage() {
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {/* KPI 1 */}
-        <div className="glass-card rounded-2xl p-6 flex items-center justify-between border border-slate-800 bg-slate-950/40">
+        <div className="rounded-2xl p-6 flex items-center justify-between" style={{background: 'rgba(10,22,40,0.75)', border: '1px solid var(--border-base)', backdropFilter: 'blur(16px)'}}>
           <div className="space-y-1">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Proyek Aktif</p>
-            <h3 className="text-2xl font-bold text-slate-100">{activeProjectsCount} Proyek</h3>
-            <p className="text-xs text-indigo-400">Dalam pendampingan</p>
+            <p className="text-xs font-semibold uppercase tracking-wider" style={{color: 'var(--text-muted)'}}>Proyek Aktif</p>
+            <h3 className="text-2xl font-bold" style={{color: 'var(--text-primary)'}}>{activeProjectsCount} Proyek</h3>
+            <p className="text-xs" style={{color: 'var(--gold-400)'}}>Dalam pendampingan</p>
           </div>
-          <div className="h-12 w-12 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+          <div className="h-12 w-12 rounded-xl flex items-center justify-center" style={{background: 'rgba(212,160,23,0.10)', color: 'var(--gold-400)'}}>
             <Folder className="h-6 w-6" />
           </div>
         </div>
 
         {/* KPI 2 */}
-        <div className="glass-card rounded-2xl p-6 flex items-center justify-between border border-slate-800 bg-slate-950/40">
+        <div className="rounded-2xl p-6 flex items-center justify-between" style={{background: 'rgba(10,22,40,0.75)', border: '1px solid var(--border-base)', backdropFilter: 'blur(16px)'}}>
           <div className="space-y-1">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Perusahaan Klien</p>
-            <h3 className="text-2xl font-bold text-slate-100">{companies.length} Klien</h3>
-            <p className="text-xs text-cyan-400">Terdaftar di daerah</p>
+            <p className="text-xs font-semibold uppercase tracking-wider" style={{color: 'var(--text-muted)'}}>Perusahaan Klien</p>
+            <h3 className="text-2xl font-bold" style={{color: 'var(--text-primary)'}}>{companies.length} Klien</h3>
+            <p className="text-xs" style={{color: 'var(--gold-300)'}}>Terdaftar di daerah</p>
           </div>
-          <div className="h-12 w-12 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400">
+          <div className="h-12 w-12 rounded-xl flex items-center justify-center" style={{background: 'rgba(212,160,23,0.07)', color: 'var(--gold-300)'}}>
             <Users className="h-6 w-6" />
           </div>
         </div>
 
         {/* KPI 3 */}
-        <div className="glass-card rounded-2xl p-6 flex items-center justify-between border border-slate-800 bg-slate-950/40">
+        <div className="rounded-2xl p-6 flex items-center justify-between" style={{background: 'rgba(10,22,40,0.75)', border: '1px solid var(--border-base)', backdropFilter: 'blur(16px)'}}>
           <div className="space-y-1">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Rata-Rata Index</p>
-            <h3 className="text-2xl font-bold text-slate-100">66.5%</h3>
-            <p className="text-xs text-emerald-400">Productivity index</p>
+            <p className="text-xs font-semibold uppercase tracking-wider" style={{color: 'var(--text-muted)'}}>Rata-Rata Index</p>
+            <h3 className="text-2xl font-bold" style={{color: 'var(--text-primary)'}}>66.5%</h3>
+            <p className="text-xs" style={{color: '#5ecb8a'}}>Productivity index</p>
           </div>
-          <div className="h-12 w-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+          <div className="h-12 w-12 rounded-xl flex items-center justify-center" style={{background: 'rgba(94,203,138,0.10)', color: '#5ecb8a'}}>
             <Activity className="h-6 w-6" />
           </div>
         </div>
 
         {/* KPI 4 */}
-        <div className="glass-card rounded-2xl p-6 flex items-center justify-between border border-slate-800 bg-slate-950/40">
+        <div className="rounded-2xl p-6 flex items-center justify-between" style={{background: 'rgba(10,22,40,0.75)', border: '1px solid var(--border-base)', backdropFilter: 'blur(16px)'}}>
           <div className="space-y-1">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Rerata Improvement</p>
-            <h3 className="text-2xl font-bold text-slate-100">+{avgImprovement.toFixed(1)}%</h3>
-            <p className="text-xs text-amber-400">Peningkatan dari baseline</p>
+            <p className="text-xs font-semibold uppercase tracking-wider" style={{color: 'var(--text-muted)'}}>Rerata Improvement</p>
+            <h3 className="text-2xl font-bold" style={{color: 'var(--text-primary)'}}>+{avgImprovement.toFixed(1)}%</h3>
+            <p className="text-xs" style={{color: 'var(--gold-400)'}}>Peningkatan dari baseline</p>
           </div>
-          <div className="h-12 w-12 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400">
+          <div className="h-12 w-12 rounded-xl flex items-center justify-center" style={{background: 'rgba(212,160,23,0.10)', color: 'var(--gold-400)'}}>
             <TrendingUp className="h-6 w-6" />
           </div>
         </div>
       </div>
 
       {/* Projects List Section */}
-      <div className="glass-card rounded-2xl border border-slate-800 bg-slate-950/40 overflow-hidden shadow-lg">
+      <div className="rounded-2xl overflow-hidden" style={{background: 'rgba(10,22,40,0.75)', border: '1px solid var(--border-base)', backdropFilter: 'blur(16px)', boxShadow: '0 8px 32px rgba(0,0,0,0.25)'}}>
         {/* Section Header with search */}
-        <div className="p-6 border-b border-slate-800/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4" style={{borderBottom: '1px solid var(--border-base)'}}>
           <div>
-            <h2 className="text-lg font-bold text-slate-200">Daftar Proyek Pendampingan</h2>
-            <p className="text-xs text-slate-500">Pilih proyek untuk memulai tahapan DMAIC</p>
+            <h2 className="text-lg font-bold" style={{color: 'var(--text-primary)'}}>Daftar Proyek Pendampingan</h2>
+            <p className="text-xs mt-0.5" style={{color: 'var(--text-muted)'}}>Pilih proyek untuk memulai tahapan DMAIC</p>
           </div>
 
           <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+            <Search className="absolute left-3 top-2.5 h-4 w-4" style={{color: 'var(--text-muted)'}} />
             <input
               type="text"
               placeholder="Cari proyek atau klien..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 pl-10 pr-4 text-sm text-slate-350 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+              className="w-full rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none transition-colors"
+              style={{background: 'rgba(5,10,24,0.8)', border: '1px solid var(--border-base)', color: 'var(--text-primary)'}}
             />
           </div>
         </div>
@@ -176,7 +181,7 @@ export default function DashboardPage() {
         {/* Table list */}
         <div className="overflow-x-auto">
           {filteredProjects.length === 0 ? (
-            <div className="p-8 text-center text-slate-500">Tidak ada proyek ditemukan.</div>
+            <div className="p-8 text-center" style={{color: 'var(--text-muted)'}}>Tidak ada proyek ditemukan.</div>
           ) : (
             <table className="w-full text-left border-collapse">
               <thead>
@@ -236,13 +241,14 @@ export default function DashboardPage() {
 
       {/* New Project Modal */}
       {showNewProjectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="w-full max-w-lg bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
-            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-200">Mulai Proyek BIMKON Baru</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in" style={{background: 'rgba(2,6,15,0.80)', backdropFilter: 'blur(8px)'}}>
+          <div className="w-full max-w-lg rounded-3xl overflow-hidden" style={{background: 'var(--navy-900)', border: '1px solid var(--border-base)', boxShadow: '0 30px 80px rgba(0,0,0,0.60)'}}>
+            <div className="px-6 py-4 flex items-center justify-between" style={{borderBottom: '1px solid var(--border-base)', background: 'var(--navy-950)'}}>
+              <h3 className="text-lg font-bold" style={{color: 'var(--text-primary)'}}>Mulai Proyek BIMKON Baru</h3>
               <button 
                 onClick={() => setShowNewProjectModal(false)}
-                className="text-slate-500 hover:text-slate-300 transition-colors"
+                className="text-lg font-light transition-colors"
+                style={{color: 'var(--text-muted)'}}
               >
                 ✕
               </button>

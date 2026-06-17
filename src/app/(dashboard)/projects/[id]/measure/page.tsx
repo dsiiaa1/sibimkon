@@ -7,7 +7,10 @@ import {
   TrendingUp, 
   Save, 
   HelpCircle,
-  FileCheck
+  FileCheck,
+  MessageSquareQuote,
+  Plus,
+  Trash2
 } from 'lucide-react'
 import { 
   Radar, 
@@ -34,6 +37,13 @@ export default function MeasurePage() {
   const [assessments, setAssessments] = useState<Assessment[]>([])
   const [isSaved, setIsSaved] = useState(false)
 
+  // VOM State
+  const [vomList, setVomList] = useState<any[]>([])
+  const [vomDimension, setVomDimension] = useState('productivity')
+  const [vomProblem, setVomProblem] = useState('')
+  const [vomImpact, setVomImpact] = useState('')
+  const [showVomPanel, setShowVomPanel] = useState(false)
+
   useEffect(() => {
     const db = getMockDB()
     const proj = db.projects.find((p: Project) => p.id === projectId)
@@ -46,6 +56,20 @@ export default function MeasurePage() {
     // Load or initialize assessments
     const projectAssessments = db.assessments[projectId] || []
     setAssessments(projectAssessments)
+
+    // Load VOM from localStorage
+    const storedVom = localStorage.getItem(`sibimkon_vom_${projectId}`)
+    if (storedVom) {
+      setVomList(JSON.parse(storedVom))
+    } else {
+      // Default seed data when no VOM captured yet
+      const defaultVom = [
+        { id: 'vom-1', dimension: 'productivity', problem: 'Bottleneck di stasiun sewing line 3', impact: 'OPH turun 15% dari target', priority: 1 },
+        { id: 'vom-2', dimension: 'quality', problem: 'Tingkat defect jahit kerut tinggi', impact: 'Biaya re-work mencapai Rp 25jt/bulan', priority: 2 }
+      ]
+      setVomList(defaultVom)
+      localStorage.setItem(`sibimkon_vom_${projectId}`, JSON.stringify(defaultVom))
+    }
   }, [projectId, router])
 
   const handleScoreChange = (dimension: string, questionId: string, value: number) => {
@@ -96,6 +120,28 @@ export default function MeasurePage() {
     alert('Assessment PQCDSM berhasil disimpan! Fase proyek diperbarui ke ANALYZE.')
   }
 
+  const handleAddVom = () => {
+    if (!vomProblem) return
+    const newItem = {
+      id: 'vom-' + Math.random().toString(36).substr(2, 9),
+      dimension: vomDimension,
+      problem: vomProblem,
+      impact: vomImpact,
+      priority: vomList.length + 1
+    }
+    const updated = [...vomList, newItem]
+    setVomList(updated)
+    localStorage.setItem(`sibimkon_vom_${projectId}`, JSON.stringify(updated))
+    setVomProblem('')
+    setVomImpact('')
+  }
+
+  const handleDeleteVom = (id: string) => {
+    const updated = vomList.filter((item: any) => item.id !== id)
+    setVomList(updated)
+    localStorage.setItem(`sibimkon_vom_${projectId}`, JSON.stringify(updated))
+  }
+
   if (!project || assessments.length === 0) {
     return (
       <div className="flex h-64 items-center justify-center text-slate-400">
@@ -125,9 +171,20 @@ export default function MeasurePage() {
         <div>
           <span className="text-xs font-mono text-indigo-400">{project.project_code}</span>
           <h1 className="text-2xl font-bold text-slate-100 mt-1">{project.title}</h1>
-          <p className="text-xs text-slate-500 mt-0.5">Fase MEASURE: Baseline Assessment PQCDSM & Productivity Index</p>
+          <p className="text-xs text-slate-500 mt-0.5">Fase MEASURE: Baseline Assessment PQCDSM &amp; Productivity Index</p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowVomPanel(v => !v)}
+            className={`inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-xl border transition-colors cursor-pointer ${
+              showVomPanel
+                ? 'bg-amber-500/10 border-amber-500/40 text-amber-400'
+                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <MessageSquareQuote className="h-4 w-4" />
+            Voice of Management
+          </button>
           <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-right">
             <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-bold">Productivity Index</span>
             <span className="text-xl font-bold text-indigo-400">{project.current_score || 0}%</span>
@@ -141,6 +198,94 @@ export default function MeasurePage() {
           </button>
         </div>
       </div>
+
+      {/* VOM Collapsible Panel */}
+      {showVomPanel && (
+        <div className="bg-amber-950/10 border border-amber-800/30 rounded-3xl p-6 space-y-5">
+          <div className="flex items-center justify-between border-b border-amber-800/20 pb-3">
+            <div className="flex items-center gap-2">
+              <MessageSquareQuote className="h-5 w-5 text-amber-400" />
+              <h2 className="font-bold text-amber-300 text-base">Voice of Management (VOM)</h2>
+            </div>
+            <span className="text-[10px] text-amber-500 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded">Gunakan sebagai konteks penilaian kuesioner</span>
+          </div>
+
+          {/* VOM Input Form */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-1">Dimensi PQCDSM</label>
+              <select
+                value={vomDimension}
+                onChange={(e) => setVomDimension(e.target.value)}
+                className="w-full bg-slate-900 border border-amber-800/30 rounded-lg py-2 px-3 text-sm text-slate-300"
+              >
+                <option value="productivity">Productivity</option>
+                <option value="quality">Quality</option>
+                <option value="cost">Cost</option>
+                <option value="delivery">Delivery</option>
+                <option value="safety">Safety</option>
+                <option value="morale">Morale</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-1">Keluhan / Prioritas Masalah</label>
+              <input
+                type="text"
+                value={vomProblem}
+                onChange={(e) => setVomProblem(e.target.value)}
+                placeholder="Deskripsi keluhan manajemen..."
+                className="w-full bg-slate-900 border border-amber-800/30 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-amber-500"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-amber-500 mb-1">Dampak (Impact)</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={vomImpact}
+                  onChange={(e) => setVomImpact(e.target.value)}
+                  placeholder="Dampak finansial / operasional"
+                  className="flex-1 bg-slate-900 border border-amber-800/30 rounded-lg px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-amber-500"
+                />
+                <button
+                  onClick={handleAddVom}
+                  className="px-3 py-2 bg-amber-600 hover:bg-amber-500 text-xs font-bold rounded-lg text-white cursor-pointer"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* VOM List */}
+          {vomList.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {vomList.map((item: any, idx: number) => (
+                <div key={item.id} className="flex items-start justify-between bg-amber-950/20 border border-amber-800/30 rounded-2xl p-4 gap-3">
+                  <div className="space-y-1 flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-bold uppercase tracking-wider bg-amber-900/30 border border-amber-700/30 px-2 py-0.5 rounded text-amber-400">
+                        {item.dimension}
+                      </span>
+                      <span className="text-[10px] text-amber-600 font-mono">#{idx + 1}</span>
+                    </div>
+                    <p className="text-sm font-semibold text-slate-200 leading-snug">{item.problem}</p>
+                    {item.impact && <p className="text-xs text-slate-400">Dampak: {item.impact}</p>}
+                  </div>
+                  <button
+                    onClick={() => handleDeleteVom(item.id)}
+                    className="text-red-400 hover:text-red-300 p-1.5 rounded-lg hover:bg-red-900/20 transition-colors cursor-pointer shrink-0"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-center py-4 text-sm text-amber-700">Belum ada catatan Voice of Management. Tambahkan di atas.</p>
+          )}
+        </div>
+      )}
 
       {/* Main Grid: Forms and Chart Side-by-side */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

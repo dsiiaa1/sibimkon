@@ -1,63 +1,526 @@
 @import "tailwindcss";
 
+/* ===================================================
+   SIBIMKON — Design System: Navy · Black · Gold
+   =================================================== */
+
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --primary: #4f46e5;
-  --primary-hover: #4338ca;
+  /* Core palette */
+  --navy-950: #050a18;
+  --navy-900: #0a1628;
+  --navy-800: #0f2044;
+  --navy-700: #163060;
+  --navy-600: #1e4080;
+  --navy-500: #2a55a5;
+
+  --gold-400: #f4c430;
+  --gold-500: #d4a017;
+  --gold-600: #b8860b;
+  --gold-300: #fad55a;
+  --gold-200: #fce9a0;
+  --gold-100: #fef8e1;
+
+  --black-pure: #000000;
+  --dark-900: #050505;
+  --dark-800: #0d0d0d;
+  --dark-700: #141414;
+  --dark-600: #1c1c1c;
+
+  /* Text hierarchy */
+  --text-primary: #f5f0e0; /* warm white — readable on dark */
+  --text-secondary: #c8bfa0; /* muted warm */
+  --text-muted: #7a6f55; /* subtle */
+  --text-gold: #f4c430;
+
+  /* Borders */
+  --border-base: rgba(212, 160, 23, 0.12);
+  --border-hover: rgba(212, 160, 23, 0.3);
+  --border-active: rgba(212, 160, 23, 0.55);
+
+  /* Background */
+  --background: var(--navy-950);
+  --foreground: var(--text-primary);
+
+  /* Sidebar */
   --sidebar-width: 280px;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-primary-main: var(--primary);
-  --color-primary-hover: var(--primary-hover);
+}
+
+/* ===================================================
+   BASE RESET
+   =================================================== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: var(--navy-950);
+  color: var(--text-primary);
+  font-family:
+    "Inter",
+    system-ui,
+    -apple-system,
+    sans-serif;
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom scrollbars */
+/* ===================================================
+   TYPOGRAPHY — clear & readable
+   =================================================== */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--text-primary);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+p,
+span,
+li,
+td,
+th {
+  color: var(--text-secondary);
+}
+
+/* Force readable text on non-interactive elements
+   where Tailwind may generate overly dim colours */
+.text-slate-100 {
+  color: #f5f0e0 !important;
+}
+.text-slate-200 {
+  color: #e8e0cc !important;
+}
+.text-slate-300 {
+  color: #d7cfb0 !important;
+}
+.text-slate-400 {
+  color: #b9ab86 !important;
+}
+
+/* sering muncul sebagai “nyatu” di background navy */
+.text-slate-500 {
+  color: #c8bfa0 !important;
+}
+.text-slate-600 {
+  color: #b2a37f !important;
+}
+.text-slate-700 {
+  color: #c8bfa0 !important;
+}
+.text-slate-800 {
+  color: #f5f0e0 !important;
+}
+
+/* custom utility values used in codebase */
+.text-slate-250 {
+  color: #d9d0b0 !important;
+}
+.text-slate-350 {
+  color: #c8bfa0 !important;
+}
+
+.text-white {
+  color: #f5f0e0 !important;
+}
+
+/* Gold accent overrides */
+.text-indigo-400,
+.text-indigo-300 {
+  color: var(--gold-400) !important;
+}
+.text-cyan-400,
+.text-cyan-300 {
+  color: var(--gold-300) !important;
+}
+.text-emerald-400 {
+  color: #5ecb8a !important;
+}
+.text-amber-400 {
+  color: var(--gold-400) !important;
+}
+
+/* Consistent base text inside dark surfaces */
+.glass-card,
+aside,
+header,
+main,
+section,
+nav {
+  color: var(--text-primary) !important;
+}
+
+/* Labels & small text readability */
+label,
+option,
+select,
+textarea,
+input {
+  color: var(--text-primary) !important;
+}
+
+p,
+span,
+li,
+td,
+th {
+  color: var(--text-secondary) !important;
+}
+
+/* ===================================================
+   SCROLLBAR — gold themed
+   =================================================== */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.3);
+  background: rgba(212, 160, 23, 0.25);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.5);
+  background: rgba(212, 160, 23, 0.45);
 }
 
-/* Glassmorphism cards */
+/* ===================================================
+   GLASS CARD — dark navy glass
+   =================================================== */
 .glass-card {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  background: rgba(10, 22, 40, 0.75);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-base);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(244, 196, 48, 0.05);
 }
 
-/* Fade in animation */
+/* ===================================================
+   SIDEBAR OVERRIDE — Navy/Gold
+   =================================================== */
+
+/* Active nav items */
+.nav-active {
+  background: linear-gradient(
+    135deg,
+    rgba(212, 160, 23, 0.18) 0%,
+    rgba(244, 196, 48, 0.08) 100%
+  );
+  color: var(--gold-400);
+  border: 1px solid var(--border-active);
+}
+
+/* Background of sidebar/header panels */
+.bg-slate-950\/80,
+.bg-slate-950\/40,
+.bg-slate-950 {
+  background-color: var(--navy-900) !important;
+}
+.bg-slate-900\/60,
+.bg-slate-900\/40,
+.bg-slate-900 {
+  background-color: var(--navy-800) !important;
+}
+.bg-slate-900\/20 {
+  background-color: rgba(10, 22, 40, 0.25) !important;
+}
+
+/* Border overrides */
+.border-slate-800\/80,
+.border-slate-800 {
+  border-color: var(--border-base) !important;
+}
+.border-slate-700 {
+  border-color: var(--border-hover) !important;
+}
+
+/* Dividers */
+.divide-slate-800 > * + * {
+  border-color: var(--border-base) !important;
+}
+
+/* ===================================================
+   BUTTON OVERRIDES — Gold primary
+   =================================================== */
+
+/* Indigo buttons → Gold */
+.bg-indigo-600,
+.bg-indigo-500 {
+  background: linear-gradient(
+    135deg,
+    #b8860b 0%,
+    #d4a017 50%,
+    #f4c430 100%
+  ) !important;
+  color: var(--navy-950) !important;
+  font-weight: 700;
+  box-shadow: 0 4px 16px rgba(212, 160, 23, 0.25) !important;
+}
+.bg-indigo-600:hover,
+.bg-indigo-500:hover,
+.hover\:bg-indigo-500:hover,
+.hover\:bg-indigo-600:hover {
+  background: linear-gradient(
+    135deg,
+    #d4a017 0%,
+    #f4c430 50%,
+    #fad55a 100%
+  ) !important;
+  box-shadow: 0 6px 24px rgba(244, 196, 48, 0.35) !important;
+}
+
+/* Gradient buttons (login) */
+.bg-gradient-to-r.from-indigo-500.to-cyan-500,
+.bg-gradient-to-r.from-indigo-600.to-cyan-600 {
+  background: linear-gradient(135deg, #b8860b, #f4c430) !important;
+  color: var(--navy-950) !important;
+}
+
+/* Indigo tinted backgrounds */
+.bg-indigo-500\/10 {
+  background-color: rgba(212, 160, 23, 0.08) !important;
+}
+.bg-indigo-500\/20 {
+  background-color: rgba(212, 160, 23, 0.15) !important;
+}
+.bg-cyan-500\/10 {
+  background-color: rgba(212, 160, 23, 0.06) !important;
+}
+
+/* Indigo borders */
+.border-indigo-500\/20 {
+  border-color: rgba(212, 160, 23, 0.2) !important;
+}
+.border-indigo-500\/30 {
+  border-color: rgba(212, 160, 23, 0.3) !important;
+}
+.border-indigo-500\/35 {
+  border-color: rgba(212, 160, 23, 0.35) !important;
+}
+.border-indigo-500 {
+  border-color: var(--gold-400) !important;
+}
+
+/* Indigo focus rings */
+.focus\:border-indigo-500:focus {
+  border-color: var(--gold-400) !important;
+}
+.focus\:ring-indigo-500:focus-visible {
+  outline-color: var(--gold-400) !important;
+}
+
+/* ===================================================
+   AVATAR & ICON BG OVERRIDES
+   =================================================== */
+.bg-gradient-to-tr.from-indigo-500.to-cyan-500 {
+  background: linear-gradient(135deg, #b8860b, #f4c430) !important;
+  color: var(--navy-950) !important;
+}
+
+/* Icon containers */
+.bg-indigo-500\/10 svg,
+.bg-indigo-500\/20 svg {
+  color: var(--gold-400) !important;
+}
+.bg-cyan-500\/10 svg {
+  color: var(--gold-300) !important;
+}
+
+/* ===================================================
+   BADGE / STATUS PILL OVERRIDES
+   =================================================== */
+.bg-indigo-500\/20.text-indigo-300 {
+  background-color: rgba(212, 160, 23, 0.15) !important;
+  color: var(--gold-400) !important;
+  border-color: rgba(212, 160, 23, 0.3) !important;
+}
+
+/* Demo mode badge */
+.text-indigo-400.bg-indigo-500\/10 {
+  color: var(--gold-400) !important;
+  background-color: rgba(212, 160, 23, 0.1) !important;
+  border-color: rgba(212, 160, 23, 0.2) !important;
+}
+
+/* Notification ping dot */
+.bg-indigo-400,
+.bg-indigo-500 {
+  background-color: var(--gold-400) !important;
+}
+
+/* ===================================================
+   FORM INPUTS — navy dark
+   =================================================== */
+input,
+textarea,
+select {
+  background-color: var(--navy-900) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-base) !important;
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted) !important;
+}
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--gold-400) !important;
+  box-shadow: 0 0 0 3px rgba(212, 160, 23, 0.12) !important;
+  outline: none !important;
+}
+select option {
+  background-color: var(--navy-900) !important;
+  color: var(--text-primary) !important;
+}
+
+/* ===================================================
+   TABLE — consistent
+   =================================================== */
+thead tr {
+  background: rgba(10, 22, 40, 0.6) !important;
+}
+th {
+  color: var(--text-muted) !important;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+}
+td {
+  color: var(--text-secondary) !important;
+}
+tr:hover td {
+  background: rgba(212, 160, 23, 0.03) !important;
+}
+
+/* ===================================================
+   HERO BANNER — navy to dark
+   =================================================== */
+.rounded-3xl.bg-gradient-to-r.from-indigo-900 {
+  background: linear-gradient(
+    135deg,
+    var(--navy-800) 0%,
+    var(--navy-950) 60%,
+    var(--dark-900) 100%
+  ) !important;
+  border-color: var(--border-base) !important;
+}
+
+/* ===================================================
+   CHART TOOLTIPS
+   =================================================== */
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: var(--navy-900) !important;
+  border-color: var(--border-base) !important;
+  color: var(--text-primary) !important;
+  border-radius: 8px;
+}
+
+/* ===================================================
+   MODAL OVERLAY
+   =================================================== */
+.fixed.inset-0.bg-black\/60 {
+  background: rgba(2, 6, 15, 0.75) !important;
+}
+
+/* ===================================================
+   LOADING SPINNER
+   =================================================== */
+.border-indigo-500 {
+  border-color: var(--gold-400) !important;
+}
+
+/* ===================================================
+   ANIMATIONS
+   =================================================== */
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(10px) scale(0.99);
+    filter: blur(2px);
   }
   to {
     opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+.animate-fade-in {
+  animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes floaty {
+  0%,
+  100% {
     transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+.floaty {
+  animation: floaty 2.8s ease-in-out infinite;
+}
+
+/* Accessibility: reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in {
+    animation: none !important;
+  }
+  .gold-pulse {
+    animation: none !important;
+  }
+  .floaty {
+    animation: none !important;
   }
 }
 
-.animate-fade-in {
-  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+@keyframes goldPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(212, 160, 23, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(212, 160, 23, 0);
+  }
+}
+.gold-pulse {
+  animation: goldPulse 2s ease-in-out infinite;
+}
+
+/* ===================================================
+   GOLD GRADIENT TEXT UTILITY
+   =================================================== */
+.text-gold-gradient {
+  background: linear-gradient(135deg, #f4c430, #fad55a, #d4a017);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ===================================================
+   SCROLLBAR for sidebar nav
+   =================================================== */
+nav::-webkit-scrollbar {
+  width: 3px;
+}
+nav::-webkit-scrollbar-thumb {
+  background: rgba(212, 160, 23, 0.15);
+  border-radius: 2px;
 }
