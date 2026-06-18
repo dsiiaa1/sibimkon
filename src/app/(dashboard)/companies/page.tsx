@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { getCompanies, getProjects } from '@/lib/db'
+import { getCompanies, getProjects, createCompany } from '@/lib/db'
 import { Company, Project } from '@/lib/mockData'
 import { Building, Search, Plus, User, Phone, Mail, ArrowRight } from 'lucide-react'
 
@@ -46,8 +46,7 @@ export default function CompaniesPage() {
     e.preventDefault()
     if (!newName) return
 
-    const newCompany: Company = {
-      id: 'comp-' + Math.random().toString(36).substr(2, 9),
+    const newCompany = await createCompany({
       name: newName,
       address: newAddress,
       province: newProvince,
@@ -59,13 +58,9 @@ export default function CompaniesPage() {
       pic_position: picPos,
       pic_phone: picPhone,
       pic_email: picEmail,
-    }
+    })
 
-    const { getMockDB, updateMockDB } = await import('@/lib/mockData')
-    const db = getMockDB()
-    const updated = [...db.companies, newCompany]
-    updateMockDB('companies', updated)
-    setCompanies(updated)
+    setCompanies(prev => [...prev, newCompany])
     
     // Close modal & reset fields
     setShowAddModal(false)

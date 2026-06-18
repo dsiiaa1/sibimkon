@@ -104,6 +104,58 @@ export async function createProject(project: Omit<Project, 'id' | 'project_code'
   }
 }
 
+export async function createCompany(company: Omit<Company, 'id'>): Promise<Company> {
+  try {
+    const hasTable = await checkTableExists('companies')
+    if (!hasTable) throw new Error('Table does not exist')
+
+    const { data, error } = await supabase
+      .from('companies')
+      .insert({
+        name: company.name,
+        address: company.address,
+        province: company.province,
+        city: company.city,
+        business_field: company.business_field,
+        total_employees: company.total_employees,
+        certifications: company.certifications || [],
+        pic_name: company.pic_name,
+        pic_position: company.pic_position,
+        pic_phone: company.pic_phone,
+        pic_email: company.pic_email,
+      })
+      .select('*')
+      .single()
+
+    if (error) throw error
+
+    return {
+      id: data.id,
+      name: data.name,
+      address: data.address,
+      province: data.province,
+      city: data.city,
+      business_field: data.business_field,
+      total_employees: data.total_employees,
+      certifications: data.certifications || [],
+      pic_name: company.pic_name,
+      pic_position: company.pic_position,
+      pic_phone: company.pic_phone,
+      pic_email: company.pic_email,
+    }
+  } catch (err) {
+    console.warn('Supabase createCompany failed, falling back to mock storage.', err)
+    const db = getMockDB()
+    const newCompany: Company = {
+      ...company,
+      id: 'comp-' + Math.random().toString(36).substr(2, 9),
+    }
+    const updated = [...db.companies, newCompany]
+    updateMockDB('companies', updated)
+    return newCompany
+  }
+}
+
 export async function getCompanies(): Promise<Company[]> {
   try {
     const hasTable = await checkTableExists('companies')
