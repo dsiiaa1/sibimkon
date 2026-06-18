@@ -20,6 +20,10 @@ export interface Company {
   business_field: string
   total_employees: number
   certifications?: string[]
+  pic_name?: string
+  pic_position?: string
+  pic_phone?: string
+  pic_email?: string
 }
 
 export interface Project {
@@ -104,6 +108,10 @@ const INITIAL_COMPANIES: Company[] = [
     business_field: 'Tekstil & Garmen',
     total_employees: 250,
     certifications: ['ISO 9001', 'SMK3'],
+    pic_name: 'Budi Santoso',
+    pic_position: 'Manager HR & Produksi',
+    pic_phone: '081234567890',
+    pic_email: 'budi.santoso@sinarmaju.com',
   },
   {
     id: 'comp-2',
@@ -114,6 +122,10 @@ const INITIAL_COMPANIES: Company[] = [
     business_field: 'Makanan & Minuman',
     total_employees: 120,
     certifications: ['HACCP', 'Halal MUI'],
+    pic_name: 'Dewi Lestari',
+    pic_position: 'QA Lead',
+    pic_phone: '089876543210',
+    pic_email: 'dewi.lestari@globalpangan.com',
   }
 ]
 

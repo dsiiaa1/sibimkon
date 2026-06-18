@@ -14,6 +14,7 @@ export default function ProjectsPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [showNewProjectModal, setShowNewProjectModal] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string>('unknown')
+  const [currentUser, setCurrentUser] = useState<any>(null)
   
   // New Project Form
   const [newTitle, setNewTitle] = useState('')
@@ -28,14 +29,23 @@ export default function ProjectsPage() {
     async function loadData() {
       // Baca user dari session
       const localUser = localStorage.getItem('sibimkon_user')
+      let u: any = null
       if (localUser) {
-        const u = JSON.parse(localUser)
+        u = JSON.parse(localUser)
         setCurrentUserId(u.id || 'unknown')
+        setCurrentUser(u)
       }
       const projs = await getProjects()
       const comps = await getCompanies()
       setProjects(projs)
       setCompanies(comps)
+
+      if (u && u.role === 'perusahaan') {
+        const comp = comps.find(c => c.name.toLowerCase() === u.organization.toLowerCase())
+        if (comp) {
+          setNewCompanyId(comp.id)
+        }
+      }
     }
     loadData()
   }, [])
@@ -66,6 +76,11 @@ export default function ProjectsPage() {
   }
 
   const filteredProjects = projects.filter(p => {
+    if (currentUser?.role === 'perusahaan' && currentUser?.organization) {
+      if (p.company_name.toLowerCase() !== currentUser.organization.toLowerCase()) {
+        return false
+      }
+    }
     const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           p.company_name.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesStatus = statusFilter === 'all' || p.status === statusFilter
@@ -223,19 +238,28 @@ export default function ProjectsPage() {
 
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Pilih Perusahaan Klien
+                  Perusahaan Klien
                 </label>
-                <select
-                  required
-                  value={newCompanyId}
-                  onChange={(e) => setNewCompanyId(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
-                >
-                  <option value="">-- Pilih Perusahaan --</option>
-                  {companies.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
+                {currentUser?.role === 'perusahaan' ? (
+                  <input
+                    type="text"
+                    disabled
+                    value={currentUser?.organization}
+                    className="w-full bg-slate-950/40 border border-slate-850 rounded-xl px-4 py-2.5 text-slate-500 text-sm"
+                  />
+                ) : (
+                  <select
+                    required
+                    value={newCompanyId}
+                    onChange={(e) => setNewCompanyId(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
+                  >
+                    <option value="">-- Pilih Perusahaan --</option>
+                    {companies.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">

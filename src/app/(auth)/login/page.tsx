@@ -73,7 +73,11 @@ export default function LoginPage() {
       router.push('/dashboard')
       router.refresh()
     } catch (err: any) {
-      setError(err.message || 'Terjadi kesalahan. Silakan coba lagi.')
+      const msg = typeof err === 'string' ? err
+        : err?.message ? err.message
+        : err?.error_description ? err.error_description
+        : JSON.stringify(err)
+      setError(msg || 'Terjadi kesalahan. Silakan coba lagi.')
     } finally {
       setLoading(false)
     }

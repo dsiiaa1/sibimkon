@@ -4,6 +4,8 @@ const en: TranslationKeys = {
   // Sidebar / Navigation
   nav: {
     dashboard: 'Dashboard',
+    companies: 'Client Companies',
+    profile: 'Company Profile',
     projects: 'BIMKON Projects',
     admin: 'National / Admin',
     dmaicTitle: 'DMAIC Stages',

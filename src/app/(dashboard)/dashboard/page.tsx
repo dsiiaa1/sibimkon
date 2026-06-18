@@ -23,6 +23,7 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [showNewProjectModal, setShowNewProjectModal] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string>('unknown')
+  const [currentUser, setCurrentUser] = useState<any>(null)
   
   // New Project Form
   const [newTitle, setNewTitle] = useState('')
@@ -36,14 +37,23 @@ export default function DashboardPage() {
   useEffect(() => {
     async function loadData() {
       const localUser = localStorage.getItem('sibimkon_user')
+      let u: any = null
       if (localUser) {
-        const u = JSON.parse(localUser)
+        u = JSON.parse(localUser)
         setCurrentUserId(u.id || 'unknown')
+        setCurrentUser(u)
       }
       const projs = await getProjects()
       const comps = await getCompanies()
       setProjects(projs)
       setCompanies(comps)
+
+      if (u && u.role === 'perusahaan') {
+        const comp = comps.find(c => c.name.toLowerCase() === u.organization.toLowerCase())
+        if (comp) {
+          setNewCompanyId(comp.id)
+        }
+      }
     }
     loadData()
   }, [])
@@ -70,16 +80,29 @@ export default function DashboardPage() {
     setShowNewProjectModal(false)
     setNewTitle('')
     setNewDesc('')
-    setNewCompanyId('')
+    if (currentUser?.role !== 'perusahaan') {
+      setNewCompanyId('')
+    }
   }
 
-  const filteredProjects = projects.filter(p => 
+  // Filter projects by company if user is a client company
+  const viewableProjects = projects.filter(p => {
+    if (currentUser?.role === 'perusahaan' && currentUser?.organization) {
+      return p.company_name.toLowerCase() === currentUser.organization.toLowerCase()
+    }
+    return true
+  })
+
+  const filteredProjects = viewableProjects.filter(p => 
     p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     p.company_name.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  const activeProjectsCount = projects.filter(p => p.status !== 'completed').length
-  const avgImprovement = projects.reduce((acc, p) => acc + ((p.current_score || 0) - (p.baseline_score || 0)), 0) / (projects.length || 1)
+  const activeProjectsCount = viewableProjects.filter(p => p.status !== 'completed').length
+  const avgImprovement = viewableProjects.reduce((acc, p) => acc + ((p.current_score || 0) - (p.baseline_score || 0)), 0) / (viewableProjects.length || 1)
+  const avgIndex = viewableProjects.reduce((acc, p) => acc + (p.current_score || 0), 0) / (viewableProjects.length || 1)
+  
+  const userCompany = companies.find(c => c.name.toLowerCase() === currentUser?.organization?.toLowerCase())
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto animate-fade-in">
@@ -118,7 +141,9 @@ export default function DashboardPage() {
         {/* KPI 1 */}
         <div className="rounded-2xl p-6 flex items-center justify-between" style={{background: 'rgba(10,22,40,0.75)', border: '1px solid var(--border-base)', backdropFilter: 'blur(16px)'}}>
           <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wider" style={{color: 'var(--text-muted)'}}>Proyek Aktif</p>
+            <p className="text-xs font-semibold uppercase tracking-wider" style={{color: 'var(--text-muted)'}}>
+              {currentUser?.role === 'perusahaan' ? 'Proyek Kami' : 'Proyek Aktif'}
+            </p>
             <h3 className="text-2xl font-bold" style={{color: 'var(--text-primary)'}}>{activeProjectsCount} Proyek</h3>
             <p className="text-xs" style={{color: 'var(--gold-400)'}}>Dalam pendampingan</p>
           </div>
@@ -130,9 +155,19 @@ export default function DashboardPage() {
         {/* KPI 2 */}
         <div className="rounded-2xl p-6 flex items-center justify-between" style={{background: 'rgba(10,22,40,0.75)', border: '1px solid var(--border-base)', backdropFilter: 'blur(16px)'}}>
           <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wider" style={{color: 'var(--text-muted)'}}>Perusahaan Klien</p>
-            <h3 className="text-2xl font-bold" style={{color: 'var(--text-primary)'}}>{companies.length} Klien</h3>
-            <p className="text-xs" style={{color: 'var(--gold-300)'}}>Terdaftar di daerah</p>
+            {currentUser?.role === 'perusahaan' ? (
+              <>
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{color: 'var(--text-muted)'}}>Tenaga Kerja</p>
+                <h3 className="text-2xl font-bold" style={{color: 'var(--text-primary)'}}>{userCompany?.total_employees || 0} Orang</h3>
+                <p className="text-xs" style={{color: 'var(--gold-300)'}}>Karyawan aktif</p>
+              </>
+            ) : (
+              <>
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{color: 'var(--text-muted)'}}>Perusahaan Klien</p>
+                <h3 className="text-2xl font-bold" style={{color: 'var(--text-primary)'}}>{companies.length} Klien</h3>
+                <p className="text-xs" style={{color: 'var(--gold-300)'}}>Terdaftar di daerah</p>
+              </>
+            )}
           </div>
           <div className="h-12 w-12 rounded-xl flex items-center justify-center" style={{background: 'rgba(212,160,23,0.07)', color: 'var(--gold-300)'}}>
             <Users className="h-6 w-6" />
@@ -143,7 +178,9 @@ export default function DashboardPage() {
         <div className="rounded-2xl p-6 flex items-center justify-between" style={{background: 'rgba(10,22,40,0.75)', border: '1px solid var(--border-base)', backdropFilter: 'blur(16px)'}}>
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wider" style={{color: 'var(--text-muted)'}}>Rata-Rata Index</p>
-            <h3 className="text-2xl font-bold" style={{color: 'var(--text-primary)'}}>66.5%</h3>
+            <h3 className="text-2xl font-bold" style={{color: 'var(--text-primary)'}}>
+              {isNaN(avgIndex) ? '0.0' : avgIndex.toFixed(1)}%
+            </h3>
             <p className="text-xs" style={{color: '#5ecb8a'}}>Productivity index</p>
           </div>
           <div className="h-12 w-12 rounded-xl flex items-center justify-center" style={{background: 'rgba(94,203,138,0.10)', color: '#5ecb8a'}}>
@@ -154,8 +191,12 @@ export default function DashboardPage() {
         {/* KPI 4 */}
         <div className="rounded-2xl p-6 flex items-center justify-between" style={{background: 'rgba(10,22,40,0.75)', border: '1px solid var(--border-base)', backdropFilter: 'blur(16px)'}}>
           <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wider" style={{color: 'var(--text-muted)'}}>Rerata Improvement</p>
-            <h3 className="text-2xl font-bold" style={{color: 'var(--text-primary)'}}>+{avgImprovement.toFixed(1)}%</h3>
+            <p className="text-xs font-semibold uppercase tracking-wider" style={{color: 'var(--text-muted)'}}>
+              {currentUser?.role === 'perusahaan' ? 'Rerata Peningkatan' : 'Rerata Improvement'}
+            </p>
+            <h3 className="text-2xl font-bold" style={{color: 'var(--text-primary)'}}>
+              {isNaN(avgImprovement) ? '+0.0' : `+${avgImprovement.toFixed(1)}`}%
+            </h3>
             <p className="text-xs" style={{color: 'var(--gold-400)'}}>Peningkatan dari baseline</p>
           </div>
           <div className="h-12 w-12 rounded-xl flex items-center justify-center" style={{background: 'rgba(212,160,23,0.10)', color: 'var(--gold-400)'}}>
@@ -291,19 +332,28 @@ export default function DashboardPage() {
 
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Pilih Perusahaan Klien
+                  Perusahaan Klien
                 </label>
-                <select
-                  required
-                  value={newCompanyId}
-                  onChange={(e) => setNewCompanyId(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
-                >
-                  <option value="">-- Pilih Perusahaan --</option>
-                  {companies.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
+                {currentUser?.role === 'perusahaan' ? (
+                  <input
+                    type="text"
+                    disabled
+                    value={currentUser?.organization}
+                    className="w-full bg-slate-950/40 border border-slate-855 rounded-xl px-4 py-2.5 text-slate-500 text-sm"
+                  />
+                ) : (
+                  <select
+                    required
+                    value={newCompanyId}
+                    onChange={(e) => setNewCompanyId(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
+                  >
+                    <option value="">-- Pilih Perusahaan --</option>
+                    {companies.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">

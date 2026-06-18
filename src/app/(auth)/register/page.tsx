@@ -55,10 +55,18 @@ export default function RegisterPage() {
       })
 
       if (signUpError) {
-        if (signUpError.message.includes('User already registered')) {
+        if (signUpError.message?.includes('User already registered')) {
           throw new Error('Email ini sudah terdaftar. Silakan login atau gunakan email lain.')
         }
-        throw new Error(signUpError.message)
+        if (signUpError.message?.includes('Email rate limit exceeded')) {
+          throw new Error('Terlalu banyak percobaan. Tunggu beberapa menit lalu coba lagi.')
+        }
+        if (signUpError.message?.includes('Unable to validate email address')) {
+          throw new Error('Format email tidak valid.')
+        }
+        // Tampilkan pesan asli dari Supabase, atau stringify jika bukan string
+        const msg = signUpError.message || signUpError.code || JSON.stringify(signUpError)
+        throw new Error(msg)
       }
 
       // Upsert profil ke tabel profiles
@@ -94,7 +102,13 @@ export default function RegisterPage() {
       }, 3000)
 
     } catch (err: any) {
-      setError(err.message || 'Terjadi kesalahan. Silakan coba lagi.')
+      console.error('Register error full object:', err, JSON.stringify(err))
+      // Pastikan pesan error selalu berupa string yang bisa ditampilkan
+      const msg = typeof err === 'string' ? err
+        : err?.message ? err.message
+        : err?.error_description ? err.error_description
+        : JSON.stringify(err)
+      setError(msg || 'Terjadi kesalahan. Silakan coba lagi.')
     } finally {
       setLoading(false)
     }

@@ -209,6 +209,8 @@ export default function DashboardLayout({
 
   const navigation = [
     { name: t('nav.dashboard'), href: '/dashboard', icon: LayoutDashboard },
+    { name: t('nav.companies'), href: '/companies', icon: Building, roles: ['konsultan', 'admin_kemnaker', 'admin_disnaker'] },
+    { name: t('nav.profile'), href: '/profile', icon: Building, roles: ['perusahaan'] },
     { name: t('nav.projects'), href: '/projects', icon: FolderKanban },
     { name: t('nav.admin'), href: '/admin', icon: Activity, roles: ['admin_kemnaker', 'admin_disnaker'] },
   ]

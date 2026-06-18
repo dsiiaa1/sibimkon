@@ -2,6 +2,8 @@ const id = {
   // Sidebar / Navigation
   nav: {
     dashboard: 'Dashboard',
+    companies: 'Daftar Perusahaan',
+    profile: 'Profil Perusahaan',
     projects: 'Proyek BIMKON',
     admin: 'Nasional / Admin',
     dmaicTitle: 'Tahapan DMAIC',
