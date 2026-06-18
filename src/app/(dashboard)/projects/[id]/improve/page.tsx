@@ -18,7 +18,8 @@ export default function ImprovePage() {
 
   // Role-based permission — loaded from localStorage (same source as layout.tsx)
   const [userRole, setUserRole] = useState<string>('konsultan')
-  const isKonsultan = userRole === 'konsultan' || userRole === 'admin_kemnaker' || userRole === 'admin_disnaker'
+  // Perusahaan = satu-satunya role yang dibatasi. Semua role lain (konsultan, admin, dll) dapat akses penuh.
+  const isKonsultan = userRole.toLowerCase() !== 'perusahaan'
   
   // Modal & form states
   const [showAddModal, setShowAddModal] = useState(false)
