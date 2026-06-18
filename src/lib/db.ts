@@ -31,9 +31,8 @@ export async function getProjects(): Promise<Project[]> {
       .select('*, companies(name)')
     
     if (error) throw error
-    if (!data || data.length === 0) throw new Error('No data')
 
-    return data.map((p: any) => ({
+    return (data || []).map((p: any) => ({
       id: p.id,
       project_code: p.project_code,
       title: p.title,
@@ -112,9 +111,8 @@ export async function getCompanies(): Promise<Company[]> {
 
     const { data, error } = await supabase.from('companies').select('*')
     if (error) throw error
-    if (!data || data.length === 0) throw new Error('No data')
 
-    return data
+    return data || []
   } catch (err) {
     console.warn('Supabase getCompanies failed, falling back to mock storage.', err)
     return getMockDB().companies
@@ -176,9 +174,8 @@ export async function getAssessments(projectId: string): Promise<Assessment[]> {
       .eq('project_id', projectId)
 
     if (error) throw error
-    if (!data || data.length === 0) throw new Error('No data')
 
-    return data.map((d: any) => ({
+    return (data || []).map((d: any) => ({
       project_id: d.project_id,
       dimension: d.dimension,
       percentage_score: Number(d.percentage_score || 0),
@@ -225,9 +222,8 @@ export async function getFishbones(projectId: string): Promise<FishboneNode[]> {
       .eq('project_id', projectId)
 
     if (error) throw error
-    if (!data || data.length === 0) throw new Error('No data')
 
-    return data
+    return data || []
   } catch (err) {
     console.warn('Supabase getFishbones failed, falling back to mock storage.', err)
     return getMockDB().fishbones[projectId] || []
@@ -245,9 +241,8 @@ export async function getActionPlans(projectId: string): Promise<ActionPlan[]> {
       .eq('project_id', projectId)
 
     if (error) throw error
-    if (!data || data.length === 0) throw new Error('No data')
 
-    return data.map((d: any) => ({
+    return (data || []).map((d: any) => ({
       id: d.id,
       project_id: d.project_id,
       title: d.action_title,
