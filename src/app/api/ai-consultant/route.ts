@@ -1,32 +1,166 @@
 import { NextResponse } from 'next/server'
 
+// Derive top problems from PQCDSM scores — returns array of { dimension, score } sorted worst first
+function deriveTopProblems(scores: Record<string, number>) {
+  const labels: Record<string, string> = {
+    productivity: 'Produktivitas',
+    quality: 'Kualitas',
+    cost: 'Efisiensi Biaya',
+    delivery: 'Ketepatan Delivery',
+    safety: 'Keselamatan Kerja',
+    morale: 'Moral & SDM',
+  }
+  return Object.entries(scores)
+    .filter(([, v]) => typeof v === 'number')
+    .map(([k, v]) => ({ dimension: labels[k] || k, score: v }))
+    .sort((a, b) => a.score - b.score) // ascending = worst first
+}
+
+// Build a dynamic fallback response from the actual project data sent in the request
+function buildDynamicFallback(
+  projectTitle: string,
+  companyName: string,
+  vomList: string[],
+  pqcdsmScores: Record<string, number>,
+  whyTree: Array<{ why?: string; answer?: string }>,
+  fishboneItems: Array<{ category: string; text: string }>,
+) {
+  const topProblems = deriveTopProblems(pqcdsmScores)
+  const worstDim = topProblems[0]?.dimension ?? 'produktivitas'
+  const secondDim = topProblems[1]?.dimension ?? 'kualitas'
+  const prodScore = pqcdsmScores.productivity ?? pqcdsmScores.produktivity ?? null
+  const qualScore = pqcdsmScores.quality ?? null
+  const costScore = pqcdsmScores.cost ?? null
+
+  // Collect unique root-cause hints from 5-Why answers
+  const whyAnswers = whyTree
+    .map((w: any) => w.answer)
+    .filter(Boolean)
+    .slice(0, 3)
+
+  // Collect machine/method fishbone items as context
+  const fishboneHints = (fishboneItems || [])
+    .filter((f) => ['machine', 'method', 'man'].includes(f.category))
+    .map((f) => f.text)
+    .slice(0, 3)
+
+  // VOM context (voice of management)
+  const vomContext =
+    Array.isArray(vomList) && vomList.length > 0
+      ? vomList.slice(0, 2).join('; ')
+      : 'kondisi operasional saat ini'
+
+  // Dynamic root causes: use whyTree answers if available, else generic dimension-based
+  const rootCauses: string[] =
+    whyAnswers.length >= 2
+      ? [
+          ...whyAnswers,
+          ...fishboneHints.slice(0, Math.max(0, 3 - whyAnswers.length)),
+        ].slice(0, 3)
+      : [
+          `Belum adanya standar operasional yang konsisten pada dimensi ${worstDim}`,
+          `Rendahnya skor ${worstDim} (${topProblems[0]?.score ?? '-'}%) mengindikasikan kebutuhan perbaikan proses`,
+          `Dimensi ${secondDim} juga membutuhkan perhatian dengan skor ${topProblems[1]?.score ?? '-'}%`,
+        ]
+
+  // Realistic targets: nudge worst 3 dimensions toward improvement
+  const realisticTargets: Record<string, number> = {}
+  topProblems.slice(0, 3).forEach(({ dimension }) => {
+    const key = Object.keys(pqcdsmScores).find(
+      (k) =>
+        k === dimension.toLowerCase() ||
+        (k === 'productivity' && dimension === 'Produktivitas') ||
+        (k === 'quality' && dimension === 'Kualitas') ||
+        (k === 'cost' && dimension === 'Efisiensi Biaya'),
+    )
+    if (key) realisticTargets[key] = Math.min(100, Math.round((pqcdsmScores[key] ?? 60) + 15))
+  })
+  // Always include the three main KPI targets shown in the UI
+  realisticTargets.productivity = Math.min(100, Math.round((prodScore ?? 60) + 15))
+  realisticTargets.quality = Math.min(100, Math.round((qualScore ?? 60) + 15))
+  realisticTargets.cost = Math.min(100, Math.round((costScore ?? 60) + 10))
+
+  // Priority recommendations keyed on worst dimensions
+  const recMap: Record<string, { program: string; description: string; impact: string }> = {
+    productivity: {
+      program: 'Standardized Work & Lean Process',
+      description: `Petakan alur proses utama di ${companyName}, tetapkan standar waktu, dan eliminasi pemborosan untuk meningkatkan output`,
+      impact: 'Estimasi peningkatan produktivitas 15-20%',
+    },
+    quality: {
+      program: 'Quality Control Circle (QCC)',
+      description: 'Bentuk tim QCC lintas fungsi untuk identifikasi dan eliminasi sumber defect secara berkelanjutan',
+      impact: 'Target penurunan defect rate ≥ 50%',
+    },
+    cost: {
+      program: 'Cost Reduction & Waste Elimination',
+      description: 'Audit pemborosan (7 waste Lean) dan implementasikan program penghematan energi & material',
+      impact: 'Estimasi penghematan biaya operasional 10-15%',
+    },
+    delivery: {
+      program: 'Pull System & Penjadwalan Produksi',
+      description: 'Terapkan sistem kanban atau jadwal produksi berbasis permintaan untuk mengurangi keterlambatan delivery',
+      impact: 'On-time delivery meningkat ke >95%',
+    },
+    safety: {
+      program: 'Program SMK3 & Safety Training',
+      description: 'Perbarui risk assessment, lakukan safety induction berkala, dan pastikan APD tersedia dan digunakan',
+      impact: 'Zero accident target dalam 6 bulan',
+    },
+    morale: {
+      program: 'Employee Engagement & Reward System',
+      description: 'Rancang program penghargaan berbasis pencapaian KPI, tingkatkan transparansi informasi kepada karyawan',
+      impact: 'Penurunan turnover dan absensi ≥ 20%',
+    },
+  }
+
+  const recommendations = topProblems
+    .slice(0, 3)
+    .map(({ dimension }) => {
+      const key = Object.keys(pqcdsmScores).find(
+        (k) =>
+          (k === 'productivity' && dimension === 'Produktivitas') ||
+          (k === 'quality' && dimension === 'Kualitas') ||
+          (k === 'cost' && dimension === 'Efisiensi Biaya') ||
+          (k === 'delivery' && dimension === 'Ketepatan Delivery') ||
+          (k === 'safety' && dimension === 'Keselamatan Kerja') ||
+          (k === 'morale' && dimension === 'Moral & SDM'),
+      )
+      return recMap[key ?? 'productivity'] ?? recMap.productivity
+    })
+    .filter((v, i, arr) => arr.findIndex((r) => r.program === v.program) === i) // deduplicate
+
+  // Ensure at least 3 recommendations
+  while (recommendations.length < 3) {
+    const extras = Object.values(recMap).filter(
+      (r) => !recommendations.find((rec) => rec.program === r.program),
+    )
+    if (extras.length === 0) break
+    recommendations.push(extras[0])
+  }
+
+  return {
+    summary: `Berdasarkan analisis data proyek "${projectTitle}" di ${companyName}, kendala utama teridentifikasi pada dimensi ${worstDim} (skor: ${topProblems[0]?.score ?? '-'}%) dan ${secondDim} (skor: ${topProblems[1]?.score ?? '-'}%). Keluhan manajemen mencakup: ${vomContext}. Analisis 5-Why menunjukkan bahwa akar penyebab berada di level proses dan standarisasi operasional.`,
+    root_causes: rootCauses,
+    priority_recommendations: recommendations.slice(0, 3),
+    realistic_targets: realisticTargets,
+  }
+}
+
 export async function POST(req: Request) {
   try {
-    const { projectTitle, companyName, vomList, pqcdsmScores, whyTree } = await req.json()
+    const { projectTitle, companyName, vomList, pqcdsmScores, whyTree, fishboneItems } = await req.json()
 
     const geminiKey = process.env.GEMINI_API_KEY
 
-    // If Gemini key is missing, mock a high-fidelity AI recommendation report so it's always fully functional!
+    // If Gemini key is missing, build a fully dynamic response from the project's actual data
+    // IMPORTANT: never use hardcoded industry-specific content here — all narrative derives from
+    // the pqcdsmScores, vomList, whyTree, and fishboneItems sent by the caller for this specific project.
     if (!geminiKey) {
-      console.warn('GEMINI_API_KEY is not defined. Returning realistic mocked response.')
-      return NextResponse.json({
-        summary: `Berdasarkan analisis data untuk proyek "${projectTitle}" di ${companyName}, kendala utama terfokus pada ketidakseimbangan stasiun kerja (line balancing) dan ketidakstabilan setting mesin obras. Hal ini dikonfirmasi oleh skor Quality (${pqcdsmScores.quality || 48}%) dan Productivity (${pqcdsmScores.productivity || 60}%) yang berada di bawah target baseline.`,
-        root_causes: [
-          'Kurangnya penetapan standard time (Time Study) untuk stasiun jahit',
-          'Belum ada program perawatan pencegahan (Preventive Maintenance) untuk mesin jahit obras',
-          'Aliran WIP (Work-In-Progress) menumpuk di area sewing karena balancing line tidak seimbang'
-        ],
-        priority_recommendations: [
-          { program: '5S & Standardized Work', description: 'Lakukan time study per stasiun, buat SOP balancing, dan rapihkan layout benang/alat bantu', impact: 'Peningkatan OPH 10-15%' },
-          { program: 'Preventive Maintenance Setup', description: 'Buat checklist harian mesin obras, jadwalkan PM mingguan oleh tim maintenance', impact: 'Mengurangi downtime mesin sebesar 80%' },
-          { program: 'Poka-Yoke Sewing Guides', description: 'Pasang pemandu jahitan magnetik untuk meminimalkan human error jahit kerut', impact: 'Menurunkan defect rate jahit ke <2%' }
-        ],
-        realistic_targets: {
-          productivity: 75,
-          quality: 90,
-          cost: 80
-        }
-      })
+      console.warn('GEMINI_API_KEY is not defined. Returning dynamic data-driven response for project:', projectTitle)
+      return NextResponse.json(
+        buildDynamicFallback(projectTitle, companyName, vomList, pqcdsmScores, whyTree, fishboneItems ?? []),
+      )
     }
 
     // Call real Google Gemini API

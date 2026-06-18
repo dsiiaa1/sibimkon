@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { getMockDB, updateMockDB, Project, ActionPlan } from '@/lib/mockData'
-import { LineChart, Plus, CheckCircle2, AlertTriangle, Calendar, User, DollarSign, ArrowUpRight, Check, Trash, Upload, FileText, X, Loader2, ArrowRight } from 'lucide-react'
+import { LineChart, Plus, CheckCircle2, AlertTriangle, Calendar, User, DollarSign, ArrowUpRight, Check, Trash, Upload, FileText, X, Loader2, ArrowRight, Lock } from 'lucide-react'
 import { ACTION_STATUS_LABELS } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { updateProjectPhase } from '@/lib/db'
@@ -15,6 +15,10 @@ export default function ImprovePage() {
 
   const [project, setProject] = useState<Project | null>(null)
   const [actionPlans, setActionPlans] = useState<ActionPlan[]>([])
+
+  // Role-based permission — loaded from localStorage (same source as layout.tsx)
+  const [userRole, setUserRole] = useState<string>('konsultan')
+  const isKonsultan = userRole === 'konsultan' || userRole === 'admin_kemnaker' || userRole === 'admin_disnaker'
   
   // Modal & form states
   const [showAddModal, setShowAddModal] = useState(false)
@@ -40,6 +44,15 @@ export default function ImprovePage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    // Load user role from localStorage (same auth flow as dashboard layout)
+    const localUser = localStorage.getItem('sibimkon_user')
+    if (localUser) {
+      try {
+        const parsed = JSON.parse(localUser)
+        setUserRole(parsed.role || 'konsultan')
+      } catch (_) {}
+    }
+
     const db = getMockDB()
     const proj = db.projects.find((p: Project) => p.id === projectId)
     if (!proj) {
@@ -53,6 +66,8 @@ export default function ImprovePage() {
 
   const handleCreateAction = (e: React.FormEvent) => {
     e.preventDefault()
+    // Guard: hanya konsultan yang boleh membuat action plan
+    if (!isKonsultan) return
     if (!newTitle) return
 
     const newAction: ActionPlan = {
@@ -101,6 +116,42 @@ export default function ImprovePage() {
         : act
     )
     saveActionPlans(updated)
+
+    // Audit trail: catat perubahan status (siapa, kapan, dari/ke apa)
+    try {
+      const localUser = localStorage.getItem('sibimkon_user')
+      const actor = localUser ? JSON.parse(localUser) : null
+      const prevAct = actionPlans.find(a => a.id === actionId)
+      const auditList = JSON.parse(localStorage.getItem(`sibimkon_status_audit_${projectId}`) || '[]')
+      auditList.unshift({
+        id: 'audit-' + Math.random().toString(36).substr(2, 9),
+        action_plan_id: actionId,
+        action_title: prevAct?.title || actionId,
+        from_status: prevAct?.status,
+        to_status: status,
+        actor_id: actor?.id || 'unknown',
+        actor_name: actor?.full_name || 'Unknown',
+        actor_role: actor?.role || 'unknown',
+        changed_at: new Date().toISOString(),
+      })
+      localStorage.setItem(`sibimkon_status_audit_${projectId}`, JSON.stringify(auditList))
+
+      // Best-effort Supabase write
+      const supabase = createClient()
+      supabase.from('action_audit_log').insert({
+        project_id: projectId,
+        action_plan_id: actionId,
+        actor_id: actor?.id,
+        actor_role: actor?.role,
+        event_type: 'status_change',
+        detail: `Status berubah: ${prevAct?.status} → ${status}`,
+        created_at: new Date().toISOString(),
+      }).then(({ error }) => {
+        if (error) console.warn('Audit log insert error (non-critical):', error.message)
+      })
+    } catch (err) {
+      console.warn('Failed to write status audit log (non-critical):', err)
+    }
   }
 
   const handleUpdateProgress = (actionId: string, progress: number) => {
@@ -207,8 +258,10 @@ export default function ImprovePage() {
     }
 
 
-    // Save evidence record
+    // Save evidence record with audit trail
     if (uploadedFileName) {
+      const localUser = localStorage.getItem('sibimkon_user')
+      const uploaderInfo = localUser ? JSON.parse(localUser) : null
       const evidenceList = JSON.parse(localStorage.getItem(`sibimkon_evidence_${projectId}`) || '[]')
       evidenceList.push({
         id: 'ev-' + Math.random().toString(36).substr(2, 9),
@@ -216,10 +269,35 @@ export default function ImprovePage() {
         action_title: selectedAction.title,
         file_name: uploadedFileName,
         file_url: uploadedFileUrl,
-        uploaded_at: new Date().toLocaleDateString('id-ID')
+        uploaded_at: new Date().toLocaleDateString('id-ID'),
+        // Audit trail fields
+        uploaded_by_id: uploaderInfo?.id || 'unknown',
+        uploaded_by_name: uploaderInfo?.full_name || 'Unknown',
+        uploaded_by_role: uploaderInfo?.role || 'unknown',
+        uploaded_at_iso: new Date().toISOString(),
+        kpi_actual_value: kpiActualInput,
+        kpi_unit: selectedAction.kpi_unit,
       })
       localStorage.setItem(`sibimkon_evidence_${projectId}`, JSON.stringify(evidenceList))
       setUploadedFiles(evidenceList.filter((e: any) => e.action_id === selectedAction.id))
+
+      // Persist audit trail to Supabase (best-effort, non-blocking)
+      try {
+        const supabase = createClient()
+        supabase.from('action_audit_log').insert({
+          project_id: projectId,
+          action_plan_id: selectedAction.id,
+          actor_id: uploaderInfo?.id,
+          actor_role: uploaderInfo?.role,
+          event_type: 'evidence_upload',
+          detail: `Upload bukti: ${uploadedFileName}, KPI aktual: ${kpiActualInput} ${selectedAction.kpi_unit}`,
+          created_at: new Date().toISOString(),
+        }).then(({ error }) => {
+          if (error) console.warn('Audit log insert error (non-critical):', error.message)
+        })
+      } catch (err) {
+        console.warn('Failed to write audit log to Supabase (non-critical):', err)
+      }
     }
 
     // Update project state if all completed
@@ -243,6 +321,8 @@ export default function ImprovePage() {
   }
 
   const handleDeleteAction = (actionId: string) => {
+    // Guard: hanya konsultan yang boleh menghapus action plan
+    if (!isKonsultan) return
     const updated = actionPlans.filter(act => act.id !== actionId)
     saveActionPlans(updated)
   }
@@ -275,13 +355,16 @@ export default function ImprovePage() {
             style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
             Lanjut ke CONTROL <ArrowRight className="h-3.5 w-3.5" />
           </button>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="inline-flex items-center gap-2 px-5 py-3 bg-indigo-650 hover:bg-indigo-600 text-sm font-semibold rounded-xl text-white transition-colors cursor-pointer shadow-md"
-          >
-            <Plus className="h-4 w-4" />
-            Tambah Action Plan
-          </button>
+          {/* Hanya konsultan yang bisa menambah action plan */}
+          {isKonsultan && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="inline-flex items-center gap-2 px-5 py-3 bg-indigo-650 hover:bg-indigo-600 text-sm font-semibold rounded-xl text-white transition-colors cursor-pointer shadow-md"
+            >
+              <Plus className="h-4 w-4" />
+              Tambah Action Plan
+            </button>
+          )}
         </div>
       </div>
 
@@ -290,7 +373,11 @@ export default function ImprovePage() {
         {actionPlans.length === 0 ? (
           <div className="p-12 text-center bg-slate-950/40 border border-dashed border-slate-800 rounded-3xl space-y-2">
             <h3 className="font-bold text-slate-350">Belum ada Rencana Perbaikan</h3>
-            <p className="text-xs text-slate-500">Silakan tambahkan action plan baru atau gunakan rekomendasi AI Consultant di fase ANALYZE.</p>
+            <p className="text-xs text-slate-500">
+              {isKonsultan
+                ? 'Silakan tambahkan action plan baru atau gunakan rekomendasi AI Consultant di fase ANALYZE.'
+                : 'Konsultan belum membuat action plan untuk proyek ini. Silakan tunggu atau hubungi konsultan Anda.'}
+            </p>
           </div>
         ) : (
           actionPlans.map(act => {
@@ -311,7 +398,7 @@ export default function ImprovePage() {
                     <h3 className="text-base font-bold text-slate-200">{act.title}</h3>
                   </div>
 
-                  {/* Status pills selector */}
+                  {/* Status selector (semua role bisa ubah status) + Hapus (konsultan only) */}
                   <div className="flex items-center gap-2">
                     <select
                       value={act.status}
@@ -324,17 +411,28 @@ export default function ImprovePage() {
                       <option value="tertunda">Tertunda</option>
                     </select>
 
-                    <button
-                      onClick={() => handleDeleteAction(act.id)}
-                      className="text-slate-600 hover:text-red-400 p-1 rounded hover:bg-slate-900 transition-colors cursor-pointer"
-                    >
-                      <Trash className="h-4 w-4" />
-                    </button>
+                    {/* Tombol hapus hanya untuk konsultan */}
+                    {isKonsultan && (
+                      <button
+                        onClick={() => handleDeleteAction(act.id)}
+                        className="text-slate-600 hover:text-red-400 p-1 rounded hover:bg-slate-900 transition-colors cursor-pointer"
+                      >
+                        <Trash className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
                 {/* Description */}
                 <p className="text-xs text-slate-400 leading-relaxed">{act.description}</p>
+
+                {/* Badge read-only untuk role perusahaan */}
+                {!isKonsultan && (
+                  <div className="flex items-center gap-1.5 text-[10px] text-amber-400/70 bg-amber-400/5 border border-amber-400/15 rounded-lg px-2.5 py-1.5 w-fit">
+                    <Lock className="h-3 w-3" />
+                    Detail program, target, KPI, PIC, dan timeline dikelola oleh konsultan
+                  </div>
+                )}
 
                 {/* Grid details */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2 border-t border-slate-850 text-xs">
@@ -370,21 +468,30 @@ export default function ImprovePage() {
                   </div>
                 </div>
 
-                {/* Progress bar Slider */}
+                {/* Progress bar — konsultan bisa geser, perusahaan read-only */}
                 <div className="space-y-1.5 pt-2">
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-slate-500 font-bold">Progress Implementasi:</span>
                     <span className="font-bold text-indigo-400">{act.progress_percentage}%</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={act.progress_percentage}
-                      onChange={(e) => handleUpdateProgress(act.id, Number(e.target.value))}
-                      className="w-full h-1.5 bg-slate-900 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                    />
+                    {isKonsultan ? (
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={act.progress_percentage}
+                        onChange={(e) => handleUpdateProgress(act.id, Number(e.target.value))}
+                        className="w-full h-1.5 bg-slate-900 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                      />
+                    ) : (
+                      <div className="w-full h-1.5 bg-slate-900 rounded-lg overflow-hidden">
+                        <div
+                          className="h-full rounded-lg bg-indigo-500 transition-all"
+                          style={{ width: `${act.progress_percentage}%` }}
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -407,8 +514,8 @@ export default function ImprovePage() {
         )}
       </div>
 
-      {/* Modal: Add Action Plan */}
-      {showAddModal && (
+      {/* Modal: Add Action Plan — hanya muncul untuk konsultan */}
+      {showAddModal && isKonsultan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
           <div className="w-full max-w-lg bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
             <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
@@ -534,7 +641,7 @@ export default function ImprovePage() {
         </div>
       )}
 
-      {/* Modal: Input Evidence & KPI Actual */}
+      {/* Modal: Input Evidence & KPI Actual — tersedia untuk SEMUA role */}
       {selectedAction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
           <div className="w-full max-w-md bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">

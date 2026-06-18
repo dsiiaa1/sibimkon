@@ -29,6 +29,17 @@ export default function AnalyzePage() {
   const [aiLoading, setAiLoading] = useState(false)
   const [aiResult, setAiResult] = useState<any>(null)
 
+  // Role-based permission — loaded from localStorage (same source as layout.tsx)
+  const [userRole, setUserRole] = useState<string>('konsultan')
+  const isKonsultan = userRole === 'konsultan' || userRole === 'admin_kemnaker' || userRole === 'admin_disnaker'
+
+  useEffect(() => {
+    const localUser = localStorage.getItem('sibimkon_user')
+    if (localUser) {
+      try { setUserRole(JSON.parse(localUser)?.role || 'konsultan') } catch (_) {}
+    }
+  }, [])
+
   useEffect(() => {
     async function loadData() {
       const projects = await getProjects()
@@ -140,12 +151,16 @@ export default function AnalyzePage() {
   const handleTriggerAI = async () => {
     setAiLoading(true)
     try {
-      const db = getMockDB()
+      // Always derive scores from the ACTIVE projectId — never fall back to a global/default query
       const scores = (await getAssessments(projectId)).reduce((acc: any, curr: any) => {
         acc[curr.dimension] = curr.percentage_score
         return acc
       }, {})
+
+      // VOM entries are keyed per-project in localStorage
       const vomRaw = localStorage.getItem(`sibimkon_vom_${projectId}`)
+
+      // fishboneItems and whys are already loaded from getMockDB()[projectId] in useEffect
       const response = await fetch('/api/ai-consultant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -154,7 +169,8 @@ export default function AnalyzePage() {
           companyName: project?.company_name,
           vomList: vomRaw ? JSON.parse(vomRaw) : [],
           pqcdsmScores: scores,
-          whyTree: whys,
+          whyTree: whys,          // loaded via getMockDB().fiveWhys[projectId]
+          fishboneItems,           // loaded via getMockDB().fishbones[projectId]
         }),
       })
       if (!response.ok) throw new Error('AI consultation API error')
@@ -237,7 +253,8 @@ export default function AnalyzePage() {
           { id: 'fishbone', name: 'Ishikawa Fishbone' },
           { id: '5why', name: '5-Why Analysis' },
           { id: 'pareto', name: 'Pareto Chart' },
-          { id: 'ai', name: '🤖 Gemini AI Consultant' },
+          // Tab AI hanya muncul untuk konsultan
+          ...(isKonsultan ? [{ id: 'ai', name: '🤖 Gemini AI Consultant' }] : []),
         ].map((tab) => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
             className={`px-4 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
@@ -438,8 +455,8 @@ export default function AnalyzePage() {
           </div>
         )}
 
-        {/* ── GEMINI AI CONSULTANT ── */}
-        {activeTab === 'ai' && (
+        {/* ── GEMINI AI CONSULTANT — hanya untuk konsultan ── */}
+        {activeTab === 'ai' && isKonsultan && (
           <div className="space-y-6">
             <div className="border-b border-slate-850 pb-4 flex items-center justify-between">
               <div>
