@@ -318,6 +318,77 @@ export async function getActionPlans(projectId: string): Promise<ActionPlan[]> {
   }
 }
 
+export async function saveActionPlans(projectId: string, actions: ActionPlan[]): Promise<void> {
+  try {
+    const hasTable = await checkTableExists('improve_actions')
+    if (!hasTable) throw new Error('Table does not exist')
+
+    // 1. Fetch existing action plans in DB for this project
+    const { data: existing, error: fetchErr } = await supabase
+      .from('improve_actions')
+      .select('id')
+      .eq('project_id', projectId)
+    
+    if (fetchErr) throw fetchErr
+
+    const existingIds = (existing || []).map((e: any) => e.id)
+    const newIds = actions.map(a => a.id)
+
+    // 2. Identify items to delete (in DB but not in current list)
+    const idsToDelete = existingIds.filter((id: string) => !newIds.includes(id))
+    if (idsToDelete.length > 0) {
+      const { error: deleteErr } = await supabase
+        .from('improve_actions')
+        .delete()
+        .in('id', idsToDelete)
+      if (deleteErr) throw deleteErr
+    }
+
+    // 3. Upsert current items
+    if (actions.length > 0) {
+      const upsertData = actions.map(act => {
+        const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(act.id)
+        const item: any = {
+          project_id: projectId,
+          action_title: act.title,
+          description: act.description,
+          methodology: act.methodology,
+          dimension: act.dimension,
+          kpi_name: act.kpi_name,
+          kpi_baseline: act.kpi_baseline,
+          kpi_target: act.kpi_target,
+          kpi_unit: act.kpi_unit,
+          kpi_actual: act.kpi_actual || null,
+          pic_name: act.pic_name,
+          start_date: act.start_date,
+          end_date: act.end_date,
+          status: act.status,
+          progress_percentage: act.progress_percentage
+        }
+        if (isValidUUID) {
+          item.id = act.id
+        }
+        return item
+      })
+
+      const { error: upsertErr } = await supabase
+        .from('improve_actions')
+        .upsert(upsertData)
+      if (upsertErr) throw upsertErr
+    }
+
+    // Also update mock db to stay in sync
+    const db = getMockDB()
+    db.actionPlans[projectId] = actions
+    updateMockDB('actionPlans', db.actionPlans)
+  } catch (err) {
+    console.warn('Supabase saveActionPlans failed, falling back to mock storage.', err)
+    const db = getMockDB()
+    db.actionPlans[projectId] = actions
+    updateMockDB('actionPlans', db.actionPlans)
+  }
+}
+
 // ── Advance DMAIC phase explicitly ──────────────────────────────────────────
 export type DmaicPhase = 'draft' | 'define' | 'measure' | 'analyze' | 'improve' | 'control' | 'completed'
 

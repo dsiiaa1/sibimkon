@@ -49,10 +49,27 @@ export default function DashboardLayout({
   const pathname = usePathname()
   const { locale, setLocale, t } = useLanguage()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isCollapsed, setIsCollapsed] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [notifications, setNotifications] = useState<any[]>([])
   const [showNotifDropdown, setShowNotifDropdown] = useState(false)
   const [loading, setLoading] = useState(true)
+
+  // Load sidebar collapse preference on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('sibimkon_sidebar_collapsed')
+      if (saved === 'true') {
+        setIsCollapsed(true)
+      }
+    }
+  }, [])
+
+  const toggleSidebarCollapse = () => {
+    const nextState = !isCollapsed
+    setIsCollapsed(nextState)
+    localStorage.setItem('sibimkon_sidebar_collapsed', String(nextState))
+  }
 
   // Auth checking and load mock data
   useEffect(() => {
@@ -231,37 +248,69 @@ export default function DashboardLayout({
   const unreadCount = notifications.filter(n => n.unread).length
 
   return (
-    <div className="flex min-h-screen text-slate-100" style={{background: 'var(--navy-950)', color: 'var(--text-primary)'}}>
+    <div className="flex min-h-screen" style={{background: 'var(--background)', color: 'var(--text-primary)'}}>
       {/* Sidebar for desktop */}
-      <aside className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col backdrop-blur-xl transition-transform duration-300 ease-in-out md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`} style={{background: 'var(--navy-900)', borderRight: '1px solid var(--border-base)'}}>
+      <aside className={`fixed inset-y-0 left-0 z-50 flex flex-col backdrop-blur-xl transition-all duration-300 ease-in-out md:translate-x-0 ${isCollapsed ? 'md:w-20 w-72' : 'w-72'} ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`} style={{background: 'var(--navy-900)', borderRight: '1px solid var(--border-base)'}}>
         {/* Sidebar brand header */}
-        <div className="flex h-16 items-center justify-between px-6" style={{borderBottom: '1px solid var(--border-base)', background: 'var(--navy-950)'}}>
-          <Link href="/dashboard" className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl flex items-center justify-center text-lg font-black" style={{background: 'linear-gradient(135deg, #b8860b, #f4c430)', color: 'var(--navy-950)'}}>S</div>
-            <span className="font-black text-lg tracking-tight text-gold-gradient" style={{background: 'linear-gradient(135deg, #f4c430, #fce9a0)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'}}>
-              SIBIMKON
-            </span>
-          </Link>
-          <button onClick={() => setSidebarOpen(false)} className="rounded-lg p-1.5 md:hidden" style={{color: 'var(--text-muted)'}}>
+        <div className={`flex h-16 items-center transition-all duration-300 ${isCollapsed ? 'justify-center' : 'justify-between px-6'}`} style={{borderBottom: '1px solid var(--border-base)', background: 'var(--navy-950)'}}>
+          {!isCollapsed ? (
+            <>
+              <Link href="/dashboard" className="flex items-center gap-3 py-1 animate-fade-in">
+                <img src="/sibimkonicon.png" alt="Logo" className="h-9 w-9 object-contain" />
+                <div className="flex flex-col">
+                  <span className="text-sm font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-200 leading-tight">
+                    SIBIMKON
+                  </span>
+                  <span className="text-[9px] uppercase tracking-widest text-slate-400 leading-none">
+                    Link Productive
+                  </span>
+                </div>
+              </Link>
+              <button 
+                onClick={toggleSidebarCollapse} 
+                className="hidden md:block rounded-lg p-1 hover:bg-slate-800 transition-colors" 
+                style={{color: 'var(--text-muted)'}}
+                title="Sembunyikan Sidebar"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                </svg>
+              </button>
+            </>
+          ) : (
+            <div className="w-full flex flex-col items-center justify-center">
+              <button 
+                onClick={toggleSidebarCollapse} 
+                className="rounded-lg p-1.5 hover:bg-slate-800 transition-colors flex items-center justify-center" 
+                style={{color: 'var(--text-muted)'}} 
+                title="Tampilkan Sidebar"
+              >
+                <img src="/sibimkonicon.png" alt="Logo" className="h-8 w-8 object-contain animate-fade-in" />
+              </button>
+            </div>
+          )}
+          <button onClick={() => setSidebarOpen(false)} className="rounded-lg p-1.5 md:hidden absolute right-4 top-4" style={{color: 'var(--text-muted)'}}>
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* User profile section */}
-        <div className="px-6 py-5" style={{borderBottom: '1px solid var(--border-base)', background: 'rgba(10,22,40,0.4)'}}>
+        <div className={`py-5 transition-all duration-300 ${isCollapsed ? 'px-2 flex justify-center' : 'px-6'}`} style={{borderBottom: '1px solid var(--border-base)', background: 'rgba(10,22,40,0.4)'}}>
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl font-bold shadow-md text-sm" style={{background: 'linear-gradient(135deg, #b8860b, #f4c430)', color: 'var(--navy-950)'}}>
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl font-bold shadow-md text-sm cursor-pointer" style={{background: 'linear-gradient(135deg, #b8860b, #f4c430)', color: 'var(--navy-950)'}} title={user.full_name}>
               {(user.full_name?.[0] || '?').toUpperCase()}
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold truncate" style={{color: 'var(--text-primary)'}}>{user.full_name}</p>
-              <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider" style={{background: 'rgba(212,160,23,0.12)', color: 'var(--gold-400)', border: '1px solid rgba(212,160,23,0.28)'}}>
-                {(user.role || 'user').replace('_', ' ')}
-              </span>
-            </div>
+            {!isCollapsed && (
+              <div className="flex-1 min-w-0 animate-fade-in">
+                <p className="text-sm font-semibold truncate" style={{color: 'var(--text-primary)'}}>{user.full_name}</p>
+                <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider" style={{background: 'rgba(212,160,23,0.12)', color: 'var(--gold-400)', border: '1px solid rgba(212,160,23,0.28)'}}>
+                  {(user.role || 'user').replace('_', ' ')}
+                </span>
+              </div>
+            )}
           </div>
-          {user.organization && (
-            <p className="mt-2 text-xs flex items-center gap-1.5 truncate" style={{color: 'var(--text-muted)'}}>
+          {!isCollapsed && user.organization && (
+            <p className="mt-2 text-xs flex items-center gap-1.5 truncate animate-fade-in" style={{color: 'var(--text-muted)'}}>
               <Building className="h-3 w-3 flex-shrink-0" />
               {user.organization}
             </p>
@@ -269,7 +318,7 @@ export default function DashboardLayout({
         </div>
 
         {/* Sidebar Nav */}
-        <nav className="flex-1 space-y-1 px-4 py-4 overflow-y-auto">
+        <nav className={`flex-1 space-y-1 py-4 overflow-y-auto transition-all duration-300 ${isCollapsed ? 'px-2' : 'px-4'}`}>
           {navigation
             .filter(item => !item.roles || item.roles.includes(user.role))
             .map(item => {
@@ -286,21 +335,32 @@ export default function DashboardLayout({
                     color: 'var(--text-muted)',
                     border: '1px solid transparent',
                   }}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all hover:border-gold-hover`}
+                  className={`group relative flex items-center rounded-xl text-sm font-medium transition-all hover:border-gold-hover ${isCollapsed ? 'justify-center p-2.5' : 'gap-3 px-3 py-2.5'}`}
                   onMouseEnter={e => { if (!active) { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text-primary)'; (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(212,160,23,0.06)'; } }}
                   onMouseLeave={e => { if (!active) { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text-muted)'; (e.currentTarget as HTMLAnchorElement).style.background = ''; } }}
                 >
-                  <item.icon className="h-4 w-4" />
-                  {item.name}
+                  <item.icon className="h-4 w-4 flex-shrink-0" />
+                  {!isCollapsed && <span>{item.name}</span>}
+                  
+                  {/* Tooltip for Collapsed Sidebar */}
+                  {isCollapsed && (
+                    <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-slate-900 border border-[var(--border-base)] text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none whitespace-nowrap z-50 shadow-xl text-[var(--text-primary)]">
+                      {item.name}
+                    </div>
+                  )}
                 </Link>
               )
             })}
 
           {dmaicStages.length > 0 && (
             <div className="mt-6 pt-6" style={{borderTop: '1px solid var(--border-base)'}}>
-              <p className="px-3 text-[11px] font-bold uppercase tracking-wider mb-3" style={{color: 'var(--text-muted)', letterSpacing: '0.1em'}}>
-                {t('nav.dmaicTitle')}
-              </p>
+              {!isCollapsed ? (
+                <p className="px-3 text-[11px] font-bold uppercase tracking-wider mb-3 animate-fade-in" style={{color: 'var(--text-muted)', letterSpacing: '0.1em'}}>
+                  {t('nav.dmaicTitle')}
+                </p>
+              ) : (
+                <div className="h-px bg-[var(--border-base)] mb-3 mx-2 animate-fade-in" />
+              )}
               <div className="space-y-1">
                 {dmaicStages.map(stage => {
                   const active = pathname === stage.href
@@ -316,12 +376,19 @@ export default function DashboardLayout({
                         color: 'var(--text-muted)',
                         border: '1px solid transparent',
                       }}
-                      className="flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all"
+                      className={`group relative flex items-center rounded-xl text-xs font-medium transition-all ${isCollapsed ? 'justify-center p-2.5' : 'gap-3 px-3 py-2'}`}
                       onMouseEnter={e => { if (!active) { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text-primary)'; (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(212,160,23,0.06)'; } }}
                       onMouseLeave={e => { if (!active) { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text-muted)'; (e.currentTarget as HTMLAnchorElement).style.background = ''; } }}
                     >
-                      <stage.icon className="h-3.5 w-3.5" />
-                      {stage.name}
+                      <stage.icon className="h-3.5 w-3.5 flex-shrink-0" />
+                      {!isCollapsed && <span>{stage.name}</span>}
+                      
+                      {/* Tooltip for Collapsed Sidebar */}
+                      {isCollapsed && (
+                        <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-slate-900 border border-[var(--border-base)] text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none whitespace-nowrap z-50 shadow-xl text-[var(--text-primary)]">
+                          {stage.name}
+                        </div>
+                      )}
                     </Link>
                   )
                 })}
@@ -331,24 +398,31 @@ export default function DashboardLayout({
         </nav>
 
         {/* Sidebar Footer Logout */}
-        <div className="p-4" style={{borderTop: '1px solid var(--border-base)', background: 'var(--navy-950)'}}>
+        <div className={`py-4 transition-all duration-300 ${isCollapsed ? 'px-2' : 'p-4'}`} style={{borderTop: '1px solid var(--border-base)', background: 'var(--navy-950)'}}>
           <button
             onClick={handleLogout}
-            className="flex w-full items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer"
+            className={`group relative flex items-center rounded-xl text-sm font-medium transition-all cursor-pointer ${isCollapsed ? 'w-full justify-center p-2.5' : 'w-full gap-3 px-3 py-2.5'}`}
             style={{color: '#f87171'}}
             onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(248,113,113,0.08)'; (e.currentTarget as HTMLButtonElement).style.color = '#fca5a5'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = ''; (e.currentTarget as HTMLButtonElement).style.color = '#f87171'; }}
           >
-            <LogOut className="h-4 w-4" />
-            {t('nav.logout')}
+            <LogOut className="h-4 w-4 flex-shrink-0" />
+            {!isCollapsed && <span>{t('nav.logout')}</span>}
+            
+            {/* Tooltip for Collapsed Sidebar */}
+            {isCollapsed && (
+              <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-red-950 border border-red-500/30 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none whitespace-nowrap z-50 shadow-xl text-red-400">
+                {t('nav.logout')}
+              </div>
+            )}
           </button>
         </div>
       </aside>
 
       {/* Main content wrapper */}
-      <div className="flex-1 md:pl-72 flex flex-col min-h-screen">
+      <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out ${isCollapsed ? 'md:pl-20' : 'md:pl-72'}`}>
         {/* Header bar */}
-        <header className="sticky top-0 z-40 flex h-16 items-center justify-between px-6 backdrop-blur-md" style={{borderBottom: '1px solid var(--border-base)', background: 'rgba(5,10,24,0.90)', boxShadow: '0 1px 20px rgba(0,0,0,0.40)'}}>
+        <header className="sticky top-0 z-40 flex h-16 items-center justify-between px-6 backdrop-blur-md" style={{borderBottom: '1px solid var(--border-base)', background: 'var(--navy-950)', boxShadow: '0 1px 20px rgba(0,0,0,0.30)'}}>
           {/* Menu button */}
           <button
             onClick={() => setSidebarOpen(true)}
@@ -368,16 +442,16 @@ export default function DashboardLayout({
           {/* Right Header Navigation */}
           <div className="flex items-center gap-4 ml-auto">
             {/* Language Toggle */}
-            <div className="flex items-center gap-1 rounded-xl p-1" style={{ border: '1px solid var(--border-base)', background: 'rgba(10,22,40,0.6)' }}>
+            <div className="flex items-center gap-1 rounded-xl p-1" style={{ border: '1px solid var(--border-base)', background: 'rgba(255,255,255,0.06)' }}>
               <button
                 onClick={() => setLocale('id')}
-                className={`px-2 py-1 text-[11px] font-bold rounded-lg transition-all ${locale === 'id' ? 'bg-[rgba(212,160,23,0.15)] text-[var(--gold-400)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                className={`px-2 py-1 text-[11px] font-bold rounded-lg transition-all ${locale === 'id' ? 'bg-[rgba(255,255,255,0.12)] text-[var(--gold-400)]' : 'text-[var(--text-muted)] hover:text-white'}`}
               >
                 🇮🇩 ID
               </button>
               <button
                 onClick={() => setLocale('en')}
-                className={`px-2 py-1 text-[11px] font-bold rounded-lg transition-all ${locale === 'en' ? 'bg-[rgba(212,160,23,0.15)] text-[var(--gold-400)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                className={`px-2 py-1 text-[11px] font-bold rounded-lg transition-all ${locale === 'en' ? 'bg-[rgba(255,255,255,0.12)] text-[var(--gold-400)]' : 'text-[var(--text-muted)] hover:text-white'}`}
               >
                 🇬🇧 EN
               </button>
@@ -388,8 +462,8 @@ export default function DashboardLayout({
               <button 
                 onClick={() => setShowNotifDropdown(!showNotifDropdown)}
                 className="relative rounded-xl p-2 transition-all"
-                style={{border: '1px solid var(--border-base)', background: 'rgba(10,22,40,0.6)', color: 'var(--text-muted)'}}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--gold-400)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(212,160,23,0.35)'; }}
+                style={{border: '1px solid var(--border-base)', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)'}}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--gold-400)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.2)'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-base)'; }}
               >
                 <Bell className="h-4 w-4" />
@@ -402,7 +476,7 @@ export default function DashboardLayout({
               </button>
 
               {showNotifDropdown && (
-                <div className="absolute right-0 mt-3 w-80 rounded-2xl py-2 z-50 backdrop-blur-xl animate-fade-in" style={{border: '1px solid var(--border-base)', background: 'rgba(5,10,24,0.97)', boxShadow: '0 20px 60px rgba(0,0,0,0.60)'}}>
+                <div className="absolute right-0 mt-3 w-80 rounded-2xl py-2 z-50 backdrop-blur-xl animate-fade-in" style={{border: '1px solid var(--border-base)', background: 'var(--navy-900)', boxShadow: '0 20px 60px rgba(0,0,0,0.50)'}}>
                   <div className="flex items-center justify-between px-4 py-2" style={{borderBottom: '1px solid var(--border-base)'}}>
                     <span className="text-xs font-bold" style={{color: 'var(--text-primary)'}}>{t('header.notifications')} ({unreadCount})</span>
                     {unreadCount > 0 && (
@@ -432,11 +506,11 @@ export default function DashboardLayout({
 
             {/* Profile widget */}
             <div className="flex items-center gap-2 pl-4" style={{borderLeft: '1px solid var(--border-base)'}}>
-              <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-semibold" style={{background: 'rgba(212,160,23,0.12)', border: '1px solid rgba(212,160,23,0.25)', color: 'var(--gold-400)'}}>
+              <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-semibold" style={{background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'var(--gold-400)'}}>
                 <User className="h-4 w-4" />
               </div>
               <div className="hidden lg:block text-left">
-                <p className="text-xs font-medium leading-none" style={{color: 'var(--text-secondary)'}}>{user.full_name}</p>
+                <p className="text-xs font-semibold leading-none" style={{color: 'var(--text-primary)'}}>{user.full_name}</p>
                 <span className="text-[9px]" style={{color: 'var(--text-muted)'}}>{user.email}</span>
               </div>
             </div>

@@ -185,14 +185,13 @@ export default function DefinePage() {
       )}
 
       {/* Advance phase banner */}
-      <div className="flex items-center justify-between px-5 py-3.5 rounded-2xl bg-indigo-500/5 border border-indigo-500/15">
+      <div className="flex items-center justify-between px-5 py-3.5 rounded-2xl bg-indigo-500/5 border border-indigo-500/15 phase-banner">
         <div>
           <p className="text-xs font-semibold text-indigo-300">Fase Saat Ini: <span className="uppercase font-black">DEFINE</span></p>
           <p className="text-[10px] text-slate-500 mt-0.5">Isi Profil Perusahaan dan Project Charter sebelum lanjut ke MEASURE.</p>
         </div>
         <button onClick={handleAdvanceToMeasure} disabled={saving}
-          className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl text-white cursor-pointer disabled:opacity-50 transition-all"
-          style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}>
+          className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl cursor-pointer disabled:opacity-50 transition-all">
           Lanjut ke MEASURE <ArrowRight className="h-3.5 w-3.5" />
         </button>
       </div>

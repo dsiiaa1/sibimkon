@@ -6,19 +6,19 @@
 
 :root {
   /* Core palette */
-  --navy-950: #050a18;
-  --navy-900: #0a1628;
-  --navy-800: #0f2044;
-  --navy-700: #163060;
-  --navy-600: #1e4080;
-  --navy-500: #2a55a5;
+  --navy-950: #050e1a;
+  --navy-900: #0a192f;
+  --navy-800: #172a45;
+  --navy-700: #304a6e;
+  --navy-600: #4b6e9c;
+  --navy-500: #6b94c7;
 
-  --gold-400: #f4c430;
-  --gold-500: #d4a017;
-  --gold-600: #b8860b;
-  --gold-300: #fad55a;
-  --gold-200: #fce9a0;
-  --gold-100: #fef8e1;
+  --gold-400: #d4af37; /* Luxury Gold */
+  --gold-500: #c19a2d;
+  --gold-600: #aa821c;
+  --gold-300: #e5c058;
+  --gold-200: #f3d98e;
+  --gold-100: #fff9e6;
 
   --black-pure: #000000;
   --dark-900: #050505;
@@ -27,22 +27,34 @@
   --dark-600: #1c1c1c;
 
   /* Text hierarchy */
-  --text-primary: #f5f0e0; /* warm white — readable on dark */
-  --text-secondary: #c8bfa0; /* muted warm */
-  --text-muted: #7a6f55; /* subtle */
-  --text-gold: #f4c430;
+  --text-primary: #0a192f; /* Primary Navy */
+  --text-secondary: #4a5568; /* Slate Gray */
+  --text-muted: #8a99ad; /* Muted Slate */
+  --text-gold: #d4af37;
 
   /* Borders */
-  --border-base: rgba(212, 160, 23, 0.12);
-  --border-hover: rgba(212, 160, 23, 0.3);
-  --border-active: rgba(212, 160, 23, 0.55);
+  --border-base: rgba(212, 175, 55, 0.15);
+  --border-hover: rgba(212, 175, 55, 0.35);
+  --border-active: rgba(212, 175, 55, 0.6);
 
   /* Background */
-  --background: var(--navy-950);
+  --background: #ffffff; /* Putih */
   --foreground: var(--text-primary);
 
   /* Sidebar */
   --sidebar-width: 280px;
+}
+
+/* Local scoping for dark components (Sidebar, Header & Dark Sections) to preserve text readability */
+aside,
+header,
+main .dark-section {
+  --text-primary: #ffffff !important;
+  --text-secondary: #e2e8f0 !important;
+  --text-muted: #a0aec0 !important;
+  --border-base: rgba(255, 255, 255, 0.1) !important;
+  --border-hover: rgba(255, 255, 255, 0.2) !important;
+  --border-active: var(--gold-400) !important;
 }
 
 @theme inline {
@@ -64,8 +76,8 @@ html {
 }
 
 body {
-  background: var(--navy-950);
-  color: var(--text-primary);
+  background: var(--background);
+  color: var(--foreground);
   font-family:
     "Inter",
     system-ui,
@@ -85,59 +97,34 @@ h3,
 h4,
 h5,
 h6 {
-  color: var(--text-primary);
   font-weight: 700;
   line-height: 1.25;
 }
 
-p,
-span,
-li,
-td,
-th {
+/* Colors are inherited from parent to allow text-white or other classes to work.
+   Default body color handles standard text, scoped main rules handle dashboard elements. */
+body {
+  color: var(--text-primary);
+}
+
+main h1,
+main h2,
+main h3,
+main h4,
+main h5,
+main h6 {
+  color: var(--text-primary);
+}
+
+main p,
+main span,
+main li,
+main td,
+main th {
   color: var(--text-secondary);
 }
 
-/* Force readable text on non-interactive elements
-   where Tailwind may generate overly dim colours */
-.text-slate-100 {
-  color: #f5f0e0 !important;
-}
-.text-slate-200 {
-  color: #e8e0cc !important;
-}
-.text-slate-300 {
-  color: #d7cfb0 !important;
-}
-.text-slate-400 {
-  color: #b9ab86 !important;
-}
 
-/* sering muncul sebagai “nyatu” di background navy */
-.text-slate-500 {
-  color: #c8bfa0 !important;
-}
-.text-slate-600 {
-  color: #b2a37f !important;
-}
-.text-slate-700 {
-  color: #c8bfa0 !important;
-}
-.text-slate-800 {
-  color: #f5f0e0 !important;
-}
-
-/* custom utility values used in codebase */
-.text-slate-250 {
-  color: #d9d0b0 !important;
-}
-.text-slate-350 {
-  color: #c8bfa0 !important;
-}
-
-.text-white {
-  color: #f5f0e0 !important;
-}
 
 /* Gold accent overrides */
 .text-indigo-400,
@@ -155,13 +142,16 @@ th {
   color: var(--gold-400) !important;
 }
 
-/* Consistent base text inside dark surfaces */
+/* Consistent base text inside dark surfaces vs light surfaces */
 .glass-card,
 aside,
 header,
-main,
-section,
 nav {
+  color: #ffffff !important;
+}
+
+main,
+section {
   color: var(--text-primary) !important;
 }
 
@@ -171,7 +161,7 @@ option,
 select,
 textarea,
 input {
-  color: var(--text-primary) !important;
+  color: var(--text-primary);
 }
 
 p,
@@ -179,7 +169,7 @@ span,
 li,
 td,
 th {
-  color: var(--text-secondary) !important;
+  color: var(--text-secondary);
 }
 
 /* ===================================================
@@ -262,35 +252,39 @@ th {
 
 /* Indigo buttons → Gold */
 .bg-indigo-600,
-.bg-indigo-500 {
+.bg-indigo-500,
+[class*="bg-indigo-6"],
+[class*="bg-indigo-5"] {
   background: linear-gradient(
     135deg,
-    #b8860b 0%,
-    #d4a017 50%,
-    #f4c430 100%
+    #aa821c 0%,
+    #d4af37 50%,
+    #e5c058 100%
   ) !important;
-  color: var(--navy-950) !important;
+  color: #0a192f !important;
   font-weight: 700;
-  box-shadow: 0 4px 16px rgba(212, 160, 23, 0.25) !important;
+  box-shadow: 0 4px 16px rgba(212, 175, 55, 0.25) !important;
 }
 .bg-indigo-600:hover,
 .bg-indigo-500:hover,
-.hover\:bg-indigo-500:hover,
-.hover\:bg-indigo-600:hover {
+[class*="bg-indigo-6"]:hover,
+[class*="bg-indigo-5"]:hover,
+[class*="hover\:bg-indigo-5"]:hover,
+[class*="hover\:bg-indigo-6"]:hover {
   background: linear-gradient(
     135deg,
-    #d4a017 0%,
-    #f4c430 50%,
-    #fad55a 100%
+    #c19a2d 0%,
+    #d4af37 50%,
+    #e5c058 100%
   ) !important;
-  box-shadow: 0 6px 24px rgba(244, 196, 48, 0.35) !important;
+  box-shadow: 0 6px 24px rgba(212, 175, 55, 0.35) !important;
 }
 
 /* Gradient buttons (login) */
 .bg-gradient-to-r.from-indigo-500.to-cyan-500,
 .bg-gradient-to-r.from-indigo-600.to-cyan-600 {
-  background: linear-gradient(135deg, #b8860b, #f4c430) !important;
-  color: var(--navy-950) !important;
+  background: linear-gradient(135deg, #aa821c, #d4af37) !important;
+  color: #0a192f !important;
 }
 
 /* Indigo tinted backgrounds */
@@ -366,14 +360,14 @@ th {
 }
 
 /* ===================================================
-   FORM INPUTS — navy dark
+   FORM INPUTS — clean light theme
    =================================================== */
 input,
 textarea,
 select {
-  background-color: var(--navy-900) !important;
-  color: var(--text-primary) !important;
-  border-color: var(--border-base) !important;
+  background-color: #ffffff;
+  color: var(--text-primary);
+  border-color: #cbd5e1;
 }
 input::placeholder,
 textarea::placeholder {
@@ -387,8 +381,95 @@ select:focus {
   outline: none !important;
 }
 select option {
-  background-color: var(--navy-900) !important;
-  color: var(--text-primary) !important;
+  background-color: #ffffff !important;
+  color: var(--navy-950) !important;
+}
+
+/* Ensure inputs inside main content are always light-themed */
+main input,
+main textarea,
+main select {
+  background-color: #ffffff !important;
+  color: var(--navy-950) !important;
+  border-color: #cbd5e1 !important;
+}
+main input:focus,
+main textarea:focus,
+main select:focus {
+  border-color: var(--gold-400) !important;
+  box-shadow: 0 0 0 3px rgba(212, 160, 23, 0.12) !important;
+}
+
+/* Default card backgrounds and borders inside main content (Light Theme) */
+main .glass-card,
+main [class*="bg-slate-900"],
+main [class*="bg-slate-950"],
+main [class*="bg-slate-800"],
+main [class*="bg-slate-850"] {
+  background-color: #ffffff !important;
+  background: #ffffff !important;
+  border-color: var(--border-base) !important;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 10px -1px rgba(0, 0, 0, 0.03) !important;
+}
+
+/* Visual Hierarchy for Nested Cards inside cards */
+main [class*="bg-slate-900"] [class*="bg-slate-9"],
+main [class*="bg-slate-950"] [class*="bg-slate-9"],
+main [class*="bg-slate-900"] [class*="bg-slate-8"],
+main [class*="bg-slate-950"] [class*="bg-slate-8"],
+main .glass-card [class*="bg-slate-9"],
+main .glass-card [class*="bg-slate-8"] {
+  background-color: #f8fafc !important;
+  background: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Table headers & rows in light theme */
+main thead tr,
+main tr.bg-slate-950\/60,
+main tr[class*="bg-slate-"] {
+  background-color: #f8fafc !important;
+  background: #f8fafc !important;
+  border-bottom: 1px solid #cbd5e1 !important;
+}
+main tr:hover td,
+main tr[class*="hover:bg-slate"]:hover td {
+  background-color: #f1f5f9 !important;
+  background: #f1f5f9 !important;
+}
+main td,
+main th {
+  border-color: #cbd5e1 !important;
+}
+
+/* Border slate classes inside main content */
+main .border-slate-800,
+main .border-slate-700,
+main .border-slate-850,
+main [class*="border-slate-"],
+main .divide-slate-800 > * + *,
+main [class*="divide-slate-"] > * + * {
+  border-color: #cbd5e1 !important;
+}
+
+/* Text color mapping inside main content */
+main .text-slate-50,
+main .text-slate-100,
+main .text-slate-200,
+main .text-slate-350,
+main .text-slate-300 {
+  color: var(--text-primary) !important; /* Navy */
+}
+
+main .text-slate-400,
+main .text-slate-250,
+main .text-slate-500 {
+  color: var(--text-secondary) !important; /* Slate Gray */
+}
+
+main .text-indigo-400,
+main .text-indigo-300 {
+  color: var(--gold-500) !important; /* Luxury Gold - slightly darker for contrast */
 }
 
 /* ===================================================
@@ -508,7 +589,7 @@ tr:hover td {
    GOLD GRADIENT TEXT UTILITY
    =================================================== */
 .text-gold-gradient {
-  background: linear-gradient(135deg, #f4c430, #fad55a, #d4a017);
+  background: linear-gradient( #000000);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -524,3 +605,123 @@ nav::-webkit-scrollbar-thumb {
   background: rgba(212, 160, 23, 0.15);
   border-radius: 2px;
 }
+
+/* ===================================================
+   HERO BANNER TEXT READABILITY OVERRIDE
+   =================================================== */
+.hero-banner h1,
+.hero-banner p,
+.hero-banner span {
+  color: #ffffff !important;
+}
+
+/* ===================================================
+   LIGHT TABLE OVERRIDE FOR DARK SECTIONS
+   =================================================== */
+.dark-section .light-table {
+  background-color: #ffffff !important;
+  background: #ffffff !important;
+  color: #0a192f !important;
+}
+
+.dark-section .light-table table {
+  background-color: #ffffff !important;
+}
+
+.dark-section .light-table thead tr {
+  background-color: #f8fafc !important;
+  background: #f8fafc !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+.dark-section .light-table th {
+  color: #4a5568 !important;
+  font-weight: 700 !important;
+  border-color: #e2e8f0 !important;
+}
+
+.dark-section .light-table tbody tr {
+  background-color: #ffffff !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.dark-section .light-table tbody tr:hover {
+  background-color: #f8fafc !important;
+  background: #f8fafc !important;
+}
+
+.dark-section .light-table td {
+  color: #4a5568 !important;
+  border-color: #f1f5f9 !important;
+}
+
+.dark-section .light-table td h4,
+.dark-section .light-table td span:not(.project-code):not(.text-white),
+.dark-section .light-table td font-semibold {
+  color: #0a192f !important;
+}
+
+.dark-section .light-table td .project-code {
+  color: #aa821c !important;
+}
+
+.dark-section .light-table td a {
+  color: #aa821c !important;
+}
+.dark-section .light-table td a:hover {
+  color: #d4af37 !important;
+}
+
+.dark-section .light-table .baseline-pill {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #4a5568 !important;
+}
+.dark-section .light-table .baseline-pill span {
+  color: #4a5568 !important;
+}
+.dark-section .light-table .baseline-pill .text-emerald-400,
+.dark-section .light-table .baseline-pill .text-emerald-600 {
+  color: #059669 !important; /* High-contrast green */
+}
+
+/* ===================================================
+   PHASE ADVANCE BANNER STYLE
+   =================================================== */
+main .phase-banner {
+  background: linear-gradient(
+    135deg,
+    #aa821c 0%,
+    #d4af37 50%,
+    #e5c058 100%
+  ) !important;
+  border-color: var(--gold-400) !important;
+  box-shadow: 0 4px 20px rgba(212, 175, 55, 0.15) !important;
+}
+
+main .phase-banner p,
+main .phase-banner span {
+  color: #0a192f !important;
+}
+
+main .phase-banner button {
+  background: var(--navy-950) !important;
+  background-color: var(--navy-950) !important;
+  color: var(--gold-400) !important;
+  border: 1px solid var(--border-base) !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  transition: all 0.2s ease-in-out !important;
+}
+main .phase-banner button:hover {
+  background: var(--navy-900) !important;
+  background-color: var(--navy-900) !important;
+  border-color: var(--gold-300) !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25) !important;
+  transform: translateY(-1px) !important;
+}
+main .phase-banner button:active {
+  transform: translateY(0) !important;
+}
+
+

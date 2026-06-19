@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { getMockDB, updateMockDB, Project, ActionPlan } from '@/lib/mockData'
+import { Project, ActionPlan } from '@/lib/mockData'
 import {
   TrendingUp,
   AlertTriangle,
@@ -16,7 +16,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react'
-import { updateProjectPhase } from '@/lib/db'
+import { updateProjectPhase, getProjects, getActionPlans } from '@/lib/db'
 import { 
   ResponsiveContainer,
   ComposedChart,
@@ -51,14 +51,20 @@ export default function ControlPage() {
   const [resultScore, setResultScore] = useState(75)
 
   useEffect(() => {
-    const db = getMockDB()
-    const proj = db.projects.find((p: Project) => p.id === projectId)
-    if (!proj) {
-      router.push('/dashboard')
-      return
+    async function loadData() {
+      const [projects, actions] = await Promise.all([
+        getProjects(),
+        getActionPlans(projectId)
+      ])
+      const proj = projects.find((p: Project) => p.id === projectId)
+      if (!proj) {
+        router.push('/dashboard')
+        return
+      }
+      setProject(proj)
+      setActionPlans(actions)
     }
-    setProject(proj)
-    setActionPlans(db.actionPlans[projectId] || [])
+    loadData()
 
     // Load audit checklist
     const savedAudit = localStorage.getItem(`sibimkon_audit_${projectId}`)
@@ -179,14 +185,13 @@ export default function ControlPage() {
       )}
 
       {/* Advance phase banner */}
-      <div className="flex items-center justify-between px-5 py-3.5 rounded-2xl bg-indigo-500/5 border border-indigo-500/15">
+      <div className="flex items-center justify-between px-5 py-3.5 rounded-2xl bg-indigo-500/5 border border-indigo-500/15 phase-banner">
         <div>
           <p className="text-xs font-semibold text-indigo-300">Fase Saat Ini: <span className="uppercase font-black">CONTROL</span></p>
           <p className="text-[10px] text-slate-500 mt-0.5">Simpan PSI, lalu selesaikan proyek dan cetak laporan akhir.</p>
         </div>
         <button onClick={handleCompleteProject}
-          className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl text-white cursor-pointer"
-          style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}>
+          className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl cursor-pointer">
           Selesaikan &amp; Buka Laporan <ArrowRight className="h-3.5 w-3.5" />
         </button>
       </div>

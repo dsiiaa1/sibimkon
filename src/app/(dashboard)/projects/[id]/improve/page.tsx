@@ -6,7 +6,7 @@ import { getMockDB, updateMockDB, Project, ActionPlan } from '@/lib/mockData'
 import { LineChart, Plus, CheckCircle2, AlertTriangle, Calendar, User, DollarSign, ArrowUpRight, Check, Trash, Upload, FileText, X, Loader2, ArrowRight, Lock } from 'lucide-react'
 import { ACTION_STATUS_LABELS } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { updateProjectPhase } from '@/lib/db'
+import { getProjects, getActionPlans, saveActionPlans as saveActionPlansDb, updateProjectPhase } from '@/lib/db'
 
 export default function ImprovePage() {
   const router = useRouter()
@@ -54,25 +54,32 @@ export default function ImprovePage() {
       } catch (_) {}
     }
 
-    const db = getMockDB()
-    const proj = db.projects.find((p: Project) => p.id === projectId)
-    if (!proj) {
-      router.push('/dashboard')
-      return
+    async function loadData() {
+      const [projects, actions] = await Promise.all([
+        getProjects(),
+        getActionPlans(projectId)
+      ])
+      const proj = projects.find((p: Project) => p.id === projectId)
+      if (!proj) {
+        router.push('/dashboard')
+        return
+      }
+      setProject(proj)
+      setActionPlans(actions)
     }
-    setProject(proj)
-
-    setActionPlans(db.actionPlans[projectId] || [])
+    loadData()
   }, [projectId, router])
 
-  const handleCreateAction = (e: React.FormEvent) => {
+  const handleCreateAction = async (e: React.FormEvent) => {
     e.preventDefault()
     // Guard: hanya konsultan yang boleh membuat action plan
     if (!isKonsultan) return
     if (!newTitle) return
 
+    const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'act-' + Math.random().toString(36).substr(2, 9)
+
     const newAction: ActionPlan = {
-      id: 'act-' + Math.random().toString(36).substr(2, 9),
+      id: newId,
       project_id: projectId,
       title: newTitle,
       description: newDesc,
@@ -90,11 +97,7 @@ export default function ImprovePage() {
     }
 
     const updated = [...actionPlans, newAction]
-    setActionPlans(updated)
-
-    const db = getMockDB()
-    db.actionPlans[projectId] = updated
-    updateMockDB('actionPlans', db.actionPlans)
+    await saveActionPlans(updated)
 
     setShowAddModal(false)
     resetForm()
@@ -328,11 +331,9 @@ export default function ImprovePage() {
     saveActionPlans(updated)
   }
 
-  const saveActionPlans = (updated: ActionPlan[]) => {
+  const saveActionPlans = async (updated: ActionPlan[]) => {
     setActionPlans(updated)
-    const db = getMockDB()
-    db.actionPlans[projectId] = updated
-    updateMockDB('actionPlans', db.actionPlans)
+    await saveActionPlansDb(projectId, updated)
   }
 
   if (!project) return null

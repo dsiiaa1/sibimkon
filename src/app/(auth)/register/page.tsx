@@ -4,41 +4,93 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { Mail, Lock, Eye, EyeOff, User, Building2, Phone, Briefcase, ArrowLeft, ArrowRight, CheckCircle2 } from 'lucide-react'
 
 export default function RegisterPage() {
+  // Navigation step state
+  const [step, setStep] = useState(1)
+
+  // Form Field States
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [role, setRole] = useState<'konsultan' | 'perusahaan'>('perusahaan')
+  const [role, setRole] = useState<'perusahaan' | 'konsultan'>('perusahaan')
+  
+  // Step 2 Fields
   const [companyName, setCompanyName] = useState('')
+  const [businessField, setBusinessField] = useState('Manufaktur')
+  const [specialization, setSpecialization] = useState('')
+  const [organization, setOrganization] = useState('')
+
+  // Step 3 Fields
+  const [phone, setPhone] = useState('')
+  const [picPosition, setPicPosition] = useState('')
+
+  // UI Control States
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  
+  // Validation Dirtiness States
+  const [emailDirty, setEmailDirty] = useState(false)
+  const [passwordDirty, setPasswordDirty] = useState(false)
+  const [confirmPasswordDirty, setConfirmPasswordDirty] = useState(false)
+  const [phoneDirty, setPhoneDirty] = useState(false)
+
   const router = useRouter()
+
+  // Real-time Validations
+  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  const isPasswordValid = password.length >= 6
+  const isConfirmPasswordValid = password === confirmPassword
+  const isPhoneValid = /^[0-9+]{10,15}$/.test(phone.replace(/[\s-]/g, ''))
+
+  // Validation helpers for Step 1
+  const isStep1Valid = 
+    name.trim().length >= 3 && 
+    isEmailValid && 
+    isPasswordValid && 
+    isConfirmPasswordValid
+
+  // Validation helpers for Step 2
+  const isStep2Valid = 
+    role === 'perusahaan' 
+      ? companyName.trim().length >= 3 
+      : (organization.trim().length >= 3 || specialization.trim().length >= 2)
+
+  // Validation helpers for Step 3
+  const isStep3Valid = isPhoneValid && picPosition.trim().length >= 2
+
+  const nextStep = () => {
+    if (step === 1 && !isStep1Valid) {
+      setEmailDirty(true)
+      setPasswordDirty(true)
+      setConfirmPasswordDirty(true)
+      return
+    }
+    if (step === 2 && !isStep2Valid) return
+    setStep((prev) => prev + 1)
+  }
+
+  const prevStep = () => {
+    setStep((prev) => prev - 1)
+  }
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!isStep3Valid) {
+      setPhoneDirty(true)
+      return
+    }
+
     setLoading(true)
     setError(null)
     setSuccess(null)
 
-    // Validasi password cocok
-    if (password !== confirmPassword) {
-      setError('Password dan konfirmasi password tidak cocok.')
-      setLoading(false)
-      return
-    }
-    if (password.length < 6) {
-      setError('Password minimal 6 karakter.')
-      setLoading(false)
-      return
-    }
-    if (role === 'perusahaan' && !companyName.trim()) {
-      setError('Nama perusahaan wajib diisi untuk akun Perusahaan.')
-      setLoading(false)
-      return
-    }
+    const finalOrganization = role === 'perusahaan' ? companyName : (organization || 'Konsultan BIMKON')
 
     try {
       const supabase = createClient()
@@ -64,20 +116,18 @@ export default function RegisterPage() {
         if (signUpError.message?.includes('Unable to validate email address')) {
           throw new Error('Format email tidak valid.')
         }
-        // Tampilkan pesan asli dari Supabase, atau stringify jika bukan string
-        const msg = signUpError.message || signUpError.code || JSON.stringify(signUpError)
-        throw new Error(msg)
+        throw new Error(signUpError.message || JSON.stringify(signUpError))
       }
 
-      // Upsert profil ke tabel profiles
       if (data?.user) {
         try {
           const { error: profileErr } = await supabase.from('profiles').upsert({
             id: data.user.id,
             full_name: name,
             email: email,
+            phone: phone,
             role: role,
-            organization: role === 'perusahaan' ? companyName : 'Konsultan BIMKON',
+            organization: finalOrganization,
             is_active: true,
           }, { onConflict: 'id' })
 
@@ -89,21 +139,18 @@ export default function RegisterPage() {
         }
       }
 
-      // Tampilkan pesan sukses — arahkan ke login
       setSuccess(
         data?.user?.identities?.length === 0
           ? 'Email ini sudah terdaftar. Silakan login.'
-          : 'Pendaftaran berhasil! Silakan cek email Anda untuk verifikasi, lalu login.'
+          : 'Pendaftaran berhasil! Silakan cek kotak masuk email Anda untuk verifikasi, lalu login.'
       )
 
-      // Redirect ke login setelah 3 detik
       setTimeout(() => {
         router.push('/login?registered=true')
-      }, 3000)
+      }, 4000)
 
     } catch (err: any) {
-      console.error('Register error full object:', err, JSON.stringify(err))
-      // Pastikan pesan error selalu berupa string yang bisa ditampilkan
+      console.error('Register error:', err)
       const msg = typeof err === 'string' ? err
         : err?.message ? err.message
         : err?.error_description ? err.error_description
@@ -115,184 +162,546 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-1 flex-col justify-center py-12 sm:px-6 lg:px-8 text-white relative overflow-hidden" style={{background: 'linear-gradient(135deg, var(--navy-950) 0%, #080f22 50%, var(--dark-900) 100%)'}}>
-      <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full" style={{background: 'radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%)', filter: 'blur(80px)'}} />
-      <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] rounded-full" style={{background: 'radial-gradient(circle, rgba(6,182,212,0.06) 0%, transparent 70%)', filter: 'blur(80px)'}} />
-      <div className="absolute top-0 left-0 right-0 h-px" style={{background: 'linear-gradient(90deg, transparent, rgba(99,102,241,0.4), transparent)'}} />
-
-      <div className="sm:mx-auto sm:w-full sm:max-w-md z-10">
-        <div className="flex justify-center mb-4">
-          <div className="h-14 w-14 rounded-2xl flex items-center justify-center text-2xl font-black shadow-lg" style={{background: 'linear-gradient(135deg, #b8860b, #f4c430)', color: 'var(--navy-950)'}}>
-            S
+    <div className="grid grid-cols-1 lg:grid-cols-12 min-h-screen w-full bg-[#050a18]">
+      
+      {/* LEFT COLUMN: BRANDING & DETAILS (Navy) */}
+      <div className="hidden lg:flex lg:col-span-7 flex-col justify-between p-12 relative overflow-hidden bg-gradient-to-br from-[#050a18] via-[#09142c] to-[#040814] border-r border-slate-800/60 text-white">
+        <div className="absolute top-[-10%] left-[-10%] w-[600px] h-[600px] rounded-full bg-gradient-to-r from-amber-500/10 to-transparent blur-[100px] pointer-events-none" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full bg-gradient-to-l from-[#1e4080]/15 to-transparent blur-[80px] pointer-events-none" />
+        
+        {/* Top Branding Logo */}
+        <div className="flex items-center gap-4 z-10">
+          <img src="/sibimkonicon.png" alt="Logo" className="h-10 w-10 object-contain" />
+          <div>
+            <h1 className="text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-200">
+              SIBIMKON
+            </h1>
+            <p className="text-[10px] uppercase tracking-widest text-slate-400">
+              Link Productive
+            </p>
           </div>
         </div>
-        <h2 className="text-center text-3xl font-extrabold tracking-tight" style={{background: 'linear-gradient(135deg, #f4c430, #fce9a0, #d4a017)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text'}}>
-          Daftar SIBIMKON
-        </h2>
-        <p className="mt-2 text-center text-sm" style={{color: 'var(--text-muted)'}}>
-          Registrasi Akun Baru — Konsultan atau Perusahaan Klien
-        </p>
+
+        {/* Center Text Info */}
+        <div className="z-10 max-w-lg my-auto space-y-6">
+          <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-amber-500/10 border border-amber-500/20 text-[#f4c430] inline-block tracking-wider uppercase">
+            Portal Registrasi
+          </span>
+          <h2 className="text-4xl font-extrabold leading-tight text-slate-100">
+            Bergabunglah dengan Ekosistem Peningkatan Produktivitas
+          </h2>
+          <p className="text-slate-400 text-sm leading-relaxed">
+            Dapatkan bimbingan terstruktur, pantau perkembangan proyek perbaikan secara real-time, dan capai efisiensi maksimal dengan solusi berbasis digital.
+          </p>
+
+          {/* Stepper info card */}
+          <div className="glass-card rounded-2xl p-5 border border-slate-800 space-y-4" style={{ background: 'rgba(10,22,40,0.3)', backdropFilter: 'blur(10px)' }}>
+            <h3 className="text-xs font-bold text-slate-350 tracking-wider uppercase">3 Langkah Mudah Pendaftaran</h3>
+            <div className="space-y-3">
+              {[
+                { stepNum: 1, title: 'Informasi Akun', desc: 'Detail login email dan password aman.' },
+                { stepNum: 2, title: role === 'perusahaan' ? 'Profil Perusahaan' : 'Informasi Konsultan', desc: 'Identitas instansi atau bidang keahlian.' },
+                { stepNum: 3, title: 'Kontak & PIC', desc: 'Nomor WhatsApp aktif untuk koordinasi bimbingan.' }
+              ].map((item) => (
+                <div key={item.stepNum} className="flex gap-3.5 items-start">
+                  <div className={`h-6 w-6 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold ${
+                    step === item.stepNum 
+                      ? 'bg-amber-400 text-[#050a18] shadow' 
+                      : step > item.stepNum 
+                        ? 'bg-amber-600/70 text-white' 
+                        : 'bg-slate-900 border border-slate-800 text-slate-500'
+                  }`}>
+                    {item.stepNum}
+                  </div>
+                  <div>
+                    <h4 className={`text-xs font-bold ${step === item.stepNum ? 'text-amber-400' : 'text-slate-300'}`}>{item.title}</h4>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{item.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer Brand Info */}
+        <div className="flex items-center justify-between text-xs text-slate-400 border-t border-slate-800/40 pt-6 z-10">
+          <span>Kementerian Ketenagakerjaan RI</span>
+          <span>© 2026 Link Productive</span>
+        </div>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md z-10 px-4 sm:px-0">
-        <div className="rounded-2xl py-8 px-6 sm:px-10 animate-fade-in" style={{background: 'rgba(10,22,40,0.80)', border: '1px solid var(--border-base)', boxShadow: '0 25px 60px rgba(0,0,0,0.50)', backdropFilter: 'blur(20px)'}}>
+      {/* RIGHT COLUMN: WHITE FORM CONTAINER */}
+      <div 
+        className="col-span-1 lg:col-span-5 flex flex-col justify-center py-12 px-6 sm:px-12 md:px-20 bg-white"
+        style={{
+          '--background': '#ffffff',
+          '--foreground': '#0f172a',
+          '--text-primary': '#0f172a',
+          '--text-secondary': '#475569',
+          '--text-muted': '#94a3b8',
+          '--border-base': '#e2e8f0',
+          '--navy-900': '#f8fafc',
+          background: '#ffffff',
+          color: '#0f172a'
+        } as any}
+      >
+        <div className="w-full max-w-md mx-auto">
+          {/* Mobile logo header */}
+          <div className="lg:hidden flex flex-col items-center mb-6">
+            <img src="/sibimkonicon.png" alt="Logo" className="h-12 w-12 object-contain" />
+            <h2 className="mt-2 text-center text-xl font-black text-[#0a1628]">
+              Daftar SIBIMKON
+            </h2>
+            <p className="mt-1 text-center text-xs text-slate-500">
+              Registrasi Akun Baru Konsultan atau Klien Perusahaan
+            </p>
+          </div>
 
+          {/* Desktop welcome header */}
+          <div className="hidden lg:block mb-6">
+            <h2 className="text-2xl font-black text-[#0f172a] tracking-tight">
+              Registrasi Akun
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Silakan isi formulir secara lengkap untuk memulai.
+            </p>
+          </div>
+
+          {/* Stepper Progress Bar (Right Column) */}
+          <div className="mb-6 flex items-center justify-between relative px-2 py-1">
+            <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-slate-100 -translate-y-1/2 z-0" />
+            <div 
+              className="absolute top-1/2 left-0 h-0.5 bg-[#0a1628] -translate-y-1/2 z-0 transition-all duration-300" 
+              style={{ width: step === 1 ? '16%' : step === 2 ? '50%' : '84%' }}
+            />
+            
+            {[1, 2, 3].map((s) => (
+              <div key={s} className="relative z-10 flex flex-col items-center">
+                <div className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                  step === s 
+                    ? 'bg-[#0a1628] text-white ring-4 ring-slate-100 scale-105' 
+                    : step > s 
+                      ? 'bg-amber-500 text-white' 
+                      : 'bg-white border-2 border-slate-200 text-slate-400'
+                }`}>
+                  {s}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Error / Success alerts */}
           {error && (
-            <div className="mb-4 rounded-lg bg-red-500/15 border border-red-500/30 p-3 text-sm text-red-400">
-              ⚠️ {error}
+            <div className="mb-6 rounded-xl bg-rose-50 border border-rose-200 p-4 text-xs text-rose-800 flex items-start gap-2.5 animate-fade-in">
+              <span className="text-base leading-none">⚠️</span>
+              <p className="font-semibold leading-relaxed">{error}</p>
             </div>
           )}
 
           {success && (
-            <div className="mb-4 rounded-lg bg-green-500/15 border border-green-500/30 p-4 text-sm text-green-400">
-              <div className="font-semibold mb-1">✅ Berhasil!</div>
-              {success}
-              <div className="mt-2 text-xs opacity-75">Mengalihkan ke halaman login dalam 3 detik...</div>
+            <div className="mb-6 rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-xs text-emerald-800 flex items-start gap-3.5 animate-fade-in">
+              <CheckCircle2 className="h-6 w-6 text-emerald-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Pendaftaran Berhasil!</p>
+                <p className="mt-1 text-emerald-600 leading-normal">{success}</p>
+                <p className="mt-2.5 text-[10px] text-slate-400 font-bold uppercase tracking-wider">Mengalihkan ke Halaman Login...</p>
+              </div>
             </div>
           )}
 
           {!success && (
-            <form onSubmit={handleRegister} className="space-y-5">
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium" style={{color: 'var(--text-secondary)'}}>
-                  Nama Lengkap
-                </label>
-                <input
-                  id="name"
-                  name="name"
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Nama lengkap Anda"
-                  className="mt-1 block w-full rounded-xl px-4 py-3 sm:text-sm transition-all outline-none"
-                  style={{background: 'rgba(5,10,24,0.8)', border: '1px solid var(--border-base)', color: 'var(--text-primary)'}}
-                />
-              </div>
+            <form onSubmit={(e) => e.preventDefault()} className="space-y-5">
+              
+              {/* STEP 1: ACCOUNT DETAILS */}
+              {step === 1 && (
+                <div className="space-y-4 animate-fade-in">
+                  
+                  {/* Role tab switcher inside step 1 */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+                      Daftar Sebagai
+                    </label>
+                    <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-100 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => setRole('perusahaan')}
+                        className={`py-2 rounded-lg text-xs font-bold transition-all ${
+                          role === 'perusahaan'
+                            ? 'bg-[#0a1628] text-white shadow'
+                            : 'text-slate-600 hover:text-slate-800'
+                        }`}
+                      >
+                        🏭 Perusahaan
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRole('konsultan')}
+                        className={`py-2 rounded-lg text-xs font-bold transition-all ${
+                          role === 'konsultan'
+                            ? 'bg-[#0a1628] text-white shadow'
+                            : 'text-slate-600 hover:text-slate-800'
+                        }`}
+                      >
+                        👤 Konsultan
+                      </button>
+                    </div>
+                  </div>
 
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium" style={{color: 'var(--text-secondary)'}}>
-                  Email
-                </label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="email@perusahaan.com"
-                  className="mt-1 block w-full rounded-xl px-4 py-3 sm:text-sm transition-all outline-none"
-                  style={{background: 'rgba(5,10,24,0.8)', border: '1px solid var(--border-base)', color: 'var(--text-primary)'}}
-                />
-              </div>
+                  {/* Full Name */}
+                  <div>
+                    <label htmlFor="name" className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+                      Nama Lengkap
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                        <User className="h-4 w-4 text-slate-400" />
+                      </div>
+                      <input
+                        id="name"
+                        name="name"
+                        type="text"
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Nama lengkap Anda"
+                        className="block w-full rounded-xl pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 text-sm focus:bg-white transition-all outline-none"
+                        style={{ backgroundColor: '#f8fafc', color: '#0f172a', borderColor: '#cbd5e1' }}
+                      />
+                    </div>
+                  </div>
 
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium" style={{color: 'var(--text-secondary)'}}>
-                  Password <span className="text-xs opacity-60">(min. 6 karakter)</span>
-                </label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  minLength={6}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="mt-1 block w-full rounded-xl px-4 py-3 sm:text-sm transition-all outline-none"
-                  style={{background: 'rgba(5,10,24,0.8)', border: '1px solid var(--border-base)', color: 'var(--text-primary)'}}
-                />
-              </div>
+                  {/* Email */}
+                  <div>
+                    <label htmlFor="email" className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+                      Alamat Email
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                        <Mail className="h-4 w-4 text-slate-400" />
+                      </div>
+                      <input
+                        id="email"
+                        name="email"
+                        type="email"
+                        required
+                        value={email}
+                        onBlur={() => setEmailDirty(true)}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="nama@email.com"
+                        className={`block w-full rounded-xl pl-10 pr-4 py-3 bg-slate-50 border text-slate-900 placeholder-slate-400 text-sm focus:bg-white transition-all outline-none ${
+                          emailDirty && !isEmailValid ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200'
+                        }`}
+                        style={{ backgroundColor: '#f8fafc', color: '#0f172a' }}
+                      />
+                    </div>
+                    {emailDirty && !isEmailValid && (
+                      <p className="mt-1.5 text-[10px] text-rose-500 font-bold uppercase tracking-wide">Format email tidak valid</p>
+                    )}
+                  </div>
 
-              <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium" style={{color: 'var(--text-secondary)'}}>
-                  Konfirmasi Password
-                </label>
-                <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  required
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="mt-1 block w-full rounded-xl px-4 py-3 sm:text-sm transition-all outline-none"
-                  style={{background: 'rgba(5,10,24,0.8)', border: '1px solid var(--border-base)', color: 'var(--text-primary)'}}
-                />
-              </div>
+                  {/* Password */}
+                  <div>
+                    <label htmlFor="password" className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+                      Kata Sandi (min. 6 karakter)
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                        <Lock className="h-4 w-4 text-slate-400" />
+                      </div>
+                      <input
+                        id="password"
+                        name="password"
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        value={password}
+                        onBlur={() => setPasswordDirty(true)}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className={`block w-full rounded-xl pl-10 pr-10 py-3 bg-slate-50 border text-slate-900 placeholder-slate-400 text-sm focus:bg-white transition-all outline-none ${
+                          passwordDirty && !isPasswordValid ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200'
+                        }`}
+                        style={{ backgroundColor: '#f8fafc', color: '#0f172a' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600"
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    {passwordDirty && !isPasswordValid && (
+                      <p className="mt-1.5 text-[10px] text-rose-500 font-bold uppercase tracking-wide">Sandi harus minimal 6 karakter</p>
+                    )}
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-2" style={{color: 'var(--text-secondary)'}}>
-                  Daftar Sebagai
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { id: 'perusahaan', label: '🏭 Perusahaan (Klien)' },
-                    { id: 'konsultan', label: '👤 Konsultan BIMKON' },
-                  ].map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setRole(item.id as 'perusahaan' | 'konsultan')}
-                      className="px-3 py-3 rounded-xl text-sm font-medium transition-all"
-                      style={role === item.id ? {
-                        border: '1px solid rgba(212,160,23,0.55)',
-                        background: 'rgba(212,160,23,0.12)',
-                        color: 'var(--gold-400)',
-                        fontWeight: 700,
-                      } : {
-                        border: '1px solid var(--border-base)',
-                        background: 'rgba(5,10,24,0.5)',
-                        color: 'var(--text-muted)',
-                      }}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+                  {/* Confirm Password */}
+                  <div>
+                    <label htmlFor="confirmPassword" className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+                      Konfirmasi Kata Sandi
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                        <Lock className="h-4 w-4 text-slate-400" />
+                      </div>
+                      <input
+                        id="confirmPassword"
+                        name="confirmPassword"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        required
+                        value={confirmPassword}
+                        onBlur={() => setConfirmPasswordDirty(true)}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className={`block w-full rounded-xl pl-10 pr-10 py-3 bg-slate-50 border text-slate-900 placeholder-slate-400 text-sm focus:bg-white transition-all outline-none ${
+                          confirmPasswordDirty && !isConfirmPasswordValid ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200'
+                        }`}
+                        style={{ backgroundColor: '#f8fafc', color: '#0f172a' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600"
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    {confirmPasswordDirty && !isConfirmPasswordValid && (
+                      <p className="mt-1.5 text-[10px] text-rose-500 font-bold uppercase tracking-wide">Konfirmasi sandi tidak cocok</p>
+                    )}
+                  </div>
 
-              {role === 'perusahaan' && (
-                <div className="animate-fade-in">
-                  <label htmlFor="companyName" className="block text-sm font-medium" style={{color: 'var(--text-secondary)'}}>
-                    Nama Perusahaan <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    id="companyName"
-                    name="companyName"
-                    type="text"
-                    required
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    placeholder="PT Nama Perusahaan Anda"
-                    className="mt-1 block w-full rounded-xl px-4 py-3 sm:text-sm transition-all outline-none"
-                    style={{background: 'rgba(5,10,24,0.8)', border: '1px solid var(--border-base)', color: 'var(--text-primary)'}}
-                  />
                 </div>
               )}
 
-              <div>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="flex w-full justify-center rounded-xl px-4 py-3 text-sm font-bold disabled:opacity-50 transition-all cursor-pointer transform hover:-translate-y-0.5"
-                  style={{background: 'linear-gradient(135deg, #b8860b, #d4a017, #f4c430)', color: 'var(--navy-950)', boxShadow: '0 6px 24px rgba(212,160,23,0.25)'}}
-                >
-                  {loading ? 'Mendaftarkan...' : 'Daftar Sekarang'}
-                </button>
+              {/* STEP 2: BUSINESS/ENTITY INFO */}
+              {step === 2 && (
+                <div className="space-y-4 animate-fade-in">
+                  {role === 'perusahaan' ? (
+                    <>
+                      {/* Company Name */}
+                      <div>
+                        <label htmlFor="companyName" className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+                          Nama Perusahaan
+                        </label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <Building2 className="h-4 w-4 text-slate-400" />
+                          </div>
+                          <input
+                            id="companyName"
+                            name="companyName"
+                            type="text"
+                            required
+                            value={companyName}
+                            onChange={(e) => setCompanyName(e.target.value)}
+                            placeholder="PT Perusahaan Contoh"
+                            className="block w-full rounded-xl pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 text-sm focus:bg-white transition-all outline-none"
+                            style={{ backgroundColor: '#f8fafc', color: '#0f172a', borderColor: '#cbd5e1' }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Business Field dropdown */}
+                      <div>
+                        <label htmlFor="businessField" className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+                          Bidang Usaha
+                        </label>
+                        <select
+                          id="businessField"
+                          name="businessField"
+                          value={businessField}
+                          onChange={(e) => setBusinessField(e.target.value)}
+                          className="block w-full rounded-xl px-4 py-3 bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:bg-white transition-all outline-none"
+                          style={{ backgroundColor: '#f8fafc', color: '#0f172a', borderColor: '#cbd5e1' }}
+                        >
+                          <option value="Manufaktur">🏭 Manufaktur / Pabrik</option>
+                          <option value="Jasa">💼 Jasa & Layanan</option>
+                          <option value="Retail">🛒 Perdagangan & Retail</option>
+                          <option value="Logistik">🚚 Logistik & Transportasi</option>
+                          <option value="Konstruksi">🏗️ Konstruksi & Properti</option>
+                          <option value="Lainnya">🧩 Bidang Usaha Lainnya</option>
+                        </select>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* Consultant Organization */}
+                      <div>
+                        <label htmlFor="organization" className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+                          Nama Lembaga / Instansi
+                        </label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <Building2 className="h-4 w-4 text-slate-400" />
+                          </div>
+                          <input
+                            id="organization"
+                            name="organization"
+                            type="text"
+                            required
+                            value={organization}
+                            onChange={(e) => setOrganization(e.target.value)}
+                            placeholder="Lembaga BIMKON Wilayah / Kemnaker"
+                            className="block w-full rounded-xl pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 text-sm focus:bg-white transition-all outline-none"
+                            style={{ backgroundColor: '#f8fafc', color: '#0f172a', borderColor: '#cbd5e1' }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Consultant Specialty */}
+                      <div>
+                        <label htmlFor="specialization" className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+                          Spesialisasi Keahlian
+                        </label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <Briefcase className="h-4 w-4 text-slate-400" />
+                          </div>
+                          <input
+                            id="specialization"
+                            name="specialization"
+                            type="text"
+                            required
+                            value={specialization}
+                            onChange={(e) => setSpecialization(e.target.value)}
+                            placeholder="Lean, Kaizen, Six Sigma, K3, dll"
+                            className="block w-full rounded-xl pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 text-sm focus:bg-white transition-all outline-none"
+                            style={{ backgroundColor: '#f8fafc', color: '#0f172a', borderColor: '#cbd5e1' }}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* STEP 3: PIC & WHATSAPP */}
+              {step === 3 && (
+                <div className="space-y-4 animate-fade-in">
+                  
+                  {/* WhatsApp/Phone number */}
+                  <div>
+                    <label htmlFor="phone" className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+                      Nomor Telepon / WhatsApp
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                        <Phone className="h-4 w-4 text-slate-400" />
+                      </div>
+                      <input
+                        id="phone"
+                        name="phone"
+                        type="text"
+                        required
+                        value={phone}
+                        onBlur={() => setPhoneDirty(true)}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="Contoh: 081234567890"
+                        className={`block w-full rounded-xl pl-10 pr-4 py-3 bg-slate-50 border text-slate-900 placeholder-slate-400 text-sm focus:bg-white transition-all outline-none ${
+                          phoneDirty && !isPhoneValid ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200'
+                        }`}
+                        style={{ backgroundColor: '#f8fafc', color: '#0f172a' }}
+                      />
+                    </div>
+                    {phoneDirty && !isPhoneValid ? (
+                      <p className="mt-1.5 text-[10px] text-rose-500 font-bold uppercase tracking-wide">Nomor WhatsApp tidak valid (10-15 angka)</p>
+                    ) : (
+                      <p className="mt-1 text-[10px] text-slate-400">Gunakan format angka saja (cth: 0812...).</p>
+                    )}
+                  </div>
+
+                  {/* PIC Position */}
+                  <div>
+                    <label htmlFor="picPosition" className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+                      Jabatan Anda (PIC / Pelaksana)
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                        <Briefcase className="h-4 w-4 text-slate-400" />
+                      </div>
+                      <input
+                        id="picPosition"
+                        name="picPosition"
+                        type="text"
+                        required
+                        value={picPosition}
+                        onChange={(e) => setPicPosition(e.target.value)}
+                        placeholder="Contoh: Direktur, HRD Manager, Konsultan Pendamping"
+                        className="block w-full rounded-xl pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 text-sm focus:bg-white transition-all outline-none"
+                        style={{ backgroundColor: '#f8fafc', color: '#0f172a', borderColor: '#cbd5e1' }}
+                      />
+                    </div>
+                  </div>
+
+                </div>
+              )}
+
+              {/* ACTION NAVIGATION BUTTONS */}
+              <div className="flex items-center gap-3 pt-4 border-t border-slate-100">
+                {step > 1 && (
+                  <button
+                    type="button"
+                    onClick={prevStep}
+                    disabled={loading}
+                    className="flex-1 flex justify-center items-center gap-1.5 py-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                    Kembali
+                  </button>
+                )}
+                
+                {step < 3 ? (
+                  <button
+                    type="button"
+                    onClick={nextStep}
+                    disabled={step === 1 ? !isStep1Valid : !isStep2Valid}
+                    className="flex-1 flex justify-center items-center gap-1.5 py-3 rounded-xl text-white font-bold text-xs bg-[#0a1628] hover:bg-[#142642] transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                    style={{ backgroundColor: '#0a1628', color: '#ffffff' }}
+                  >
+                    Lanjutkan
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleRegister}
+                    disabled={loading || !isStep3Valid}
+                    className="flex-1 flex justify-center items-center gap-1.5 py-3 rounded-xl text-white font-bold text-xs bg-[#0a1628] hover:bg-[#142642] border border-amber-500/10 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                    style={{ backgroundColor: '#0a1628', color: '#ffffff' }}
+                  >
+                    {loading ? (
+                      <>
+                        <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        <span>Mendaftarkan...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Selesaikan & Kirim</span>
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </form>
           )}
 
-          <p className="mt-6 text-center text-xs" style={{color: 'var(--text-muted)'}}>
-            Sudah punya akun?{' '}
-            <Link href="/login" className="font-semibold transition-colors" style={{color: 'var(--gold-400)'}}>
-              Masuk di sini
-            </Link>
-          </p>
+          {/* Login callout */}
+          {!success && (
+            <p className="mt-8 text-center text-xs text-slate-500">
+              Sudah memiliki akun?{' '}
+              <Link 
+                href="/login" 
+                className="font-bold text-[#0a1628] hover:text-amber-600 hover:underline transition-all"
+              >
+                Masuk di sini
+              </Link>
+            </p>
+          )}
         </div>
       </div>
+
     </div>
   )
 }
