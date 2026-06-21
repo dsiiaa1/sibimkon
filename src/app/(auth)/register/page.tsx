@@ -46,7 +46,7 @@ export default function RegisterPage() {
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
   const isPasswordValid = password.length >= 6
   const isConfirmPasswordValid = password === confirmPassword
-  const isPhoneValid = /^[0-9+]{10,15}$/.test(phone.replace(/[\s-]/g, ''))
+  const isPhoneValid = /^(?:\+62|62|0)8[1-9][0-9]{6,11}$/.test(phone.replace(/[\s-]/g, ''))
 
   // Validation helpers for Step 1
   const isStep1Valid = 
@@ -605,9 +605,9 @@ export default function RegisterPage() {
                       />
                     </div>
                     {phoneDirty && !isPhoneValid ? (
-                      <p className="mt-1.5 text-[10px] text-rose-500 font-bold uppercase tracking-wide">Nomor WhatsApp tidak valid (10-15 angka)</p>
+                      <p className="mt-1.5 text-[10px] text-rose-500 font-bold uppercase tracking-wide">Nomor telepon harus diawali 08, 62, atau +62 (10-15 angka)</p>
                     ) : (
-                      <p className="mt-1 text-[10px] text-slate-400">Gunakan format angka saja (cth: 0812...).</p>
+                      <p className="mt-1 text-[10px] text-slate-400">Gunakan format Indonesia (cth: 0812... atau +62812...).</p>
                     )}
                   </div>
 
