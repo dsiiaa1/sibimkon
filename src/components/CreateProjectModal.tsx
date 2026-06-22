@@ -58,6 +58,10 @@ export default function CreateProjectModal({
       setError('Pilih perusahaan terlebih dahulu')
       return
     }
+    if (endDate <= startDate) {
+      setError('Target selesai harus lebih dari tanggal mulai')
+      return
+    }
     setSaving(true)
     setError(null)
     try {
@@ -192,7 +196,15 @@ export default function CreateProjectModal({
                 type="date"
                 required
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={(e) => {
+                  setStartDate(e.target.value)
+                  // auto-push end date if it's no longer after start
+                  if (endDate <= e.target.value) {
+                    const d = new Date(e.target.value)
+                    d.setMonth(d.getMonth() + 3)
+                    setEndDate(d.toISOString().split('T')[0])
+                  }
+                }}
                 className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
               />
             </div>
@@ -203,10 +215,16 @@ export default function CreateProjectModal({
               <input
                 type="date"
                 required
+                min={startDate}
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
+                className={`w-full bg-slate-900 border rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none text-sm ${
+                  endDate <= startDate ? 'border-red-500/60 focus:border-red-500' : 'border-slate-800 focus:border-indigo-500'
+                }`}
               />
+              {endDate <= startDate && (
+                <p className="text-[10px] text-red-400 mt-1">Harus setelah tanggal mulai</p>
+              )}
             </div>
           </div>
 

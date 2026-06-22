@@ -82,7 +82,7 @@ function LoginForm() {
         })
       )
 
-      router.push('/dashboard')
+      router.push(searchParams.get('redirect') || '/dashboard')
       router.refresh()
     } catch (err: any) {
       const msg = typeof err === 'string' ? err

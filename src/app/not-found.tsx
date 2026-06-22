@@ -1,56 +1,33 @@
-'use client'
-
-import { useRouter } from 'next/navigation'
-import { Home, ArrowLeft, SearchX } from 'lucide-react'
+import Link from 'next/link'
 
 export default function NotFound() {
-  const router = useRouter()
-
   return (
-    <div className="min-h-screen bg-slate-990 flex items-center justify-center p-6">
-      <div className="max-w-md w-full text-center space-y-8">
-        {/* Icon */}
-        <div className="flex justify-center">
-          <div className="h-20 w-20 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center">
-            <SearchX className="h-10 w-10 text-slate-600" />
-          </div>
+    <div className="min-h-screen flex items-center justify-center bg-[#050a18]">
+      <div className="flex flex-col items-center gap-6 text-center px-4">
+        <div className="text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-200">
+          404
         </div>
-
-        {/* Text */}
-        <div className="space-y-3">
-          <span className="text-xs font-mono font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-3 py-1 rounded-full">
-            404 — Halaman Tidak Ditemukan
-          </span>
-          <h1 className="text-2xl font-black text-slate-100 mt-4">
-            Halaman ini tidak ada
-          </h1>
-          <p className="text-sm text-slate-400 leading-relaxed max-w-xs mx-auto">
-            URL yang Anda akses tidak ditemukan. Mungkin sudah dipindah, dihapus, atau Anda salah mengetik alamatnya.
+        <div className="space-y-2">
+          <h1 className="text-2xl font-bold text-slate-100">Halaman Tidak Ditemukan</h1>
+          <p className="text-sm text-slate-400 max-w-sm leading-relaxed">
+            Halaman yang kamu cari tidak ada atau sudah dipindahkan.
           </p>
         </div>
-
-        {/* Actions */}
-        <div className="flex items-center justify-center gap-3 flex-wrap">
-          <button
-            onClick={() => router.back()}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-sm font-semibold rounded-xl text-slate-300 transition-colors cursor-pointer"
+        <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold transition-all cursor-pointer"
+            style={{ background: 'linear-gradient(135deg, #b8860b, #d4a017, #f4c430)', color: '#050a18' }}
           >
-            <ArrowLeft className="h-4 w-4" />
-            Kembali
-          </button>
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold rounded-xl text-white transition-colors cursor-pointer shadow-md"
+            Kembali ke Dashboard
+          </Link>
+          <Link
+            href="/projects"
+            className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-slate-300 border border-slate-700 hover:border-slate-500 transition-all"
           >
-            <Home className="h-4 w-4" />
-            Ke Dashboard
-          </button>
+            Lihat Proyek
+          </Link>
         </div>
-
-        {/* Footer */}
-        <p className="text-[11px] text-slate-600">
-          SIBIMKON — Sistem Informasi Bimbingan Konsultansi Kemnaker RI
-        </p>
       </div>
     </div>
   )

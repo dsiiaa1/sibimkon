@@ -122,7 +122,19 @@ export default function CompaniesPage() {
 
       {/* Cards list */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredCompanies.map(comp => {
+        {filteredCompanies.length === 0 ? (
+          <div className="col-span-3 flex flex-col items-center justify-center py-20 text-center border border-dashed border-slate-800 rounded-2xl">
+            <div className="h-14 w-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mb-4">
+              <Building className="h-7 w-7 text-slate-600" />
+            </div>
+            <p className="text-sm font-semibold text-slate-400">
+              {searchQuery ? 'Perusahaan tidak ditemukan' : 'Belum ada perusahaan terdaftar'}
+            </p>
+            <p className="text-xs text-slate-600 mt-1">
+              {searchQuery ? 'Coba kata kunci lain' : 'Klik "Daftarkan Perusahaan Baru" untuk menambahkan'}
+            </p>
+          </div>
+        ) : filteredCompanies.map(comp => {
           const compProjects = projects.filter(p => p.company_id === comp.id)
           const activeCount = compProjects.filter(p => p.status !== 'completed').length
           

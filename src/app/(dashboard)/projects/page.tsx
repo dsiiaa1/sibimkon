@@ -98,7 +98,21 @@ export default function ProjectsPage() {
 
       {/* Cards list */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {filteredProjects.map(proj => {
+        {filteredProjects.length === 0 ? (
+          <div className="col-span-2 flex flex-col items-center justify-center py-20 text-center border border-dashed border-slate-800 rounded-2xl">
+            <div className="h-14 w-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mb-4">
+              <FolderKanban className="h-7 w-7 text-slate-600" />
+            </div>
+            <p className="text-sm font-semibold text-slate-400">
+              {searchQuery || statusFilter !== 'all' ? 'Proyek tidak ditemukan' : 'Belum ada proyek'}
+            </p>
+            <p className="text-xs text-slate-600 mt-1">
+              {searchQuery || statusFilter !== 'all'
+                ? 'Coba ubah filter atau kata kunci pencarian'
+                : 'Klik "Mulai Proyek Baru" untuk membuat proyek pertama'}
+            </p>
+          </div>
+        ) : filteredProjects.map(proj => {
           const statusInfo = PROJECT_STATUS_LABELS[proj.status] || { label: proj.status, color: 'bg-slate-500' }
           return (
             <div key={proj.id} className="glass-card rounded-2xl border border-slate-800/60 bg-slate-950/30 p-6 flex flex-col justify-between hover:border-slate-700 transition-all group hover:-translate-y-0.5">
