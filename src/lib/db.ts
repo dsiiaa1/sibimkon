@@ -253,13 +253,82 @@ export async function saveAssessments(projectId: string, assessments: Assessment
           percentage_score: assess.percentage_score,
           responses: { questions: assess.responses }
         })
-      if (error) throw error
+      if (error) {
+        console.error('Supabase saveAssessments Error Details:', error)
+        throw error
+      }
     }
   } catch (err) {
-    console.warn('Supabase saveAssessments failed, falling back to mock storage.', err)
+    console.warn('Supabase saveAssessments failed, falling back to mock storage. Details:', err)
     const db = getMockDB()
     db.assessments[projectId] = assessments
     updateMockDB('assessments', db.assessments)
+  }
+}
+
+export async function getVom(projectId: string): Promise<any[]> {
+  try {
+    const hasTable = await checkTableExists('measure_vom')
+    if (!hasTable) throw new Error('Table does not exist')
+
+    const { data, error } = await supabase
+      .from('measure_vom')
+      .select('*')
+      .eq('project_id', projectId)
+
+    if (error) {
+      console.error('Supabase getVom Error Details:', error)
+      throw error
+    }
+
+    return data || []
+  } catch (err) {
+    console.warn('Supabase getVom failed, falling back to local/mock logic. Details:', err)
+    return []
+  }
+}
+
+export async function saveVom(projectId: string, vomList: any[]): Promise<void> {
+  try {
+    const hasTable = await checkTableExists('measure_vom')
+    if (!hasTable) throw new Error('Table measure_vom does not exist')
+
+    // Delete existing VoM for this project
+    const { error: deleteErr } = await supabase
+      .from('measure_vom')
+      .delete()
+      .eq('project_id', projectId)
+    
+    if (deleteErr) {
+      console.error('Supabase saveVom (Delete) Error Details:', deleteErr)
+      throw deleteErr
+    }
+
+    // Insert new VoM list if there are any
+    if (vomList.length > 0) {
+      const upsertData = vomList.map((v) => {
+        const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v.id)
+        return {
+          id: isValidUUID ? v.id : undefined,
+          project_id: projectId,
+          dimension: v.dimension,
+          problem: v.problem,
+          impact: v.impact,
+          priority: v.priority
+        }
+      })
+      
+      const { error: insertErr } = await supabase
+        .from('measure_vom')
+        .insert(upsertData)
+        
+      if (insertErr) {
+        console.error('Supabase saveVom (Insert) Error Details:', insertErr)
+        throw insertErr
+      }
+    }
+  } catch (err) {
+    console.warn('Supabase saveVom failed, fallback to mock DB ignored because VOM mock DB is handled in UI.', err)
   }
 }
 

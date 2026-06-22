@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { getProjects, getAssessments, saveAssessments, updateProjectPhase } from '@/lib/db'
+import { getProjects, getAssessments, saveAssessments, updateProjectPhase, getVom, saveVom } from '@/lib/db'
 import { Project, Assessment } from '@/lib/mockData'
 import {
   TrendingUp,
@@ -41,7 +41,7 @@ export default function MeasurePage() {
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
 
-  // VOM state — TIDAK ada seed data demo
+  // VOM state
   const [vomList, setVomList] = useState<any[]>([])
   const [vomDimension, setVomDimension] = useState('productivity')
   const [vomProblem, setVomProblem] = useState('')
@@ -121,9 +121,9 @@ export default function MeasurePage() {
         existingAssessments.length > 0 ? existingAssessments : buildBlankAssessments()
       )
 
-      // Muat VOM dari localStorage — tidak ada seed demo
-      const storedVom = localStorage.getItem(`sibimkon_vom_${projectId}`)
-      setVomList(storedVom ? JSON.parse(storedVom) : [])
+      // Muat VOM dari Supabase (atau mock)
+      const dbVom = await getVom(projectId)
+      setVomList(dbVom)
     }
     loadData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -194,7 +194,7 @@ export default function MeasurePage() {
     }
     const updated = [...vomList, newItem]
     setVomList(updated)
-    localStorage.setItem(`sibimkon_vom_${projectId}`, JSON.stringify(updated))
+    saveVom(projectId, updated).catch(console.error)
     setVomProblem('')
     setVomImpact('')
   }
@@ -202,7 +202,7 @@ export default function MeasurePage() {
   const handleDeleteVom = (id: string) => {
     const updated = vomList.filter((item: any) => item.id !== id)
     setVomList(updated)
-    localStorage.setItem(`sibimkon_vom_${projectId}`, JSON.stringify(updated))
+    saveVom(projectId, updated).catch(console.error)
   }
 
   if (!project || assessments.length === 0) {
