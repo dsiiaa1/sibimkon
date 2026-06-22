@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 
-export default function DashboardError({
+export default function GlobalError({
   error,
   reset,
 }: {
@@ -10,7 +10,7 @@ export default function DashboardError({
   reset: () => void
 }) {
   useEffect(() => {
-    console.error('Dashboard error:', error)
+    console.error('App error:', error)
   }, [error])
 
   return (
