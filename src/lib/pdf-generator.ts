@@ -260,8 +260,15 @@ export function generateFinalReport(
   if (y > 220) { doc.addPage(); y = 25 }
   drawChapterHeader('BAB 4 — DAMPAK EKONOMI & ROI', 'Estimasi Penghematan Biaya dan Return on Investment')
 
-  const costSaving = 25000000 * 3
-  const investment = actionPlans.length * 2500000
+  // Hitung ROI dari data KPI aktual yang sudah diinput di modul IMPROVE
+  const costSaving = actionPlans.reduce((acc, act) => {
+    if (act.kpi_actual === undefined) return acc
+    const achieved = act.kpi_target > act.kpi_baseline
+      ? Math.max(0, (act.kpi_actual as number) - act.kpi_baseline)
+      : Math.max(0, act.kpi_baseline - (act.kpi_actual as number))
+    return acc + achieved * 500000 // Rp 500rb per unit perbaikan KPI
+  }, 0)
+  const investment = actionPlans.filter(a => a.status !== 'belum_mulai').length * 2500000
   const roi = investment > 0 ? (costSaving / investment).toFixed(1) : '0'
 
   autoTable(doc, {

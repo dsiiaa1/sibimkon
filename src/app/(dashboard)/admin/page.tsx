@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getProjects, getCompanies } from '@/lib/db'
-import { getMockDB, updateMockDB, Project, Company } from '@/lib/mockData'
+import { getProjects, getCompanies, createCompany } from '@/lib/db'
+import { Project, Company } from '@/lib/mockData'
 import { Activity, Globe, MapPin, Award, Building, Plus } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, AreaChart, Area } from 'recharts'
 
@@ -54,35 +54,33 @@ export default function AdminPanelPage() {
   const avgImprovement = displayProjects.reduce((acc, p) => acc + ((p.current_score || 0) - (p.baseline_score || 0)), 0) / (totalProjects || 1)
   const completedProjects = displayProjects.filter(p => p.status === 'completed' || p.status === 'control').length
 
-  const handleRegisterPotentialCompany = (e: React.FormEvent) => {
+  const handleRegisterPotentialCompany = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newCompName) return
 
-    const newCompany: Company = {
-      id: 'comp-' + Math.random().toString(36).substr(2, 9),
-      name: newCompName,
-      address: newCompAddress,
-      province: newCompProvince,
-      city: newCompCity,
-      business_field: newCompField,
-      total_employees: Number(newCompEmployees),
-      certifications: []
+    try {
+      const newCompany = await createCompany({
+        name: newCompName,
+        address: newCompAddress,
+        province: newCompProvince,
+        city: newCompCity,
+        business_field: newCompField,
+        total_employees: Number(newCompEmployees),
+        certifications: [],
+      })
+
+      setCompanies(prev => [...prev, newCompany])
+      setShowAddCompanyModal(false)
+      setNewCompName('')
+      setNewCompField('')
+      setNewCompCity('')
+      setNewCompAddress('')
+      setNewCompEmployees(50)
+      alert('Perusahaan Potensial berhasil didaftarkan dalam program pembinaan Disnaker!')
+    } catch (err) {
+      console.error('Gagal mendaftarkan perusahaan:', err)
+      alert('Gagal mendaftarkan perusahaan. Silakan coba lagi.')
     }
-
-    const db = getMockDB()
-    const updated = [...db.companies, newCompany]
-    updateMockDB('companies', updated)
-    setCompanies(updated)
-    
-    setShowAddCompanyModal(false)
-    // Reset fields
-    setNewCompName('')
-    setNewCompField('')
-    setNewCompCity('')
-    setNewCompAddress('')
-    setNewCompEmployees(50)
-
-    alert('Perusahaan Potensial berhasil didaftarkan dalam program pembinaan Disnaker!')
   }
 
   // Regional chart data for Disnaker

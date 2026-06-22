@@ -92,14 +92,17 @@ export default function CompaniesPage() {
           <p className="text-xs text-slate-500">Kelola profil perusahaan dan data kontak PIC terdaftar</p>
         </div>
         <div className="sm:ml-auto">
-          <button 
-            onClick={() => setShowAddModal(true)}
-            className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all cursor-pointer transform hover:-translate-y-0.5"
-            style={{background: 'linear-gradient(135deg, #b8860b, #d4a017, #f4c430)', color: 'var(--navy-950)', boxShadow: '0 6px 20px rgba(212,160,23,0.20)'}}
-          >
-            <Plus className="h-4 w-4" />
-            Daftarkan Perusahaan Baru
-          </button>
+          {/* Hanya konsultan dan admin yang bisa tambah perusahaan */}
+          {userRole !== 'perusahaan' && (
+            <button 
+              onClick={() => setShowAddModal(true)}
+              className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all cursor-pointer transform hover:-translate-y-0.5"
+              style={{background: 'linear-gradient(135deg, #b8860b, #d4a017, #f4c430)', color: 'var(--navy-950)', boxShadow: '0 6px 20px rgba(212,160,23,0.20)'}}
+            >
+              <Plus className="h-4 w-4" />
+              Daftarkan Perusahaan Baru
+            </button>
+          )}
         </div>
       </div>
 

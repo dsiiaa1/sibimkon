@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getCompanies } from '@/lib/db'
+import { getCompanies, updateCompany } from '@/lib/db'
 import { Company } from '@/lib/mockData'
 import { Building, Save, User, Phone, Mail, Sparkles } from 'lucide-react'
 
@@ -87,11 +87,8 @@ export default function CompanyProfilePage() {
     setSaveMsg(null)
 
     try {
-      const { getMockDB, updateMockDB } = await import('@/lib/mockData')
-      const db = getMockDB()
-      
-      const updatedCompany: Company = {
-        ...company,
+      // Simpan ke Supabase via updateCompany, fallback ke mockDB otomatis di dalam fungsi
+      await updateCompany(company.id, {
         name: compName,
         address: compAddress,
         total_employees: Number(compEmployees),
@@ -104,19 +101,35 @@ export default function CompanyProfilePage() {
         pic_name: picName,
         pic_position: picPosition,
         pic_phone: picPhone,
-        pic_email: picEmail
-      } as any
+        pic_email: picEmail,
+      })
 
-      const updatedList = db.companies.map((c: Company) => 
+      // Sync mockDB agar tampilan sidebar tetap konsisten
+      const { getMockDB, updateMockDB } = await import('@/lib/mockData')
+      const db = getMockDB()
+      const updatedCompany = {
+        ...company,
+        name: compName,
+        address: compAddress,
+        total_employees: Number(compEmployees),
+        business_field: compField,
+        certifications: compCertifications,
+        pic_name: picName,
+        pic_position: picPosition,
+        pic_phone: picPhone,
+        pic_email: picEmail,
+      }
+      const updatedList = db.companies.map((c: any) =>
         c.id === company.id ? updatedCompany : c
       )
       updateMockDB('companies', updatedList)
-      setCompany(updatedCompany)
-      
+      setCompany(updatedCompany as any)
+
       setSaveMsg('Profil perusahaan dan kontak PIC berhasil disimpan!')
       setTimeout(() => setSaveMsg(null), 3000)
     } catch (err) {
       console.error(err)
+      setSaveMsg('Gagal menyimpan. Silakan coba lagi.')
     } finally {
       setSaving(false)
     }

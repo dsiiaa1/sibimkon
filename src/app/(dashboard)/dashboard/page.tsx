@@ -49,9 +49,16 @@ export default function DashboardPage() {
       setCompanies(comps)
 
       if (u && u.role === 'perusahaan') {
-        const comp = comps.find(c => c.name.toLowerCase() === u.organization.toLowerCase())
+        const org = (u.organization || '').toLowerCase().trim()
+        const comp = comps.find((c: any) =>
+          c.name.toLowerCase().trim() === org ||
+          c.name.toLowerCase().trim().includes(org) ||
+          org.includes(c.name.toLowerCase().trim())
+        )
         if (comp) {
           setNewCompanyId(comp.id)
+        } else if (comps.length > 0) {
+          setNewCompanyId(comps[0].id)
         }
       }
     }
@@ -60,14 +67,19 @@ export default function DashboardPage() {
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newTitle || !newCompanyId) return
+    if (!newTitle) return
+
+    if (!newCompanyId) {
+      alert('Pilih perusahaan terlebih dahulu')
+      return
+    }
 
     const selectedCompany = companies.find(c => c.id === newCompanyId)
     const newProj = await createProject({
       title: newTitle,
       description: newDesc,
       company_id: newCompanyId,
-      company_name: selectedCompany ? selectedCompany.name : 'Unknown',
+      company_name: selectedCompany ? selectedCompany.name : (currentUser?.organization || 'Unknown'),
       consultant_id: currentUserId,
       status: 'define',
       start_date: newStartDate,
@@ -75,14 +87,10 @@ export default function DashboardPage() {
     })
 
     setProjects([...projects, newProj])
-    
-    // Close modal & reset fields
     setShowNewProjectModal(false)
     setNewTitle('')
     setNewDesc('')
-    if (currentUser?.role !== 'perusahaan') {
-      setNewCompanyId('')
-    }
+    if (currentUser?.role !== 'perusahaan') setNewCompanyId('')
   }
 
   // Filter projects by company if user is a client company
@@ -331,15 +339,17 @@ export default function DashboardPage() {
                   Perusahaan Klien
                 </label>
                 {currentUser?.role === 'perusahaan' ? (
-                  <input
-                    type="text"
-                    disabled
-                    value={currentUser?.organization}
-                    className="w-full bg-slate-100 border border-slate-200 rounded-xl px-4 py-2.5 text-slate-500 text-sm"
-                  />
+                  <>
+                    <input
+                      type="text"
+                      disabled
+                      value={currentUser?.organization}
+                      className="w-full bg-slate-100 border border-slate-200 rounded-xl px-4 py-2.5 text-slate-500 text-sm"
+                    />
+                    <input type="hidden" value={newCompanyId} />
+                  </>
                 ) : (
                   <select
-                    required
                     value={newCompanyId}
                     onChange={(e) => setNewCompanyId(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-[var(--text-primary)] focus:outline-none focus:border-[var(--gold-500)] text-sm"

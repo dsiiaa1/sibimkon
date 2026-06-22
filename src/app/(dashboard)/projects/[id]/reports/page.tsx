@@ -89,6 +89,19 @@ export default function ReportsPage() {
     if (role === 'disnaker') setDisnakerSig(rec)
     if (role === 'kemnaker') setKemnakerSig(rec)
     saveSigs(next)
+
+    // Simpan ke Supabase (best-effort)
+    import('@/lib/supabase/client').then(({ createClient }) => {
+      const supabase = createClient()
+      supabase.from('reports').upsert({
+        project_id: projectId,
+        report_type: 'signature',
+        title: `Tanda Tangan ${role}`,
+        report_data: next,
+      }, { onConflict: 'project_id,report_type' }).then(({ error }) => {
+        if (error) console.warn('Supabase signature save error (non-critical):', error.message)
+      })
+    }).catch(console.warn)
   }
 
   // ── ROI dari data KPI aktual vs baseline (Fix #7) ──
