@@ -41,9 +41,18 @@ export default function ProjectsPage() {
       setCompanies(comps)
 
       if (u && u.role === 'perusahaan') {
-        const comp = comps.find(c => c.name.toLowerCase() === u.organization.toLowerCase())
+        // Cari company yang cocok — fuzzy match: contains atau startsWith
+        const org = (u.organization || '').toLowerCase().trim()
+        const comp = comps.find(c =>
+          c.name.toLowerCase().trim() === org ||
+          c.name.toLowerCase().trim().includes(org) ||
+          org.includes(c.name.toLowerCase().trim())
+        )
         if (comp) {
           setNewCompanyId(comp.id)
+        } else if (comps.length > 0) {
+          // fallback: pakai company pertama yang tersedia untuk user ini
+          setNewCompanyId(comps[0].id)
         }
       }
     }
@@ -52,14 +61,21 @@ export default function ProjectsPage() {
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newTitle || !newCompanyId) return
+    if (!newTitle) return
+
+    // Untuk role perusahaan, newCompanyId sudah di-set di useEffect
+    // Untuk konsultan, harus pilih dari dropdown
+    if (!newCompanyId) {
+      alert('Pilih perusahaan terlebih dahulu')
+      return
+    }
 
     const selectedCompany = companies.find(c => c.id === newCompanyId)
     const newProj = await createProject({
       title: newTitle,
       description: newDesc,
       company_id: newCompanyId,
-      company_name: selectedCompany ? selectedCompany.name : 'Unknown',
+      company_name: selectedCompany ? selectedCompany.name : (currentUser?.organization || 'Unknown'),
       consultant_id: currentUserId,
       status: 'define',
       start_date: newStartDate,
@@ -67,12 +83,10 @@ export default function ProjectsPage() {
     })
 
     setProjects([...projects, newProj])
-    
-    // Close modal & reset fields
     setShowNewProjectModal(false)
     setNewTitle('')
     setNewDesc('')
-    setNewCompanyId('')
+    if (currentUser?.role !== 'perusahaan') setNewCompanyId('')
   }
 
   const filteredProjects = projects.filter(p => {
@@ -241,15 +255,17 @@ export default function ProjectsPage() {
                   Perusahaan Klien
                 </label>
                 {currentUser?.role === 'perusahaan' ? (
-                  <input
-                    type="text"
-                    disabled
-                    value={currentUser?.organization}
-                    className="w-full bg-slate-950/40 border border-slate-850 rounded-xl px-4 py-2.5 text-slate-500 text-sm"
-                  />
+                  <>
+                    <input
+                      type="text"
+                      disabled
+                      value={currentUser?.organization}
+                      className="w-full bg-slate-950/40 border border-slate-850 rounded-xl px-4 py-2.5 text-slate-500 text-sm"
+                    />
+                    <input type="hidden" value={newCompanyId} />
+                  </>
                 ) : (
                   <select
-                    required
                     value={newCompanyId}
                     onChange={(e) => setNewCompanyId(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
