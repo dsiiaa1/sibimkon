@@ -70,12 +70,6 @@ async function fetchFontAsBase64(url: string): Promise<string | null> {
  */
 async function embedNotoSans(doc: jsPDF): Promise<boolean> {
   // Google Fonts static TTF URLs (ukuran kecil, Latin subset)
-  const REGULAR_URL =
-    'https://fonts.gstatic.com/s/notosans/v36/o-0IIpQlx3QUlC5A4PNr5TRAIut8QQ.woff2'
-  const BOLD_URL =
-    'https://fonts.gstatic.com/s/notosans/v36/o-0NIpQlx3QUlC5A4PNjXhFVZNyBx2pqPIif.woff2'
-
-  // Noto Sans Latin subset tersedia via Google Fonts CSS trick — gunakan TTF subset
   const REGULAR_TTF =
     'https://fonts.gstatic.com/s/notosans/v36/o-0IIpQlx3QUlC5A4PNr5TRASf6M7bE.ttf'
   const BOLD_TTF =
