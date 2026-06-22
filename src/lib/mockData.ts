@@ -24,6 +24,11 @@ export interface Company {
   pic_position?: string
   pic_phone?: string
   pic_email?: string
+  // Extended fields (sesuai kolom DB Supabase)
+  main_product?: string          // maps to main_products di DB
+  kadin_membership?: string      // 'tidak_aktif' | 'kadin' | 'apindo' | 'keduanya'
+  labor_union?: string           // nama serikat pekerja
+  pkb_status?: string            // 'tidak_ada' | 'ada_aktif' | 'proses_perpanjangan'
 }
 
 export interface Project {

@@ -1,5 +1,3 @@
-'use client'
-
 import { createClient } from './supabase/client'
 import { getMockDB, updateMockDB, Project, Company, ProjectCharter, Assessment, FishboneNode, WhyNode, ActionPlan } from './mockData'
 
@@ -10,12 +8,13 @@ function getSupabase() {
   return createClient()
 }
 
-// Helper to check if getSupabase()! is connected and has the tables
+// Helper to check if Supabase is connected and the table exists.
+// Fix: instansiasi client hanya 1x per panggilan untuk menghindari memory leak.
 async function checkTableExists(tableName: string): Promise<boolean> {
   try {
-    const supabase = getSupabase()
-    if (!getSupabase()!) return false
-    const { error } = await getSupabase()!.from(tableName).select('*').limit(0)
+    const sb = getSupabase()
+    if (!sb) return false
+    const { error } = await sb.from(tableName).select('*').limit(0)
     // PGRST116 = table not found, 42P01 = undefined table (Postgres)
     if (error && (
       error.code === 'PGRST116' ||
@@ -181,25 +180,37 @@ export async function getCompanies(): Promise<Company[]> {
   }
 }
 
-// ── NEW: updateCompany — save profil perusahaan ke Supabase ──────────────────
-export async function updateCompany(companyId: string, fields: Partial<Company> & Record<string, any>): Promise<void> {
+// ── updateCompany — save profil perusahaan ke Supabase ──────────────────────
+export async function updateCompany(companyId: string, fields: Partial<Company>): Promise<void> {
+  // Selalu update mockDB dulu untuk konsistensi UI
+  const db = getMockDB()
+  const updatedCompanies = db.companies.map((c: Company) =>
+    c.id === companyId ? { ...c, ...fields } : c
+  )
+  updateMockDB('companies', updatedCompanies)
+
   try {
     const hasTable = await checkTableExists('companies')
-    if (!hasTable) throw new Error('Table does not exist')
+    if (!hasTable) return
 
     const { error } = await getSupabase()!
       .from('companies')
       .update({
-        name: fields.name,
-        address: fields.address,
-        total_employees: fields.total_employees,
-        business_field: fields.business_field,
-        main_products: fields.main_product,
-        certifications: fields.certifications || [],
-        kadin_member: fields.kadin_membership === 'kadin' || fields.kadin_membership === 'keduanya',
-        apindo_member: fields.kadin_membership === 'apindo' || fields.kadin_membership === 'keduanya',
-        has_union: !!fields.labor_union,
-        has_pkb: fields.pkb_status !== 'tidak_ada',
+        ...(fields.name !== undefined && { name: fields.name }),
+        ...(fields.address !== undefined && { address: fields.address }),
+        ...(fields.total_employees !== undefined && { total_employees: fields.total_employees }),
+        ...(fields.business_field !== undefined && { business_field: fields.business_field }),
+        ...(fields.main_product !== undefined && { main_products: fields.main_product }),
+        ...(fields.certifications !== undefined && { certifications: fields.certifications }),
+        // kadin_membership → kadin_member + apindo_member (boolean flags di DB)
+        ...(fields.kadin_membership !== undefined && {
+          kadin_member: fields.kadin_membership === 'kadin' || fields.kadin_membership === 'keduanya',
+          apindo_member: fields.kadin_membership === 'apindo' || fields.kadin_membership === 'keduanya',
+        }),
+        // labor_union → has_union (boolean di DB)
+        ...(fields.labor_union !== undefined && { has_union: !!fields.labor_union }),
+        // pkb_status → has_pkb (boolean di DB)
+        ...(fields.pkb_status !== undefined && { has_pkb: fields.pkb_status !== 'tidak_ada' }),
         ...(fields.pic_name !== undefined && { pic_name: fields.pic_name }),
         ...(fields.pic_position !== undefined && { pic_position: fields.pic_position }),
         ...(fields.pic_phone !== undefined && { pic_phone: fields.pic_phone }),
@@ -210,12 +221,7 @@ export async function updateCompany(companyId: string, fields: Partial<Company> 
 
     if (error) throw error
   } catch (err) {
-    console.warn('Supabase updateCompany failed, falling back to mock storage.', err)
-    const db = getMockDB()
-    const updatedCompanies = db.companies.map((c: Company) =>
-      c.id === companyId ? { ...c, ...fields } : c
-    )
-    updateMockDB('companies', updatedCompanies)
+    console.warn('Supabase updateCompany failed, data saved to mockDB only.', err)
   }
 }
 
@@ -288,12 +294,18 @@ export async function getAssessments(projectId: string): Promise<Assessment[]> {
 }
 
 export async function saveAssessments(projectId: string, assessments: Assessment[]): Promise<void> {
+  // Selalu sync mockDB dulu agar UI tidak block
+  const db = getMockDB()
+  db.assessments[projectId] = assessments
+  updateMockDB('assessments', db.assessments)
+
   try {
     const hasTable = await checkTableExists('measure_assessments')
-    if (!hasTable) throw new Error('Table does not exist')
+    if (!hasTable) return
 
+    const sb = getSupabase()!
     for (const assess of assessments) {
-      const { error } = await getSupabase()!
+      const { error } = await sb
         .from('measure_assessments')
         .upsert({
           project_id: projectId,
@@ -302,15 +314,37 @@ export async function saveAssessments(projectId: string, assessments: Assessment
           responses: { questions: assess.responses }
         }, { onConflict: 'project_id,dimension,assessment_version' })
       if (error) {
-        console.error('getSupabase()! saveAssessments Error Details:', error)
+        console.error('saveAssessments upsert error:', error)
         throw error
       }
     }
+
+    // Fix #2: Sync skor rata-rata ke bimkon_projects di Supabase
+    const avgIndex = Math.round(
+      assessments.reduce((acc, a) => acc + a.percentage_score, 0) / assessments.length
+    )
+    // Baca baseline saat ini — kalau belum ada, set sekarang
+    const { data: existingProject } = await sb
+      .from('bimkon_projects')
+      .select('baseline_productivity_index, current_productivity_index')
+      .eq('id', projectId)
+      .maybeSingle()
+
+    const baselineVal = existingProject?.baseline_productivity_index
+      ? Number(existingProject.baseline_productivity_index)
+      : avgIndex
+
+    await sb
+      .from('bimkon_projects')
+      .update({
+        baseline_productivity_index: baselineVal,
+        current_productivity_index: avgIndex,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', projectId)
+
   } catch (err) {
-    console.warn('getSupabase()! saveAssessments failed, falling back to mock storage. Details:', err)
-    const db = getMockDB()
-    db.assessments[projectId] = assessments
-    updateMockDB('assessments', db.assessments)
+    console.warn('saveAssessments Supabase failed, data saved to mockDB only.', err)
   }
 }
 
@@ -407,12 +441,17 @@ export async function getFishbones(projectId: string): Promise<FishboneNode[]> {
 }
 
 export async function saveFishbones(projectId: string, items: FishboneNode[]): Promise<void> {
+  // Selalu sync mockDB dulu agar UI konsisten
+  const db = getMockDB()
+  db.fishbones[projectId] = items
+  updateMockDB('fishbones', db.fishbones)
+
   try {
     const hasTable = await checkTableExists('analyze_fishbone')
-    if (!hasTable) throw new Error('Table does not exist')
+    if (!hasTable) return
 
-    // cek apakah sudah ada baris untuk project ini
-    const { data: existing } = await getSupabase()!
+    const sb = getSupabase()!
+    const { data: existing } = await sb
       .from('analyze_fishbone')
       .select('id')
       .eq('project_id', projectId)
@@ -420,27 +459,20 @@ export async function saveFishbones(projectId: string, items: FishboneNode[]): P
       .maybeSingle()
 
     if (existing?.id) {
-      const { error } = await getSupabase()!
+      const { error } = await sb
         .from('analyze_fishbone')
         .update({ nodes: items, updated_at: new Date().toISOString() })
         .eq('id', existing.id)
       if (error) throw error
     } else {
-      const { error } = await getSupabase()!
+      const { error } = await sb
         .from('analyze_fishbone')
         .insert({ project_id: projectId, title: 'Fishbone Diagram', nodes: items })
       if (error) throw error
     }
   } catch (err) {
-    console.warn('getSupabase()! saveFishbones failed, falling back to mock storage.', err)
-    const db = getMockDB()
-    db.fishbones[projectId] = items
-    updateMockDB('fishbones', db.fishbones)
+    console.warn('saveFishbones Supabase failed, data saved to mockDB only.', err)
   }
-  // selalu sync mockDB juga agar konsisten
-  const db = getMockDB()
-  db.fishbones[projectId] = items
-  updateMockDB('fishbones', db.fishbones)
 }
 
 // ── ANALYZE: 5-Why ───────────────────────────────────────────────────────────
@@ -468,11 +500,17 @@ export async function getFiveWhys(projectId: string): Promise<WhyNode[]> {
 }
 
 export async function saveFiveWhys(projectId: string, whyTree: WhyNode[]): Promise<void> {
+  // Selalu sync mockDB dulu agar UI konsisten
+  const db = getMockDB()
+  db.fiveWhys[projectId] = whyTree
+  updateMockDB('fiveWhys', db.fiveWhys)
+
   try {
     const hasTable = await checkTableExists('analyze_5why')
-    if (!hasTable) throw new Error('Table does not exist')
+    if (!hasTable) return
 
-    const { data: existing } = await getSupabase()!
+    const sb = getSupabase()!
+    const { data: existing } = await sb
       .from('analyze_5why')
       .select('id')
       .eq('project_id', projectId)
@@ -480,24 +518,20 @@ export async function saveFiveWhys(projectId: string, whyTree: WhyNode[]): Promi
       .maybeSingle()
 
     if (existing?.id) {
-      const { error } = await getSupabase()!
+      const { error } = await sb
         .from('analyze_5why')
         .update({ why_tree: whyTree, updated_at: new Date().toISOString() })
         .eq('id', existing.id)
       if (error) throw error
     } else {
-      const { error } = await getSupabase()!
+      const { error } = await sb
         .from('analyze_5why')
         .insert({ project_id: projectId, problem_statement: 'Analisis 5-Why', why_tree: whyTree })
       if (error) throw error
     }
   } catch (err) {
-    console.warn('getSupabase()! saveFiveWhys failed, falling back to mock storage.', err)
+    console.warn('saveFiveWhys Supabase failed, data saved to mockDB only.', err)
   }
-  // selalu sync mockDB
-  const db = getMockDB()
-  db.fiveWhys[projectId] = whyTree
-  updateMockDB('fiveWhys', db.fiveWhys)
 }
 
 export async function getActionPlans(projectId: string): Promise<ActionPlan[]> {
@@ -537,11 +571,17 @@ export async function getActionPlans(projectId: string): Promise<ActionPlan[]> {
 }
 
 export async function saveActionPlans(projectId: string, actions: ActionPlan[]): Promise<void> {
+  // Selalu sync mockDB agar UI konsisten apapun yang terjadi
+  const db = getMockDB()
+  db.actionPlans[projectId] = actions
+  updateMockDB('actionPlans', db.actionPlans)
+
   try {
     const hasTable = await checkTableExists('improve_actions')
-    if (!hasTable) throw new Error('Table does not exist')
+    if (!hasTable) return // fallback sudah dilakukan di atas
 
-    const { data: existing, error: fetchErr } = await getSupabase()!
+    const sb = getSupabase()!
+    const { data: existing, error: fetchErr } = await sb
       .from('improve_actions')
       .select('id')
       .eq('project_id', projectId)
@@ -553,7 +593,7 @@ export async function saveActionPlans(projectId: string, actions: ActionPlan[]):
 
     const idsToDelete = existingIds.filter((id: string) => !newIds.includes(id))
     if (idsToDelete.length > 0) {
-      const { error: deleteErr } = await getSupabase()!
+      const { error: deleteErr } = await sb
         .from('improve_actions')
         .delete()
         .in('id', idsToDelete)
@@ -584,18 +624,14 @@ export async function saveActionPlans(projectId: string, actions: ActionPlan[]):
         return item
       })
 
-      const { error: upsertErr } = await getSupabase()!
+      const { error: upsertErr } = await sb
         .from('improve_actions')
         .upsert(upsertData)
       if (upsertErr) throw upsertErr
     }
   } catch (err) {
-    console.warn('getSupabase()! saveActionPlans failed, falling back to mock storage.', err)
+    console.warn('getSupabase()! saveActionPlans failed, data saved to mockDB only.', err)
   }
-  // selalu sync mockDB
-  const db = getMockDB()
-  db.actionPlans[projectId] = actions
-  updateMockDB('actionPlans', db.actionPlans)
 }
 
 // ── CONTROL: Audit Checklist ─────────────────────────────────────────────────
@@ -750,5 +786,175 @@ export async function updateProjectPhase(projectId: string, newPhase: DmaicPhase
       p.id === projectId ? { ...p, status: newPhase } : p
     )
     updateMockDB('projects', updated)
+  }
+}
+
+// ── IMPROVE: Evidence Files ──────────────────────────────────────────────────
+
+export interface EvidenceRecord {
+  id: string
+  action_plan_id: string
+  action_title?: string
+  file_name: string
+  file_url: string
+  kpi_actual_value?: number
+  kpi_unit?: string
+  uploaded_by_id?: string
+  uploaded_by_name?: string
+  uploaded_by_role?: string
+  uploaded_at?: string
+}
+
+export async function saveEvidenceRecord(projectId: string, record: Omit<EvidenceRecord, 'id'>): Promise<void> {
+  // Always persist to localStorage first (instant, offline-safe)
+  if (typeof window !== 'undefined') {
+    const key = `sibimkon_evidence_${projectId}`
+    const existing = JSON.parse(localStorage.getItem(key) || '[]')
+    existing.push({
+      ...record,
+      id: 'ev-' + Math.random().toString(36).substr(2, 9),
+      uploaded_at: record.uploaded_at || new Date().toISOString(),
+    })
+    localStorage.setItem(key, JSON.stringify(existing))
+  }
+
+  try {
+    const hasTable = await checkTableExists('evidence_files')
+    if (!hasTable) return
+
+    const { error } = await getSupabase()!
+      .from('evidence_files')
+      .insert({
+        project_id: projectId,
+        action_plan_id: record.action_plan_id,
+        action_title: record.action_title,
+        file_name: record.file_name,
+        file_url: record.file_url,
+        kpi_actual_value: record.kpi_actual_value,
+        kpi_unit: record.kpi_unit,
+        uploaded_by_id: record.uploaded_by_id || null,
+        uploaded_by_name: record.uploaded_by_name,
+        uploaded_by_role: record.uploaded_by_role,
+        uploaded_at: new Date().toISOString(),
+      })
+    if (error) console.warn('saveEvidenceRecord Supabase error (non-critical):', error.message)
+  } catch (err) {
+    console.warn('saveEvidenceRecord failed, data in localStorage only.', err)
+  }
+}
+
+export async function getEvidenceRecords(projectId: string, actionPlanId?: string): Promise<EvidenceRecord[]> {
+  try {
+    const hasTable = await checkTableExists('evidence_files')
+    if (!hasTable) throw new Error('Table does not exist')
+
+    let query = getSupabase()!
+      .from('evidence_files')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('uploaded_at', { ascending: false })
+
+    if (actionPlanId) {
+      query = query.eq('action_plan_id', actionPlanId)
+    }
+
+    const { data, error } = await query
+    if (error) throw error
+
+    return (data || []).map((d: any) => ({
+      id: d.id,
+      action_plan_id: d.action_plan_id,
+      action_title: d.action_title,
+      file_name: d.file_name,
+      file_url: d.file_url,
+      kpi_actual_value: d.kpi_actual_value,
+      kpi_unit: d.kpi_unit,
+      uploaded_by_id: d.uploaded_by_id,
+      uploaded_by_name: d.uploaded_by_name,
+      uploaded_by_role: d.uploaded_by_role,
+      uploaded_at: d.uploaded_at,
+    }))
+  } catch {
+    // Fallback: read from localStorage
+    if (typeof window === 'undefined') return []
+    const key = `sibimkon_evidence_${projectId}`
+    const all: EvidenceRecord[] = JSON.parse(localStorage.getItem(key) || '[]')
+    return actionPlanId ? all.filter(e => e.action_plan_id === actionPlanId) : all
+  }
+}
+
+// ── IMPROVE: Audit Log ───────────────────────────────────────────────────────
+
+export interface AuditLogEntry {
+  project_id: string
+  action_plan_id?: string
+  actor_id?: string
+  actor_role?: string
+  event_type: 'status_change' | 'evidence_upload' | 'kpi_update' | 'plan_created' | 'plan_deleted'
+  detail: string
+}
+
+export async function saveAuditLog(entry: AuditLogEntry): Promise<void> {
+  // Always persist locally first
+  if (typeof window !== 'undefined') {
+    const key = `sibimkon_status_audit_${entry.project_id}`
+    const existing = JSON.parse(localStorage.getItem(key) || '[]')
+    existing.unshift({ ...entry, id: 'audit-' + Math.random().toString(36).substr(2, 9), created_at: new Date().toISOString() })
+    localStorage.setItem(key, JSON.stringify(existing.slice(0, 200))) // cap at 200 entries
+  }
+
+  try {
+    const hasTable = await checkTableExists('action_audit_log')
+    if (!hasTable) return
+
+    const { error } = await getSupabase()!
+      .from('action_audit_log')
+      .insert({
+        project_id: entry.project_id,
+        action_plan_id: entry.action_plan_id || null,
+        actor_id: entry.actor_id || null,
+        actor_role: entry.actor_role || null,
+        event_type: entry.event_type,
+        detail: entry.detail,
+        created_at: new Date().toISOString(),
+      })
+    if (error) console.warn('saveAuditLog Supabase error (non-critical):', error.message)
+  } catch (err) {
+    console.warn('saveAuditLog failed, data in localStorage only.', err)
+  }
+}
+
+// ── Notifications ────────────────────────────────────────────────────────────
+
+export async function saveNotification(notification: {
+  user_id: string
+  project_id: string
+  type: string
+  title: string
+  message: string
+}): Promise<void> {
+  // Always save to localStorage mock first
+  if (typeof window !== 'undefined') {
+    const key = `sibimkon_mock_notifications_${notification.user_id}`
+    const existing = JSON.parse(localStorage.getItem(key) || '[]')
+    existing.unshift({
+      id: 'notif-' + Math.random().toString(36).substr(2, 9),
+      ...notification,
+      created_at: new Date().toISOString(),
+      is_read: false,
+    })
+    localStorage.setItem(key, JSON.stringify(existing.slice(0, 50)))
+  }
+
+  try {
+    const hasTable = await checkTableExists('notifications')
+    if (!hasTable) return
+
+    const { error } = await getSupabase()!
+      .from('notifications')
+      .insert({ ...notification, is_read: false })
+    if (error) console.warn('saveNotification Supabase error (non-critical):', error.message)
+  } catch (err) {
+    console.warn('saveNotification failed, saved to localStorage only.', err)
   }
 }

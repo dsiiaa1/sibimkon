@@ -1,4 +1,34 @@
 import { NextResponse } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+
+// ── Simple in-memory rate limiter (resets per deployment/restart) ────────────
+// Limit: 10 requests per IP per minute
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
+
+function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: number } {
+  const now = Date.now()
+  const windowMs = 60_000 // 1 minute
+  const maxReqs = 10
+
+  const entry = rateLimitMap.get(ip)
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + windowMs })
+    return { allowed: true }
+  }
+  if (entry.count >= maxReqs) {
+    return { allowed: false, retryAfter: Math.ceil((entry.resetAt - now) / 1000) }
+  }
+  entry.count++
+  return { allowed: true }
+}
+
+// ── Helper: get caller IP from request headers ───────────────────────────────
+function getClientIp(req: Request): string {
+  const fwd = req.headers.get('x-forwarded-for')
+  if (fwd) return fwd.split(',')[0].trim()
+  return req.headers.get('x-real-ip') || 'unknown'
+}
 
 // Derive top problems from PQCDSM scores — returns array of { dimension, score } sorted worst first
 function deriveTopProblems(scores: Record<string, number>) {
@@ -148,6 +178,44 @@ function buildDynamicFallback(
 }
 
 export async function POST(req: Request) {
+  // ── Rate limiting ──────────────────────────────────────────────────────────
+  const ip = getClientIp(req)
+  const rl = checkRateLimit(ip)
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Terlalu banyak permintaan. Coba lagi dalam beberapa saat.' },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(rl.retryAfter ?? 60) },
+      }
+    )
+  }
+
+  // ── Auth check: harus ada Supabase session yang valid ─────────────────────
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (supabaseUrl && supabaseAnonKey) {
+    try {
+      const cookieStore = await cookies()
+      const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+        cookies: {
+          getAll: () => cookieStore.getAll(),
+          setAll: () => {},
+        },
+      })
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        return NextResponse.json(
+          { error: 'Unauthorized. Silakan login terlebih dahulu.' },
+          { status: 401 }
+        )
+      }
+    } catch {
+      // Jika Supabase tidak tersedia, lanjutkan (demo mode)
+    }
+  }
+
   try {
     const { projectTitle, companyName, vomList, pqcdsmScores, whyTree, fishboneItems } = await req.json()
 

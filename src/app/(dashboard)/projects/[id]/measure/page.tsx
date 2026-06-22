@@ -150,20 +150,17 @@ export default function MeasurePage() {
   const handleSaveAssessments = async () => {
     setSaving(true)
     try {
+      // saveAssessments di db.ts sudah handle: sync mockDB + sync skor ke Supabase
       await saveAssessments(projectId, assessments)
 
-      const { getMockDB, updateMockDB } = await import('@/lib/mockData')
-      const db = getMockDB()
+      // Update local project state agar Productivity Index di header ikut update
       const avgIndex = Math.round(
         assessments.reduce((acc, a) => acc + a.percentage_score, 0) / assessments.length
       )
-      const updatedProjects = db.projects.map((p: Project) =>
-        p.id === projectId
-          ? { ...p, baseline_score: p.baseline_score || avgIndex, current_score: avgIndex }
-          : p
+      setProject((prev) => prev
+        ? { ...prev, baseline_score: prev.baseline_score || avgIndex, current_score: avgIndex }
+        : prev
       )
-      updateMockDB('projects', updatedProjects)
-      setProject((prev) => prev ? { ...prev, current_score: avgIndex } : prev)
       showSave('Assessment PQCDSM berhasil disimpan!')
     } finally {
       setSaving(false)

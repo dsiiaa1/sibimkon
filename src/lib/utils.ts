@@ -30,6 +30,23 @@ export function getInitials(name: string): string {
     .slice(0, 2)
 }
 
+/**
+ * Sanitize a plain text string: trim whitespace and collapse internal
+ * multiple spaces. Use before saving any user-supplied text field.
+ */
+export function sanitizeText(value: string): string {
+  return value.trim().replace(/\s{2,}/g, ' ')
+}
+
+/**
+ * Sanitize an integer input: parse and clamp to a safe range.
+ */
+export function sanitizeInt(value: string | number, min = 0, max = 999_999_999): number {
+  const n = typeof value === 'string' ? parseInt(value, 10) : Math.trunc(value)
+  if (isNaN(n)) return min
+  return Math.max(min, Math.min(max, n))
+}
+
 export const PQCDSM_LABELS: Record<string, { label: string; color: string; icon: string }> = {
   productivity: { label: 'Productivity', color: '#6366f1', icon: '⚡' },
   quality: { label: 'Quality', color: '#8b5cf6', icon: '✨' },

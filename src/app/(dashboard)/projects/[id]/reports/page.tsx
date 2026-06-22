@@ -1,16 +1,49 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { getProjects, getAssessments, getActionPlans } from '@/lib/db'
 import { Project, ActionPlan, Assessment } from '@/lib/mockData'
 import { generateFinalReport, generateCertificate } from '@/lib/pdf-generator'
-import { FileText, Award, ShieldCheck, Download, Edit3, CheckCircle2 } from 'lucide-react'
+import { FileText, Award, ShieldCheck, Download, Edit3, CheckCircle2, Loader2 } from 'lucide-react'
 
 interface SignatureRecord {
   signed: boolean
   signedAt: string
   signerName: string
+}
+
+type SigBundle = {
+  consultant: SignatureRecord
+  disnaker: SignatureRecord
+  kemnaker: SignatureRecord
+}
+
+const EMPTY_SIG: SignatureRecord = { signed: false, signedAt: '', signerName: '' }
+
+// ── Simpan tanda tangan ke Supabase dengan retry (max 2x) ──
+async function persistSignaturesToSupabase(
+  projectId: string,
+  bundle: SigBundle
+): Promise<void> {
+  const { createClient } = await import('@/lib/supabase/client')
+  const supabase = createClient()
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const { error } = await supabase.from('reports').upsert(
+      {
+        project_id: projectId,
+        report_type: 'signature',
+        title: 'Tanda Tangan Digital',
+        report_data: bundle,
+      },
+      { onConflict: 'project_id,report_type' }
+    )
+    if (!error) return
+    if (attempt === 2) {
+      console.warn('Supabase signature save failed after 2 attempts:', error.message)
+    }
+  }
 }
 
 export default function ReportsPage() {
@@ -23,18 +56,54 @@ export default function ReportsPage() {
   const [assessments, setAssessments] = useState<Assessment[]>([])
   const [consultantName, setConsultantName] = useState('Konsultan SIBIMKON')
 
-  // Tanda tangan — persisten via localStorage
-  const SIG_KEY = `sibimkon_signatures_${projectId}`
-  const [consultantSig, setConsultantSig] = useState<SignatureRecord>({ signed: false, signedAt: '', signerName: '' })
-  const [disnakerSig, setDisnakerSig] = useState<SignatureRecord>({ signed: false, signedAt: '', signerName: '' })
-  const [kemnakerSig, setKemnakerSig] = useState<SignatureRecord>({ signed: false, signedAt: '', signerName: '' })
+  // Tanda tangan — primary: Supabase, fallback: localStorage
+  // SIG_KEY di-memoize agar tidak berubah setiap render (mencegah useCallback infinite loop)
+  const SIG_KEY = useMemo(() => `sibimkon_signatures_${projectId}`, [projectId])
+  const [consultantSig, setConsultantSig] = useState<SignatureRecord>(EMPTY_SIG)
+  const [disnakerSig, setDisnakerSig] = useState<SignatureRecord>(EMPTY_SIG)
+  const [kemnakerSig, setKemnakerSig] = useState<SignatureRecord>(EMPTY_SIG)
+  const [sigSaving, setSigSaving] = useState<'consultant' | 'disnaker' | 'kemnaker' | null>(null)
 
   const [pdfLoading, setPdfLoading] = useState(false)
   const [certLoading, setCertLoading] = useState(false)
 
+  // ── Ambil tanda tangan: coba Supabase dulu, fallback localStorage ──
+  const loadSignatures = useCallback(async () => {
+    try {
+      const { createClient } = await import('@/lib/supabase/client')
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('reports')
+        .select('report_data')
+        .eq('project_id', projectId)
+        .eq('report_type', 'signature')
+        .maybeSingle()
+
+      if (!error && data?.report_data) {
+        const bundle = data.report_data as SigBundle
+        if (bundle.consultant) setConsultantSig(bundle.consultant)
+        if (bundle.disnaker) setDisnakerSig(bundle.disnaker)
+        if (bundle.kemnaker) setKemnakerSig(bundle.kemnaker)
+        // Sync ke localStorage sebagai cache lokal
+        localStorage.setItem(SIG_KEY, JSON.stringify(bundle))
+        return
+      }
+    } catch (_) { /* Supabase tidak tersedia, fallback ke localStorage */ }
+
+    // Fallback: baca dari localStorage
+    const saved = localStorage.getItem(SIG_KEY)
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as SigBundle
+        if (parsed.consultant) setConsultantSig(parsed.consultant)
+        if (parsed.disnaker) setDisnakerSig(parsed.disnaker)
+        if (parsed.kemnaker) setKemnakerSig(parsed.kemnaker)
+      } catch (_) { /* data corrupt, abaikan */ }
+    }
+  }, [projectId, SIG_KEY])
+
   useEffect(() => {
     async function loadData() {
-      // Baca nama konsultan dari session
       const localUser = localStorage.getItem('sibimkon_user')
       if (localUser) {
         const u = JSON.parse(localUser)
@@ -49,59 +118,58 @@ export default function ReportsPage() {
       const [plans, assess] = await Promise.all([
         getActionPlans(projectId),
         getAssessments(projectId),
+        loadSignatures(),
       ])
       setActionPlans(plans)
       setAssessments(assess)
-
-      // Muat tanda tangan yang tersimpan
-      const saved = localStorage.getItem(SIG_KEY)
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (parsed.consultant) setConsultantSig(parsed.consultant)
-        if (parsed.disnaker) setDisnakerSig(parsed.disnaker)
-        if (parsed.kemnaker) setKemnakerSig(parsed.kemnaker)
-      }
     }
     loadData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
 
-  const saveSigs = (updated: { consultant: SignatureRecord; disnaker: SignatureRecord; kemnaker: SignatureRecord }) => {
-    localStorage.setItem(SIG_KEY, JSON.stringify(updated))
-  }
-
-  const handleSign = (role: 'consultant' | 'disnaker' | 'kemnaker') => {
+  const handleSign = async (role: 'consultant' | 'disnaker' | 'kemnaker') => {
     const localUser = localStorage.getItem('sibimkon_user')
     const u = localUser ? JSON.parse(localUser) : {}
+    const userRole: string = u.role || ''
+
+    // Role validation: hanya role yang sesuai yang boleh TTD
+    const allowedRoles: Record<string, string[]> = {
+      consultant: ['konsultan'],
+      disnaker:   ['admin_disnaker'],
+      kemnaker:   ['admin_kemnaker'],
+    }
+    if (!allowedRoles[role].includes(userRole)) {
+      alert(`Tanda tangan untuk bagian ini hanya diperbolehkan untuk role: ${allowedRoles[role].join(', ')}.\nRole Anda saat ini: ${userRole || 'tidak diketahui'}`)
+      return
+    }
+
     const rec: SignatureRecord = {
       signed: true,
       signedAt: new Date().toLocaleString('id-ID'),
-      signerName: role === 'consultant' ? (u.full_name || consultantName)
-        : role === 'disnaker' ? (u.full_name || 'Admin Disnaker')
-        : (u.full_name || 'Admin Kemnaker'),
+      signerName: u.full_name || (role === 'consultant' ? consultantName : role === 'disnaker' ? 'Admin Disnaker' : 'Admin Kemnaker'),
     }
-    const next = {
-      consultant: role === 'consultant' ? rec : consultantSig,
-      disnaker: role === 'disnaker' ? rec : disnakerSig,
-      kemnaker: role === 'kemnaker' ? rec : kemnakerSig,
-    }
-    if (role === 'consultant') setConsultantSig(rec)
-    if (role === 'disnaker') setDisnakerSig(rec)
-    if (role === 'kemnaker') setKemnakerSig(rec)
-    saveSigs(next)
 
-    // Simpan ke Supabase (best-effort)
-    import('@/lib/supabase/client').then(({ createClient }) => {
-      const supabase = createClient()
-      supabase.from('reports').upsert({
-        project_id: projectId,
-        report_type: 'signature',
-        title: `Tanda Tangan ${role}`,
-        report_data: next,
-      }, { onConflict: 'project_id,report_type' }).then(({ error }) => {
-        if (error) console.warn('Supabase signature save error (non-critical):', error.message)
-      })
-    }).catch(console.warn)
+    const next: SigBundle = {
+      consultant: role === 'consultant' ? rec : consultantSig,
+      disnaker:   role === 'disnaker'   ? rec : disnakerSig,
+      kemnaker:   role === 'kemnaker'   ? rec : kemnakerSig,
+    }
+
+    // Update state langsung (optimistic UI)
+    if (role === 'consultant') setConsultantSig(rec)
+    if (role === 'disnaker')   setDisnakerSig(rec)
+    if (role === 'kemnaker')   setKemnakerSig(rec)
+
+    // Simpan ke localStorage dulu (always succeeds)
+    localStorage.setItem(SIG_KEY, JSON.stringify(next))
+
+    // Simpan ke Supabase dengan loading indicator
+    setSigSaving(role)
+    try {
+      await persistSignaturesToSupabase(projectId, next)
+    } finally {
+      setSigSaving(null)
+    }
   }
 
   // ── ROI dari data KPI aktual vs baseline (Fix #7) ──
@@ -130,11 +198,11 @@ export default function ReportsPage() {
   const afterScore = project?.current_score || 0
   const improvement = afterScore - beforeScore
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     if (!project) return
     setPdfLoading(true)
     try {
-      const doc = generateFinalReport(project, assessments, actionPlans)
+      const doc = await generateFinalReport(project, assessments, actionPlans)
       doc.save(`Laporan_Akhir_${project.project_code}.pdf`)
     } catch (err) {
       console.error(err)
@@ -144,11 +212,11 @@ export default function ReportsPage() {
     }
   }
 
-  const handleDownloadCert = () => {
+  const handleDownloadCert = async () => {
     if (!project) return
     setCertLoading(true)
     try {
-      const doc = generateCertificate(project)
+      const doc = await generateCertificate(project)
       doc.save(`E-Sertifikat_${project.company_name.replace(/\s+/g, '_')}.pdf`)
     } catch (err) {
       console.error(err)
@@ -166,31 +234,43 @@ export default function ReportsPage() {
     title, orgLabel, sig, role,
   }: {
     title: string; orgLabel: string; sig: SignatureRecord; role: 'consultant' | 'disnaker' | 'kemnaker'
-  }) => (
-    <div className="p-4 bg-slate-950/40 border border-slate-850 rounded-2xl flex items-start justify-between gap-3">
-      <div className="flex-1 min-w-0">
-        <span className="text-[10px] text-slate-500 font-bold block uppercase">{title}</span>
+  }) => {
+    const isSaving = sigSaving === role
+    return (
+      <div className="p-4 bg-slate-950/40 border border-slate-850 rounded-2xl flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <span className="text-[10px] text-slate-500 font-bold block uppercase">{title}</span>
+          {sig.signed ? (
+            <>
+              <span className="text-xs font-semibold text-slate-300 mt-1 block">{sig.signerName}</span>
+              <span className="text-[10px] text-slate-500 block mt-0.5">✅ TTD pada {sig.signedAt}</span>
+            </>
+          ) : (
+            <span className="text-xs font-semibold text-slate-500 mt-1 block italic">{orgLabel}</span>
+          )}
+        </div>
         {sig.signed ? (
-          <>
-            <span className="text-xs font-semibold text-slate-300 mt-1 block">{sig.signerName}</span>
-            <span className="text-[10px] text-slate-500 block mt-0.5">✅ TTD pada {sig.signedAt}</span>
-          </>
+          <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400 shrink-0">
+            {isSaving
+              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Menyimpan...</>
+              : <><CheckCircle2 className="h-4 w-4" /> Terverifikasi</>
+            }
+          </span>
         ) : (
-          <span className="text-xs font-semibold text-slate-500 mt-1 block italic">{orgLabel}</span>
+          <button
+            onClick={() => handleSign(role)}
+            disabled={isSaving}
+            className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-550 text-xs font-bold rounded-lg text-white cursor-pointer shrink-0 disabled:opacity-60"
+          >
+            {isSaving
+              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Menyimpan...</>
+              : <><Edit3 className="h-3.5 w-3.5" /> Tanda Tangan</>
+            }
+          </button>
         )}
       </div>
-      {sig.signed ? (
-        <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400 shrink-0">
-          <CheckCircle2 className="h-4 w-4" /> Terverifikasi
-        </span>
-      ) : (
-        <button onClick={() => handleSign(role)}
-          className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-550 text-xs font-bold rounded-lg text-white cursor-pointer shrink-0">
-          <Edit3 className="h-3.5 w-3.5" /> Tanda Tangan
-        </button>
-      )}
-    </div>
-  )
+    )
+  }
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -313,7 +393,7 @@ export default function ReportsPage() {
               <ShieldCheck className="h-5 w-5 text-indigo-400" /> Tanda Tangan Digital
             </h3>
             <p className="text-xs text-slate-500 leading-normal">
-              Tanda tangan tersimpan permanen di perangkat dan tercatat dengan timestamp.
+              Tanda tangan disimpan ke server (Supabase) dan dicache lokal. Tersedia di semua browser &amp; perangkat.
             </p>
             <div className="space-y-3">
               <SigBlock title="Konsultan Pendamping" orgLabel={consultantName} sig={consultantSig} role="consultant" />

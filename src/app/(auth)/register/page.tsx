@@ -95,8 +95,8 @@ export default function RegisterPage() {
     try {
       const supabase = createClient()
       const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
+        email: email.trim().toLowerCase(),
+        password: password.trim(),
         options: {
           data: {
             full_name: name,
@@ -137,6 +137,7 @@ export default function RegisterPage() {
         } catch (profileErr) {
           console.warn('Profile insert failed (trigger may handle it):', profileErr)
         }
+
       }
 
       setSuccess(

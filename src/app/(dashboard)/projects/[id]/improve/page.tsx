@@ -4,9 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { getMockDB, updateMockDB, Project, ActionPlan } from '@/lib/mockData'
 import { LineChart, Plus, CheckCircle2, AlertTriangle, Calendar, User, DollarSign, ArrowUpRight, Check, Trash, Upload, FileText, X, Loader2, ArrowRight, Lock } from 'lucide-react'
-import { ACTION_STATUS_LABELS } from '@/lib/utils'
-import { createClient } from '@/lib/supabase/client'
-import { getProjects, getActionPlans, saveActionPlans as saveActionPlansDb, updateProjectPhase } from '@/lib/db'
+import { ACTION_STATUS_LABELS, sanitizeText } from '@/lib/utils'
+import { getProjects, getActionPlans, saveActionPlans as saveActionPlansDb, updateProjectPhase, saveAuditLog, saveEvidenceRecord, saveNotification } from '@/lib/db'
 
 export default function ImprovePage() {
   const router = useRouter()
@@ -32,8 +31,12 @@ export default function ImprovePage() {
   const [newKpiTarget, setNewKpiTarget] = useState(0)
   const [newKpiUnit, setNewKpiUnit] = useState('')
   const [newPicName, setNewPicName] = useState('')
-  const [newStartDate, setNewStartDate] = useState('2026-06-15')
-  const [newEndDate, setNewEndDate] = useState('2026-08-15')
+  const [newStartDate, setNewStartDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [newEndDate, setNewEndDate] = useState(() => {
+    const d = new Date()
+    d.setMonth(d.getMonth() + 2)
+    return d.toISOString().split('T')[0]
+  })
 
   // Selected Action Plan for Evidence / KPI actual update
   const [selectedAction, setSelectedAction] = useState<ActionPlan | null>(null)
@@ -72,28 +75,30 @@ export default function ImprovePage() {
 
   const handleCreateAction = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Guard: hanya konsultan yang boleh membuat action plan
     if (!isKonsultan) return
-    if (!newTitle) return
+    const title = sanitizeText(newTitle)
+    if (!title) return
 
-    const newId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'act-' + Math.random().toString(36).substr(2, 9)
+    const newId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : 'act-' + Math.random().toString(36).substr(2, 9)
 
     const newAction: ActionPlan = {
       id: newId,
       project_id: projectId,
-      title: newTitle,
-      description: newDesc,
+      title,
+      description: sanitizeText(newDesc),
       methodology: newMethodology,
       dimension: newDimension,
-      kpi_name: newKpiName,
+      kpi_name: sanitizeText(newKpiName),
       kpi_baseline: Number(newKpiBaseline),
       kpi_target: Number(newKpiTarget),
-      kpi_unit: newKpiUnit,
-      pic_name: newPicName,
+      kpi_unit: sanitizeText(newKpiUnit),
+      pic_name: sanitizeText(newPicName),
       start_date: newStartDate,
       end_date: newEndDate,
       status: 'belum_mulai',
-      progress_percentage: 0
+      progress_percentage: 0,
     }
 
     const updated = [...actionPlans, newAction]
@@ -114,48 +119,25 @@ export default function ImprovePage() {
   }
 
   const handleUpdateStatus = (actionId: string, status: ActionPlan['status']) => {
-    const updated = actionPlans.map(act => 
-      act.id === actionId 
-        ? { ...act, status, progress_percentage: status === 'selesai' ? 100 : act.progress_percentage } 
+    const updated = actionPlans.map(act =>
+      act.id === actionId
+        ? { ...act, status, progress_percentage: status === 'selesai' ? 100 : act.progress_percentage }
         : act
     )
     saveActionPlans(updated)
 
-    // Audit trail: catat perubahan status (siapa, kapan, dari/ke apa)
-    try {
-      const localUser = localStorage.getItem('sibimkon_user')
-      const actor = localUser ? JSON.parse(localUser) : null
-      const prevAct = actionPlans.find(a => a.id === actionId)
-      const auditList = JSON.parse(localStorage.getItem(`sibimkon_status_audit_${projectId}`) || '[]')
-      auditList.unshift({
-        id: 'audit-' + Math.random().toString(36).substr(2, 9),
-        action_plan_id: actionId,
-        action_title: prevAct?.title || actionId,
-        from_status: prevAct?.status,
-        to_status: status,
-        actor_id: actor?.id || 'unknown',
-        actor_name: actor?.full_name || 'Unknown',
-        actor_role: actor?.role || 'unknown',
-        changed_at: new Date().toISOString(),
-      })
-      localStorage.setItem(`sibimkon_status_audit_${projectId}`, JSON.stringify(auditList))
-
-      // Best-effort Supabase write
-      const supabase = createClient()
-      supabase.from('action_audit_log').insert({
-        project_id: projectId,
-        action_plan_id: actionId,
-        actor_id: actor?.id,
-        actor_role: actor?.role,
-        event_type: 'status_change',
-        detail: `Status berubah: ${prevAct?.status} → ${status}`,
-        created_at: new Date().toISOString(),
-      }).then(({ error }) => {
-        if (error) console.warn('Audit log insert error (non-critical):', error.message)
-      })
-    } catch (err) {
-      console.warn('Failed to write status audit log (non-critical):', err)
-    }
+    // Audit trail via db.ts wrapper (localStorage + Supabase)
+    const localUser = localStorage.getItem('sibimkon_user')
+    const actor = localUser ? JSON.parse(localUser) : null
+    const prevAct = actionPlans.find(a => a.id === actionId)
+    saveAuditLog({
+      project_id: projectId,
+      action_plan_id: actionId,
+      actor_id: actor?.id,
+      actor_role: actor?.role,
+      event_type: 'status_change',
+      detail: `Status: ${prevAct?.status} → ${status}`,
+    }).catch(console.warn)
   }
 
   const handleUpdateProgress = (actionId: string, progress: number) => {
@@ -173,138 +155,94 @@ export default function ImprovePage() {
 
   const handleSaveEvidence = async () => {
     if (!selectedAction) return
-    
+
     setUploadProgress('uploading')
     let uploadedFileUrl = ''
     let uploadedFileName = evidenceName
 
-    // Real Supabase Storage upload
+    // Supabase Storage upload (lazy import agar tidak crash jika env tidak ada)
     if (selectedFile) {
       try {
+        const { createClient } = await import('@/lib/supabase/client')
         const supabase = createClient()
         const filePath = `${projectId}/${selectedAction.id}/${Date.now()}_${selectedFile.name}`
-        
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('evidence-files')
-          .upload(filePath, selectedFile, {
-            cacheControl: '3600',
-            upsert: false
-          })
+          .upload(filePath, selectedFile, { cacheControl: '3600', upsert: false })
 
         if (uploadError) {
-          console.warn('Supabase Storage upload failed, saving locally:', uploadError.message)
-          // Fallback: store file name only in localStorage
           uploadedFileName = selectedFile.name
           uploadedFileUrl = 'local://' + selectedFile.name
         } else {
-          const { data: urlData } = supabase.storage
-            .from('evidence-files')
-            .getPublicUrl(uploadData.path)
+          const { data: urlData } = supabase.storage.from('evidence-files').getPublicUrl(uploadData.path)
           uploadedFileUrl = urlData.publicUrl
           uploadedFileName = selectedFile.name
         }
-      } catch (err) {
-        console.warn('Upload error, fallback to local:', err)
-        uploadedFileName = selectedFile?.name || evidenceName
-        uploadedFileUrl = 'local://' + (selectedFile?.name || evidenceName)
+      } catch {
+        uploadedFileName = selectedFile.name
+        uploadedFileUrl = 'local://' + selectedFile.name
       }
     } else if (evidenceName) {
       uploadedFileName = evidenceName
       uploadedFileUrl = 'manual://' + evidenceName
     }
 
-    const updated = actionPlans.map(act => 
-      act.id === selectedAction.id 
-        ? { ...act, kpi_actual: Number(kpiActualInput), progress_percentage: kpiActualInput >= act.kpi_target ? 100 : act.progress_percentage } 
+    // Update KPI actual di action plan
+    const updated = actionPlans.map(act =>
+      act.id === selectedAction.id
+        ? { ...act, kpi_actual: Number(kpiActualInput), progress_percentage: kpiActualInput >= act.kpi_target ? 100 : act.progress_percentage }
         : act
     )
     saveActionPlans(updated)
 
-    // Early Warning System: Trigger if KPI slips below baseline
-    const isSlip = selectedAction.kpi_target > selectedAction.kpi_baseline 
-      ? Number(kpiActualInput) < selectedAction.kpi_baseline 
+    const localUser = localStorage.getItem('sibimkon_user')
+    const uploaderInfo = localUser ? JSON.parse(localUser) : null
+
+    // Early Warning: KPI merosot di bawah baseline
+    const isSlip = selectedAction.kpi_target > selectedAction.kpi_baseline
+      ? Number(kpiActualInput) < selectedAction.kpi_baseline
       : Number(kpiActualInput) > selectedAction.kpi_baseline
 
-    if (isSlip) {
-      const title = `⚠️ Early Warning: ${selectedAction.kpi_name || 'KPI Degradasi'}`
-      const message = `KPI "${selectedAction.kpi_name || selectedAction.title}" berada di level PERINGATAN. Nilai aktual: ${kpiActualInput} ${selectedAction.kpi_unit || ''} (Target: ${selectedAction.kpi_target})`
-      
-      const localUser = localStorage.getItem('sibimkon_user')
-      if (localUser) {
-        const userObj = JSON.parse(localUser)
-        const mockNotifs = JSON.parse(localStorage.getItem(`sibimkon_mock_notifications_${userObj.id}`) || '[]')
-        mockNotifs.unshift({
-          id: 'notif-' + Math.random().toString(36).substr(2, 9),
-          title,
-          message,
-          created_at: new Date().toISOString(),
-          is_read: false,
-          type: 'early_warning'
-        })
-        localStorage.setItem(`sibimkon_mock_notifications_${userObj.id}`, JSON.stringify(mockNotifs))
-        
-        try {
-          const supabase = createClient()
-          supabase.from('notifications').insert({
-            user_id: userObj.id,
-            project_id: projectId,
-            type: 'early_warning',
-            title,
-            message,
-            is_read: false
-          }).then(({ error }) => {
-            if (error) console.warn('Supabase notification insert error:', error.message)
-          })
-        } catch (err) {
-          console.warn('Failed to insert warning to Supabase:', err)
-        }
-      }
+    if (isSlip && uploaderInfo?.id) {
+      saveNotification({
+        user_id: uploaderInfo.id,
+        project_id: projectId,
+        type: 'early_warning',
+        title: `⚠️ Early Warning: ${selectedAction.kpi_name || 'KPI Degradasi'}`,
+        message: `KPI "${selectedAction.kpi_name || selectedAction.title}" di level PERINGATAN. Aktual: ${kpiActualInput} ${selectedAction.kpi_unit || ''} (Target: ${selectedAction.kpi_target})`,
+      }).catch(console.warn)
     }
 
-
-    // Save evidence record with audit trail
+    // Simpan evidence record via wrapper
     if (uploadedFileName) {
-      const localUser = localStorage.getItem('sibimkon_user')
-      const uploaderInfo = localUser ? JSON.parse(localUser) : null
-      const evidenceList = JSON.parse(localStorage.getItem(`sibimkon_evidence_${projectId}`) || '[]')
-      evidenceList.push({
-        id: 'ev-' + Math.random().toString(36).substr(2, 9),
-        action_id: selectedAction.id,
+      setUploadedFiles(prev => [
+        ...prev,
+        { name: uploadedFileName, url: uploadedFileUrl },
+      ])
+
+      saveEvidenceRecord(projectId, {
+        action_plan_id: selectedAction.id,
         action_title: selectedAction.title,
         file_name: uploadedFileName,
         file_url: uploadedFileUrl,
-        uploaded_at: new Date().toLocaleDateString('id-ID'),
-        // Audit trail fields
-        uploaded_by_id: uploaderInfo?.id || 'unknown',
-        uploaded_by_name: uploaderInfo?.full_name || 'Unknown',
-        uploaded_by_role: uploaderInfo?.role || 'unknown',
-        uploaded_at_iso: new Date().toISOString(),
-        kpi_actual_value: kpiActualInput,
+        kpi_actual_value: Number(kpiActualInput),
         kpi_unit: selectedAction.kpi_unit,
-      })
-      localStorage.setItem(`sibimkon_evidence_${projectId}`, JSON.stringify(evidenceList))
-      setUploadedFiles(evidenceList.filter((e: any) => e.action_id === selectedAction.id))
+        uploaded_by_id: uploaderInfo?.id,
+        uploaded_by_name: uploaderInfo?.full_name,
+        uploaded_by_role: uploaderInfo?.role,
+      }).catch(console.warn)
 
-      // Persist audit trail to Supabase (best-effort, non-blocking)
-      try {
-        const supabase = createClient()
-        supabase.from('action_audit_log').insert({
-          project_id: projectId,
-          action_plan_id: selectedAction.id,
-          actor_id: uploaderInfo?.id,
-          actor_role: uploaderInfo?.role,
-          event_type: 'evidence_upload',
-          detail: `Upload bukti: ${uploadedFileName}, KPI aktual: ${kpiActualInput} ${selectedAction.kpi_unit}`,
-          created_at: new Date().toISOString(),
-        }).then(({ error }) => {
-          if (error) console.warn('Audit log insert error (non-critical):', error.message)
-        })
-      } catch (err) {
-        console.warn('Failed to write audit log to Supabase (non-critical):', err)
-      }
+      saveAuditLog({
+        project_id: projectId,
+        action_plan_id: selectedAction.id,
+        actor_id: uploaderInfo?.id,
+        actor_role: uploaderInfo?.role,
+        event_type: 'evidence_upload',
+        detail: `Upload bukti: ${uploadedFileName}, KPI aktual: ${kpiActualInput} ${selectedAction.kpi_unit}`,
+      }).catch(console.warn)
     }
 
-    // Update project state if all completed
+    // Update project state jika semua selesai
     const db = getMockDB()
     const allCompleted = updated.every(act => act.status === 'selesai')
     if (allCompleted && project?.status === 'improve') {
