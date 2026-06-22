@@ -3,26 +3,28 @@
 import { createClient } from './supabase/client'
 import { getMockDB, updateMockDB, Project, Company, ProjectCharter, Assessment, FishboneNode, WhyNode, ActionPlan } from './mockData'
 
-const supabase = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
-  ? createClient()
-  : null as any
+// Buat client fresh setiap panggilan agar selalu pakai session terbaru
+function getSupabase() {
+  if (typeof process === 'undefined') return null
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) return null
+  return createClient()
+}
 
-// Helper to check if Supabase is connected and has the tables
+// Helper to check if getSupabase()! is connected and has the tables
 async function checkTableExists(tableName: string): Promise<boolean> {
   try {
-    if (!supabase) return false
-    const { error } = await supabase.from(tableName).select('*').limit(0)
+    const supabase = getSupabase()
+    if (!getSupabase()!) return false
+    const { error } = await getSupabase()!.from(tableName).select('*').limit(0)
     // PGRST116 = table not found, 42P01 = undefined table (Postgres)
     if (error && (
       error.code === 'PGRST116' ||
       error.code === '42P01' ||
       error.message?.includes('does not exist') ||
-      error.message?.includes('relation') 
+      error.message?.includes('relation')
     )) {
       return false
     }
-    // RLS block (code 42501) or other errors = table exists but access denied
-    // still return true so the caller can attempt the real query and handle errors
     return true
   } catch {
     return false
@@ -34,7 +36,7 @@ export async function getProjects(): Promise<Project[]> {
     const hasTable = await checkTableExists('bimkon_projects')
     if (!hasTable) throw new Error('Table does not exist')
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()!
       .from('bimkon_projects')
       .select('*, companies(name)')
 
@@ -55,7 +57,7 @@ export async function getProjects(): Promise<Project[]> {
       current_score: Number(p.current_productivity_index || 0)
     }))
   } catch (err) {
-    console.warn('Supabase getProjects failed, falling back to mock storage.', err)
+    console.warn('getSupabase()! getProjects failed, falling back to mock storage.', err)
     return getMockDB().projects
   }
 }
@@ -65,7 +67,7 @@ export async function createProject(project: Omit<Project, 'id' | 'project_code'
     const hasTable = await checkTableExists('bimkon_projects')
     if (!hasTable) throw new Error('Table does not exist')
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()!
       .from('bimkon_projects')
       .insert({
         title: project.title,
@@ -97,7 +99,7 @@ export async function createProject(project: Omit<Project, 'id' | 'project_code'
       current_score: Number(data.current_productivity_index || 0)
     }
   } catch (err) {
-    console.warn('Supabase createProject failed, falling back to mock storage.', err)
+    console.warn('getSupabase()! createProject failed, falling back to mock storage.', err)
     const db = getMockDB()
     const newProj: Project = {
       ...project,
@@ -117,7 +119,7 @@ export async function createCompany(company: Omit<Company, 'id'>): Promise<Compa
     const hasTable = await checkTableExists('companies')
     if (!hasTable) throw new Error('Table does not exist')
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()!
       .from('companies')
       .insert({
         name: company.name,
@@ -152,7 +154,7 @@ export async function createCompany(company: Omit<Company, 'id'>): Promise<Compa
       pic_email: company.pic_email,
     }
   } catch (err) {
-    console.warn('Supabase createCompany failed, falling back to mock storage.', err)
+    console.warn('getSupabase()! createCompany failed, falling back to mock storage.', err)
     const db = getMockDB()
     const newCompany: Company = {
       ...company,
@@ -169,23 +171,23 @@ export async function getCompanies(): Promise<Company[]> {
     const hasTable = await checkTableExists('companies')
     if (!hasTable) throw new Error('Table does not exist')
 
-    const { data, error } = await supabase.from('companies').select('*')
+    const { data, error } = await getSupabase()!.from('companies').select('*')
     if (error) throw error
 
     return data || []
   } catch (err) {
-    console.warn('Supabase getCompanies failed, falling back to mock storage.', err)
+    console.warn('getSupabase()! getCompanies failed, falling back to mock storage.', err)
     return getMockDB().companies
   }
 }
 
-// ── NEW: updateCompany — save profil perusahaan ke Supabase ──────────────────
+// ── NEW: updateCompany — save profil perusahaan ke getSupabase()! ──────────────────
 export async function updateCompany(companyId: string, fields: Partial<Company> & Record<string, any>): Promise<void> {
   try {
     const hasTable = await checkTableExists('companies')
     if (!hasTable) throw new Error('Table does not exist')
 
-    const { error } = await supabase
+    const { error } = await getSupabase()!
       .from('companies')
       .update({
         name: fields.name,
@@ -204,7 +206,7 @@ export async function updateCompany(companyId: string, fields: Partial<Company> 
 
     if (error) throw error
   } catch (err) {
-    console.warn('Supabase updateCompany failed, falling back to mock storage.', err)
+    console.warn('getSupabase()! updateCompany failed, falling back to mock storage.', err)
     const db = getMockDB()
     const updatedCompanies = db.companies.map((c: Company) =>
       c.id === companyId ? { ...c, ...fields } : c
@@ -218,7 +220,7 @@ export async function getProjectCharter(projectId: string): Promise<ProjectChart
     const hasTable = await checkTableExists('project_charters')
     if (!hasTable) throw new Error('Table does not exist')
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()!
       .from('project_charters')
       .select('*')
       .eq('project_id', projectId)
@@ -227,7 +229,7 @@ export async function getProjectCharter(projectId: string): Promise<ProjectChart
     if (error) throw error
     return data
   } catch (err) {
-    console.warn('Supabase getProjectCharter failed, falling back to mock storage.', err)
+    console.warn('getSupabase()! getProjectCharter failed, falling back to mock storage.', err)
     return getMockDB().charters[projectId] || null
   }
 }
@@ -237,7 +239,7 @@ export async function saveProjectCharter(charter: ProjectCharter): Promise<void>
     const hasTable = await checkTableExists('project_charters')
     if (!hasTable) throw new Error('Table does not exist')
 
-    const { error } = await supabase
+    const { error } = await getSupabase()!
       .from('project_charters')
       .upsert({
         project_id: charter.project_id,
@@ -250,7 +252,7 @@ export async function saveProjectCharter(charter: ProjectCharter): Promise<void>
 
     if (error) throw error
   } catch (err) {
-    console.warn('Supabase saveProjectCharter failed, falling back to mock storage.', err)
+    console.warn('getSupabase()! saveProjectCharter failed, falling back to mock storage.', err)
     const db = getMockDB()
     db.charters[charter.project_id] = charter
     updateMockDB('charters', db.charters)
@@ -262,7 +264,7 @@ export async function getAssessments(projectId: string): Promise<Assessment[]> {
     const hasTable = await checkTableExists('measure_assessments')
     if (!hasTable) throw new Error('Table does not exist')
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()!
       .from('measure_assessments')
       .select('*')
       .eq('project_id', projectId)
@@ -276,7 +278,7 @@ export async function getAssessments(projectId: string): Promise<Assessment[]> {
       responses: d.responses?.questions || []
     }))
   } catch (err) {
-    console.warn('Supabase getAssessments failed, falling back to mock storage.', err)
+    console.warn('getSupabase()! getAssessments failed, falling back to mock storage.', err)
     return getMockDB().assessments[projectId] || []
   }
 }
@@ -287,7 +289,7 @@ export async function saveAssessments(projectId: string, assessments: Assessment
     if (!hasTable) throw new Error('Table does not exist')
 
     for (const assess of assessments) {
-      const { error } = await supabase
+      const { error } = await getSupabase()!
         .from('measure_assessments')
         .upsert({
           project_id: projectId,
@@ -296,12 +298,12 @@ export async function saveAssessments(projectId: string, assessments: Assessment
           responses: { questions: assess.responses }
         }, { onConflict: 'project_id,dimension,assessment_version' })
       if (error) {
-        console.error('Supabase saveAssessments Error Details:', error)
+        console.error('getSupabase()! saveAssessments Error Details:', error)
         throw error
       }
     }
   } catch (err) {
-    console.warn('Supabase saveAssessments failed, falling back to mock storage. Details:', err)
+    console.warn('getSupabase()! saveAssessments failed, falling back to mock storage. Details:', err)
     const db = getMockDB()
     db.assessments[projectId] = assessments
     updateMockDB('assessments', db.assessments)
@@ -313,20 +315,20 @@ export async function getVom(projectId: string): Promise<any[]> {
     const hasTable = await checkTableExists('measure_vom')
     if (!hasTable) throw new Error('Table does not exist')
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()!
       .from('measure_vom')
       .select('*')
       .eq('project_id', projectId)
       .order('priority', { ascending: true })
 
     if (error) {
-      console.error('Supabase getVom Error Details:', error)
+      console.error('getSupabase()! getVom Error Details:', error)
       throw error
     }
 
     return data || []
   } catch (err) {
-    console.warn('Supabase getVom failed, falling back to local/mock logic. Details:', err)
+    console.warn('getSupabase()! getVom failed, falling back to local/mock logic. Details:', err)
     return []
   }
 }
@@ -336,7 +338,7 @@ export async function saveVom(projectId: string, vomList: any[]): Promise<void> 
     const hasTable = await checkTableExists('measure_vom')
     if (!hasTable) throw new Error('Table measure_vom does not exist')
 
-    const { error: deleteErr } = await supabase
+    const { error: deleteErr } = await getSupabase()!
       .from('measure_vom')
       .delete()
       .eq('project_id', projectId)
@@ -359,7 +361,7 @@ export async function saveVom(projectId: string, vomList: any[]): Promise<void> 
         }
       })
 
-      const { error: insertErr } = await supabase
+      const { error: insertErr } = await getSupabase()!
         .from('measure_vom')
         .insert(upsertData)
 
@@ -382,7 +384,7 @@ export async function getFishbones(projectId: string): Promise<FishboneNode[]> {
     if (!hasTable) throw new Error('Table does not exist')
 
     // schema menyimpan fishbone sebagai 1 baris per project dengan JSONB nodes
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()!
       .from('analyze_fishbone')
       .select('nodes')
       .eq('project_id', projectId)
@@ -395,7 +397,7 @@ export async function getFishbones(projectId: string): Promise<FishboneNode[]> {
     // nodes adalah array FishboneNode {id, category, text}
     return (data?.nodes as FishboneNode[]) || []
   } catch (err) {
-    console.warn('Supabase getFishbones failed, falling back to mock storage.', err)
+    console.warn('getSupabase()! getFishbones failed, falling back to mock storage.', err)
     return getMockDB().fishbones[projectId] || []
   }
 }
@@ -406,7 +408,7 @@ export async function saveFishbones(projectId: string, items: FishboneNode[]): P
     if (!hasTable) throw new Error('Table does not exist')
 
     // cek apakah sudah ada baris untuk project ini
-    const { data: existing } = await supabase
+    const { data: existing } = await getSupabase()!
       .from('analyze_fishbone')
       .select('id')
       .eq('project_id', projectId)
@@ -414,19 +416,19 @@ export async function saveFishbones(projectId: string, items: FishboneNode[]): P
       .maybeSingle()
 
     if (existing?.id) {
-      const { error } = await supabase
+      const { error } = await getSupabase()!
         .from('analyze_fishbone')
         .update({ nodes: items, updated_at: new Date().toISOString() })
         .eq('id', existing.id)
       if (error) throw error
     } else {
-      const { error } = await supabase
+      const { error } = await getSupabase()!
         .from('analyze_fishbone')
         .insert({ project_id: projectId, title: 'Fishbone Diagram', nodes: items })
       if (error) throw error
     }
   } catch (err) {
-    console.warn('Supabase saveFishbones failed, falling back to mock storage.', err)
+    console.warn('getSupabase()! saveFishbones failed, falling back to mock storage.', err)
     const db = getMockDB()
     db.fishbones[projectId] = items
     updateMockDB('fishbones', db.fishbones)
@@ -444,7 +446,7 @@ export async function getFiveWhys(projectId: string): Promise<WhyNode[]> {
     const hasTable = await checkTableExists('analyze_5why')
     if (!hasTable) throw new Error('Table does not exist')
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()!
       .from('analyze_5why')
       .select('why_tree')
       .eq('project_id', projectId)
@@ -456,7 +458,7 @@ export async function getFiveWhys(projectId: string): Promise<WhyNode[]> {
 
     return (data?.why_tree as WhyNode[]) || []
   } catch (err) {
-    console.warn('Supabase getFiveWhys failed, falling back to mock storage.', err)
+    console.warn('getSupabase()! getFiveWhys failed, falling back to mock storage.', err)
     return getMockDB().fiveWhys[projectId] || []
   }
 }
@@ -466,7 +468,7 @@ export async function saveFiveWhys(projectId: string, whyTree: WhyNode[]): Promi
     const hasTable = await checkTableExists('analyze_5why')
     if (!hasTable) throw new Error('Table does not exist')
 
-    const { data: existing } = await supabase
+    const { data: existing } = await getSupabase()!
       .from('analyze_5why')
       .select('id')
       .eq('project_id', projectId)
@@ -474,19 +476,19 @@ export async function saveFiveWhys(projectId: string, whyTree: WhyNode[]): Promi
       .maybeSingle()
 
     if (existing?.id) {
-      const { error } = await supabase
+      const { error } = await getSupabase()!
         .from('analyze_5why')
         .update({ why_tree: whyTree, updated_at: new Date().toISOString() })
         .eq('id', existing.id)
       if (error) throw error
     } else {
-      const { error } = await supabase
+      const { error } = await getSupabase()!
         .from('analyze_5why')
         .insert({ project_id: projectId, problem_statement: 'Analisis 5-Why', why_tree: whyTree })
       if (error) throw error
     }
   } catch (err) {
-    console.warn('Supabase saveFiveWhys failed, falling back to mock storage.', err)
+    console.warn('getSupabase()! saveFiveWhys failed, falling back to mock storage.', err)
   }
   // selalu sync mockDB
   const db = getMockDB()
@@ -499,7 +501,7 @@ export async function getActionPlans(projectId: string): Promise<ActionPlan[]> {
     const hasTable = await checkTableExists('improve_actions')
     if (!hasTable) throw new Error('Table does not exist')
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()!
       .from('improve_actions')
       .select('*')
       .eq('project_id', projectId)
@@ -525,7 +527,7 @@ export async function getActionPlans(projectId: string): Promise<ActionPlan[]> {
       progress_percentage: d.progress_percentage
     }))
   } catch (err) {
-    console.warn('Supabase getActionPlans failed, falling back to mock storage.', err)
+    console.warn('getSupabase()! getActionPlans failed, falling back to mock storage.', err)
     return getMockDB().actionPlans[projectId] || []
   }
 }
@@ -535,7 +537,7 @@ export async function saveActionPlans(projectId: string, actions: ActionPlan[]):
     const hasTable = await checkTableExists('improve_actions')
     if (!hasTable) throw new Error('Table does not exist')
 
-    const { data: existing, error: fetchErr } = await supabase
+    const { data: existing, error: fetchErr } = await getSupabase()!
       .from('improve_actions')
       .select('id')
       .eq('project_id', projectId)
@@ -547,7 +549,7 @@ export async function saveActionPlans(projectId: string, actions: ActionPlan[]):
 
     const idsToDelete = existingIds.filter((id: string) => !newIds.includes(id))
     if (idsToDelete.length > 0) {
-      const { error: deleteErr } = await supabase
+      const { error: deleteErr } = await getSupabase()!
         .from('improve_actions')
         .delete()
         .in('id', idsToDelete)
@@ -578,13 +580,13 @@ export async function saveActionPlans(projectId: string, actions: ActionPlan[]):
         return item
       })
 
-      const { error: upsertErr } = await supabase
+      const { error: upsertErr } = await getSupabase()!
         .from('improve_actions')
         .upsert(upsertData)
       if (upsertErr) throw upsertErr
     }
   } catch (err) {
-    console.warn('Supabase saveActionPlans failed, falling back to mock storage.', err)
+    console.warn('getSupabase()! saveActionPlans failed, falling back to mock storage.', err)
   }
   // selalu sync mockDB
   const db = getMockDB()
@@ -599,7 +601,7 @@ export async function getControlAudit(projectId: string): Promise<any[]> {
     const hasTable = await checkTableExists('audit_checklists')
     if (!hasTable) throw new Error('Table does not exist')
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()!
       .from('audit_checklists')
       .select('items')
       .eq('project_id', projectId)
@@ -611,7 +613,7 @@ export async function getControlAudit(projectId: string): Promise<any[]> {
 
     return (data?.items as any[]) || []
   } catch (err) {
-    console.warn('Supabase getControlAudit failed, falling back to localStorage.', err)
+    console.warn('getSupabase()! getControlAudit failed, falling back to localStorage.', err)
     const saved = typeof window !== 'undefined' ? localStorage.getItem(`sibimkon_audit_${projectId}`) : null
     return saved ? JSON.parse(saved) : []
   }
@@ -630,7 +632,7 @@ export async function saveControlAudit(projectId: string, items: any[]): Promise
     const compliant = items.filter((i: any) => i.completed).length
     const pct = items.length > 0 ? Math.round((compliant / items.length) * 100) : 0
 
-    const { data: existing } = await supabase
+    const { data: existing } = await getSupabase()!
       .from('audit_checklists')
       .select('id')
       .eq('project_id', projectId)
@@ -638,7 +640,7 @@ export async function saveControlAudit(projectId: string, items: any[]): Promise
       .maybeSingle()
 
     if (existing?.id) {
-      const { error } = await supabase
+      const { error } = await getSupabase()!
         .from('audit_checklists')
         .update({
           items,
@@ -650,7 +652,7 @@ export async function saveControlAudit(projectId: string, items: any[]): Promise
         .eq('id', existing.id)
       if (error) throw error
     } else {
-      const { error } = await supabase
+      const { error } = await getSupabase()!
         .from('audit_checklists')
         .insert({
           project_id: projectId,
@@ -663,7 +665,7 @@ export async function saveControlAudit(projectId: string, items: any[]): Promise
       if (error) throw error
     }
   } catch (err) {
-    console.warn('Supabase saveControlAudit failed, data saved to localStorage only.', err)
+    console.warn('getSupabase()! saveControlAudit failed, data saved to localStorage only.', err)
   }
 }
 
@@ -674,7 +676,7 @@ export async function getControlPsi(projectId: string): Promise<{ people: number
     const hasTable = await checkTableExists('sustainability_assessments')
     if (!hasTable) throw new Error('Table does not exist')
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabase()!
       .from('sustainability_assessments')
       .select('people_score, process_score, system_score, result_score')
       .eq('project_id', projectId)
@@ -690,7 +692,7 @@ export async function getControlPsi(projectId: string): Promise<{ people: number
       result: Number(data.result_score || 75),
     }
   } catch (err) {
-    console.warn('Supabase getControlPsi failed, falling back to localStorage.', err)
+    console.warn('getSupabase()! getControlPsi failed, falling back to localStorage.', err)
     const saved = typeof window !== 'undefined' ? localStorage.getItem(`sibimkon_psi_${projectId}`) : null
     return saved ? JSON.parse(saved) : null
   }
@@ -708,7 +710,7 @@ export async function saveControlPsi(projectId: string, psi: { people: number; p
 
     const psiTotal = Math.round((psi.people + psi.process + psi.system + psi.result) / 4)
 
-    const { error } = await supabase
+    const { error } = await getSupabase()!
       .from('sustainability_assessments')
       .upsert({
         project_id: projectId,
@@ -722,7 +724,7 @@ export async function saveControlPsi(projectId: string, psi: { people: number; p
 
     if (error) throw error
   } catch (err) {
-    console.warn('Supabase saveControlPsi failed, data saved to localStorage only.', err)
+    console.warn('getSupabase()! saveControlPsi failed, data saved to localStorage only.', err)
   }
 }
 
@@ -733,7 +735,7 @@ export async function updateProjectPhase(projectId: string, newPhase: DmaicPhase
   try {
     const hasTable = await checkTableExists('bimkon_projects')
     if (!hasTable) throw new Error('Table does not exist')
-    const { error } = await supabase
+    const { error } = await getSupabase()!
       .from('bimkon_projects')
       .update({ status: newPhase, current_phase: newPhase })
       .eq('id', projectId)
