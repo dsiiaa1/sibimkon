@@ -4,11 +4,9 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { Project, ActionPlan } from '@/lib/mockData'
 import {
-  TrendingUp,
   AlertTriangle,
   CheckCircle2,
   ShieldAlert,
-  HelpCircle,
   FileCheck,
   Save,
   Check,
@@ -121,6 +119,7 @@ export default function ControlPage() {
   }
 
   const handleDeleteAudit = (auditId: string) => {
+    if (!window.confirm('Hapus item checklist ini?')) return
     const updated = auditItems.filter(item => item.id !== auditId)
     setAuditItems(updated)
     saveControlAudit(projectId, updated).catch(console.error)

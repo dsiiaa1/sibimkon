@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { getCompanies, getProjects, createProject } from '@/lib/db'
+import { getCompanies, getProjects } from '@/lib/db'
 import { Company, Project } from '@/lib/mockData'
-import { Building, ArrowLeft, Plus, FolderKanban, User, Phone, Mail, Award, Calendar, ArrowRight } from 'lucide-react'
+import { Building, ArrowLeft, Plus, User, Phone, Mail, ArrowRight } from 'lucide-react'
 import { PROJECT_STATUS_LABELS } from '@/lib/utils'
+import CreateProjectModal from '@/components/CreateProjectModal'
 
 export default function CompanyDetailPage() {
   const params = useParams()
@@ -17,14 +18,7 @@ export default function CompanyDetailPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [showNewProjectModal, setShowNewProjectModal] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string>('unknown')
-
-  // New Project Form
-  const [newTitle, setNewTitle] = useState('')
-  const [newDesc, setNewDesc] = useState('')
-  const [newStartDate, setNewStartDate] = useState(new Date().toISOString().split('T')[0])
-  const [newEndDate, setNewEndDate] = useState(() => {
-    const d = new Date(); d.setMonth(d.getMonth() + 3); return d.toISOString().split('T')[0]
-  })
+  const [currentUser, setCurrentUser] = useState<any>(null)
 
   useEffect(() => {
     async function loadData() {
@@ -32,6 +26,7 @@ export default function CompanyDetailPage() {
       if (localUser) {
         const u = JSON.parse(localUser)
         setCurrentUserId(u.id || 'unknown')
+        setCurrentUser(u)
       }
       const comps = await getCompanies()
       const comp = comps.find(c => c.id === companyId)
@@ -47,27 +42,6 @@ export default function CompanyDetailPage() {
     }
     loadData()
   }, [companyId, router])
-
-  const handleCreateProject = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newTitle || !company) return
-
-    const newProj = await createProject({
-      title: newTitle,
-      description: newDesc,
-      company_id: company.id,
-      company_name: company.name,
-      consultant_id: currentUserId,
-      status: 'define',
-      start_date: newStartDate,
-      target_end_date: newEndDate,
-    })
-
-    setProjects([...projects, newProj])
-    setShowNewProjectModal(false)
-    setNewTitle('')
-    setNewDesc('')
-  }
 
   if (!company) {
     return <div className="text-center py-20 text-slate-400 text-sm">Memuat profil perusahaan...</div>
@@ -197,45 +171,16 @@ export default function CompanyDetailPage() {
         )}
       </div>
 
-      {/* New Project Modal */}
-      {showNewProjectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background: 'rgba(2,6,15,0.80)', backdropFilter: 'blur(8px)'}}>
-          <div className="w-full max-w-lg rounded-3xl overflow-hidden" style={{background: 'var(--navy-900)', border: '1px solid var(--border-base)', boxShadow: '0 30px 80px rgba(0,0,0,0.60)'}}>
-            <div className="px-6 py-4 flex items-center justify-between" style={{borderBottom: '1px solid var(--border-base)', background: 'var(--navy-950)'}}>
-              <h3 className="text-lg font-bold text-slate-200">Mulai Proyek Baru — {company.name}</h3>
-              <button onClick={() => setShowNewProjectModal(false)} className="text-slate-450 hover:text-slate-200">✕</button>
-            </div>
-            
-            <form onSubmit={handleCreateProject} className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Judul Proyek</label>
-                <input type="text" required placeholder="Misal: Peningkatan OPH Sewing Line 3" value={newTitle} onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 text-xs focus:outline-none" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Deskripsi Proyek</label>
-                <textarea placeholder="Detail target dan program perbaikan..." value={newDesc} onChange={(e) => setNewDesc(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 text-xs focus:outline-none h-20" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Tanggal Mulai</label>
-                  <input type="date" required value={newStartDate} onChange={(e) => setNewStartDate(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 text-xs focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Target Selesai</label>
-                  <input type="date" required value={newEndDate} onChange={(e) => setNewEndDate(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 text-xs focus:outline-none" />
-                </div>
-              </div>
-              <div className="pt-4 flex justify-end gap-3 border-t border-slate-800">
-                <button type="button" onClick={() => setShowNewProjectModal(false)} className="px-4 py-2 text-xs text-slate-400">Batal</button>
-                <button type="submit" className="px-5 py-2.5 rounded-xl bg-indigo-650 text-xs font-semibold text-white hover:bg-indigo-600 transition-all cursor-pointer shadow-md">Buat Proyek</button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {showNewProjectModal && company && (
+        <CreateProjectModal
+          companies={[]}
+          currentUser={currentUser}
+          currentUserId={currentUserId}
+          fixedCompanyId={company.id}
+          fixedCompanyName={company.name}
+          onCreated={(proj) => setProjects(prev => [...prev, proj])}
+          onClose={() => setShowNewProjectModal(false)}
+        />
       )}
     </div>
   )

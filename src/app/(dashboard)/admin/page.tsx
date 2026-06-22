@@ -112,8 +112,9 @@ export default function AdminPanelPage() {
     })
     return Object.entries(provinceMap)
       .map(([name, val]) => ({ name, ...val }))
+      .filter(item => item.name !== 'Lainnya' || item.Proyek > 0 || item.Klien > 0)
       .sort((a, b) => b.Proyek - a.Proyek)
-      .slice(0, 8) // top 8 provinsi
+      .slice(0, 8)
   })()
 
   // ── Growth data: hitung kumulatif proyek per bulan dari start_date ──

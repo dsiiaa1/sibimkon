@@ -103,6 +103,7 @@ export default function AnalyzePage() {
   }
 
   const handleDeleteFb = (id: string) => {
+    if (!window.confirm('Hapus item fishbone ini?')) return
     const updated = fishboneItems.filter((item) => item.id !== id)
     setFishboneItems(updated)
     saveFishbones(projectId, updated).catch(console.error)
@@ -137,6 +138,7 @@ export default function AnalyzePage() {
   }
 
   const handleDeleteWhyNode = (index: number) => {
+    if (!window.confirm('Hapus analisis 5-Why ini?')) return
     const updated = whys.filter((_, i) => i !== index)
     setWhys(updated)
     saveFiveWhys(projectId, updated).catch(console.error)

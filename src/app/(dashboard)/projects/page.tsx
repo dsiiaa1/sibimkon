@@ -2,32 +2,23 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { getProjects, getCompanies, createProject } from '@/lib/db'
+import { getProjects, getCompanies } from '@/lib/db'
 import { Project, Company } from '@/lib/mockData'
-import { FolderKanban, Search, Plus, Calendar, ArrowRight, Activity } from 'lucide-react'
+import { FolderKanban, Search, Plus, ArrowRight } from 'lucide-react'
 import { PROJECT_STATUS_LABELS } from '@/lib/utils'
+import CreateProjectModal from '@/components/CreateProjectModal'
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
-  const [showNewProjectModal, setShowNewProjectModal] = useState(false)
+  const [showModal, setShowModal] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string>('unknown')
   const [currentUser, setCurrentUser] = useState<any>(null)
-  
-  // New Project Form
-  const [newTitle, setNewTitle] = useState('')
-  const [newDesc, setNewDesc] = useState('')
-  const [newCompanyId, setNewCompanyId] = useState('')
-  const [newStartDate, setNewStartDate] = useState(new Date().toISOString().split('T')[0])
-  const [newEndDate, setNewEndDate] = useState(() => {
-    const d = new Date(); d.setMonth(d.getMonth() + 3); return d.toISOString().split('T')[0]
-  })
 
   useEffect(() => {
     async function loadData() {
-      // Baca user dari session
       const localUser = localStorage.getItem('sibimkon_user')
       let u: any = null
       if (localUser) {
@@ -35,68 +26,20 @@ export default function ProjectsPage() {
         setCurrentUserId(u.id || 'unknown')
         setCurrentUser(u)
       }
-      const projs = await getProjects()
-      const comps = await getCompanies()
+      const [projs, comps] = await Promise.all([getProjects(), getCompanies()])
       setProjects(projs)
       setCompanies(comps)
-
-      if (u && u.role === 'perusahaan') {
-        // Cari company yang cocok — fuzzy match: contains atau startsWith
-        const org = (u.organization || '').toLowerCase().trim()
-        const comp = comps.find(c =>
-          c.name.toLowerCase().trim() === org ||
-          c.name.toLowerCase().trim().includes(org) ||
-          org.includes(c.name.toLowerCase().trim())
-        )
-        if (comp) {
-          setNewCompanyId(comp.id)
-        } else if (comps.length > 0) {
-          // fallback: pakai company pertama yang tersedia untuk user ini
-          setNewCompanyId(comps[0].id)
-        }
-      }
     }
     loadData()
   }, [])
 
-  const handleCreateProject = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newTitle) return
-
-    // Untuk role perusahaan, newCompanyId sudah di-set di useEffect
-    // Untuk konsultan, harus pilih dari dropdown
-    if (!newCompanyId) {
-      alert('Pilih perusahaan terlebih dahulu')
-      return
-    }
-
-    const selectedCompany = companies.find(c => c.id === newCompanyId)
-    const newProj = await createProject({
-      title: newTitle,
-      description: newDesc,
-      company_id: newCompanyId,
-      company_name: selectedCompany ? selectedCompany.name : (currentUser?.organization || 'Unknown'),
-      consultant_id: currentUserId,
-      status: 'define',
-      start_date: newStartDate,
-      target_end_date: newEndDate,
-    })
-
-    setProjects([...projects, newProj])
-    setShowNewProjectModal(false)
-    setNewTitle('')
-    setNewDesc('')
-    if (currentUser?.role !== 'perusahaan') setNewCompanyId('')
-  }
-
   const filteredProjects = projects.filter(p => {
     if (currentUser?.role === 'perusahaan' && currentUser?.organization) {
-      if (p.company_name.toLowerCase() !== currentUser.organization.toLowerCase()) {
-        return false
-      }
+      if (p.company_name.toLowerCase() !== currentUser.organization.toLowerCase()) return false
     }
-    const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          p.company_name.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesSearch =
+      p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.company_name.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesStatus = statusFilter === 'all' || p.status === statusFilter
     return matchesSearch && matchesStatus
   })
@@ -112,10 +55,10 @@ export default function ProjectsPage() {
           <p className="text-xs text-slate-500">Kelola dan pantau seluruh pendampingan aktif perusahaan</p>
         </div>
         <div className="sm:ml-auto">
-          <button 
-            onClick={() => setShowNewProjectModal(true)}
+          <button
+            onClick={() => setShowModal(true)}
             className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all cursor-pointer transform hover:-translate-y-0.5"
-            style={{background: 'linear-gradient(135deg, #b8860b, #d4a017, #f4c430)', color: 'var(--navy-950)', boxShadow: '0 6px 20px rgba(212,160,23,0.20)'}}
+            style={{ background: 'linear-gradient(135deg, #b8860b, #d4a017, #f4c430)', color: 'var(--navy-950)', boxShadow: '0 6px 20px rgba(212,160,23,0.20)' }}
           >
             <Plus className="h-4 w-4" />
             Mulai Proyek Baru
@@ -166,16 +109,10 @@ export default function ProjectsPage() {
                     {statusInfo.label}
                   </span>
                 </div>
-
                 <div className="space-y-2">
-                  <h3 className="text-lg font-bold text-slate-200 group-hover:text-indigo-400 transition-colors">
-                    {proj.title}
-                  </h3>
-                  <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                    {proj.description}
-                  </p>
+                  <h3 className="text-lg font-bold text-slate-200 group-hover:text-indigo-400 transition-colors">{proj.title}</h3>
+                  <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">{proj.description}</p>
                 </div>
-
                 <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-850">
                   <div>
                     <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold block">Perusahaan Klien</span>
@@ -187,7 +124,6 @@ export default function ProjectsPage() {
                   </div>
                 </div>
               </div>
-
               <div className="mt-6 pt-4 border-t border-slate-850 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="text-xs font-semibold text-slate-400">Index Keberhasilan:</div>
@@ -195,13 +131,8 @@ export default function ProjectsPage() {
                     {proj.current_score || 0}%
                   </div>
                 </div>
-
-                <Link
-                  href={`/projects/${proj.id}/define`}
-                  className="inline-flex items-center gap-1 text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors"
-                >
-                  Buka Proyek
-                  <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
+                <Link href={`/projects/${proj.id}/define`} className="inline-flex items-center gap-1 text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors">
+                  Buka Proyek <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
                 </Link>
               </div>
             </div>
@@ -209,120 +140,14 @@ export default function ProjectsPage() {
         })}
       </div>
 
-      {/* New Project Modal */}
-      {showNewProjectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in" style={{background: 'rgba(2,6,15,0.80)', backdropFilter: 'blur(8px)'}}>
-          <div className="w-full max-w-lg rounded-3xl overflow-hidden" style={{background: 'var(--navy-900)', border: '1px solid var(--border-base)', boxShadow: '0 30px 80px rgba(0,0,0,0.60)'}}>
-            <div className="px-6 py-4 flex items-center justify-between" style={{borderBottom: '1px solid var(--border-base)', background: 'var(--navy-950)'}}>
-              <h3 className="text-lg font-bold" style={{color: 'var(--text-primary)'}}>Mulai Proyek BIMKON Baru</h3>
-              <button 
-                onClick={() => setShowNewProjectModal(false)}
-                className="text-lg font-light transition-colors text-slate-400 hover:text-slate-250"
-              >
-                ✕
-              </button>
-            </div>
-            
-            <form onSubmit={handleCreateProject} className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Judul Proyek
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Misal: Reduksi Waste Bahan Baku Cutting Line"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Deskripsi Proyek
-                </label>
-                <textarea
-                  placeholder="Penjelasan singkat fokus improvement..."
-                  value={newDesc}
-                  onChange={(e) => setNewDesc(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm h-20"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Perusahaan Klien
-                </label>
-                {currentUser?.role === 'perusahaan' ? (
-                  <>
-                    <input
-                      type="text"
-                      disabled
-                      value={currentUser?.organization}
-                      className="w-full bg-slate-950/40 border border-slate-850 rounded-xl px-4 py-2.5 text-slate-500 text-sm"
-                    />
-                    <input type="hidden" value={newCompanyId} />
-                  </>
-                ) : (
-                  <select
-                    value={newCompanyId}
-                    onChange={(e) => setNewCompanyId(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
-                  >
-                    <option value="">-- Pilih Perusahaan --</option>
-                    {companies.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                    Tanggal Mulai
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={newStartDate}
-                    onChange={(e) => setNewStartDate(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                    Target Selesai
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={newEndDate}
-                    onChange={(e) => setNewEndDate(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-4 flex justify-end gap-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setShowNewProjectModal(false)}
-                  className="px-4 py-2.5 text-sm font-semibold text-slate-400 hover:text-slate-350 transition-colors"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-indigo-650 text-sm font-semibold text-white hover:bg-indigo-600 transition-all cursor-pointer shadow-md hover:shadow-indigo-500/10"
-                >
-                  Buat Proyek
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {showModal && (
+        <CreateProjectModal
+          companies={companies}
+          currentUser={currentUser}
+          currentUserId={currentUserId}
+          onCreated={(proj) => setProjects(prev => [...prev, proj])}
+          onClose={() => setShowModal(false)}
+        />
       )}
     </div>
   )

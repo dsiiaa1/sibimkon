@@ -151,7 +151,10 @@ export default function DefinePage() {
     setNewMemberName(''); setNewMemberPos(''); setNewMemberRole('')
   }
 
-  const handleDeleteMember = (idx: number) => setTeamMembers(teamMembers.filter((_, i) => i !== idx))
+  const handleDeleteMember = (idx: number) => {
+    if (!window.confirm('Hapus anggota tim ini?')) return
+    setTeamMembers(teamMembers.filter((_, i) => i !== idx))
+  }
 
   const handleAddCert = () => {
     if (!newCert || compCertifications.includes(newCert)) return

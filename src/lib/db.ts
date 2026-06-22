@@ -181,7 +181,7 @@ export async function getCompanies(): Promise<Company[]> {
   }
 }
 
-// ── NEW: updateCompany — save profil perusahaan ke getSupabase()! ──────────────────
+// ── NEW: updateCompany — save profil perusahaan ke Supabase ──────────────────
 export async function updateCompany(companyId: string, fields: Partial<Company> & Record<string, any>): Promise<void> {
   try {
     const hasTable = await checkTableExists('companies')
@@ -200,13 +200,17 @@ export async function updateCompany(companyId: string, fields: Partial<Company> 
         apindo_member: fields.kadin_membership === 'apindo' || fields.kadin_membership === 'keduanya',
         has_union: !!fields.labor_union,
         has_pkb: fields.pkb_status !== 'tidak_ada',
+        ...(fields.pic_name !== undefined && { pic_name: fields.pic_name }),
+        ...(fields.pic_position !== undefined && { pic_position: fields.pic_position }),
+        ...(fields.pic_phone !== undefined && { pic_phone: fields.pic_phone }),
+        ...(fields.pic_email !== undefined && { pic_email: fields.pic_email }),
         updated_at: new Date().toISOString(),
       })
       .eq('id', companyId)
 
     if (error) throw error
   } catch (err) {
-    console.warn('getSupabase()! updateCompany failed, falling back to mock storage.', err)
+    console.warn('Supabase updateCompany failed, falling back to mock storage.', err)
     const db = getMockDB()
     const updatedCompanies = db.companies.map((c: Company) =>
       c.id === companyId ? { ...c, ...fields } : c

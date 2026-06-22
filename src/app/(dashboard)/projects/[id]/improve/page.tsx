@@ -325,8 +325,8 @@ export default function ImprovePage() {
   }
 
   const handleDeleteAction = (actionId: string) => {
-    // Guard: hanya konsultan yang boleh menghapus action plan
     if (!isKonsultan) return
+    if (!window.confirm('Hapus action plan ini? Tindakan tidak dapat dibatalkan.')) return
     const updated = actionPlans.filter(act => act.id !== actionId)
     saveActionPlans(updated)
   }
