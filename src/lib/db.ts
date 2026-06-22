@@ -11,10 +11,18 @@ const supabase = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_SUPA
 async function checkTableExists(tableName: string): Promise<boolean> {
   try {
     if (!supabase) return false
-    const { error } = await supabase.from(tableName).select('id').limit(1)
-    if (error && (error.code === 'PGRST116' || error.message.includes('does not exist'))) {
+    const { error } = await supabase.from(tableName).select('*').limit(0)
+    // PGRST116 = table not found, 42P01 = undefined table (Postgres)
+    if (error && (
+      error.code === 'PGRST116' ||
+      error.code === '42P01' ||
+      error.message?.includes('does not exist') ||
+      error.message?.includes('relation') 
+    )) {
       return false
     }
+    // RLS block (code 42501) or other errors = table exists but access denied
+    // still return true so the caller can attempt the real query and handle errors
     return true
   } catch {
     return false
@@ -334,7 +342,7 @@ export async function saveVom(projectId: string, vomList: any[]): Promise<void> 
       .eq('project_id', projectId)
 
     if (deleteErr) {
-      console.error('Supabase saveVom (Delete) Error Details:', deleteErr)
+      console.error('[saveVom] Delete error:', deleteErr)
       throw deleteErr
     }
 
@@ -356,12 +364,13 @@ export async function saveVom(projectId: string, vomList: any[]): Promise<void> 
         .insert(upsertData)
 
       if (insertErr) {
-        console.error('Supabase saveVom (Insert) Error Details:', insertErr)
+        console.error('[saveVom] Insert error:', insertErr)
         throw insertErr
       }
     }
+    console.log('[saveVom] Saved', vomList.length, 'VOM items for project', projectId)
   } catch (err) {
-    console.warn('Supabase saveVom failed. Details:', err)
+    console.warn('[saveVom] Failed, details:', err)
   }
 }
 
