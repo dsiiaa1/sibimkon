@@ -16,7 +16,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react'
-import { updateProjectPhase, getProjects, getActionPlans } from '@/lib/db'
+import { updateProjectPhase, getProjects, getActionPlans, getControlAudit, saveControlAudit, getControlPsi, saveControlPsi } from '@/lib/db'
 import { 
   ResponsiveContainer,
   ComposedChart,
@@ -66,31 +66,36 @@ export default function ControlPage() {
     }
     loadData()
 
-    // Load audit checklist
-    const savedAudit = localStorage.getItem(`sibimkon_audit_${projectId}`)
-    if (savedAudit) {
-      setAuditItems(JSON.parse(savedAudit))
-    } else {
-      // Template default generik — tidak terikat ke perusahaan tertentu
-      const defaultAudit = [
-        { id: 'aud-1', category: 'Production', task: 'SOP proses produksi dipasang dan dipatuhi di lapangan', completed: false },
-        { id: 'aud-2', category: 'Quality', task: 'Sistem inspeksi mutu (inline/final) berjalan rutin', completed: false },
-        { id: 'aud-3', category: 'Safety', task: 'APD tersedia dan digunakan seluruh operator', completed: false },
-        { id: 'aud-4', category: 'Morale', task: 'Program pelatihan dan reward karyawan berjalan', completed: false },
-      ]
-      setAuditItems(defaultAudit)
-      localStorage.setItem(`sibimkon_audit_${projectId}`, JSON.stringify(defaultAudit))
-    }
+    // Load audit checklist dari Supabase (fallback localStorage)
+    getControlAudit(projectId).then((items) => {
+      if (items && items.length > 0) {
+        setAuditItems(items)
+      } else {
+        const savedAudit = localStorage.getItem(`sibimkon_audit_${projectId}`)
+        if (savedAudit) {
+          setAuditItems(JSON.parse(savedAudit))
+        } else {
+          const defaultAudit = [
+            { id: 'aud-1', category: 'Production', task: 'SOP proses produksi dipasang dan dipatuhi di lapangan', completed: false },
+            { id: 'aud-2', category: 'Quality', task: 'Sistem inspeksi mutu (inline/final) berjalan rutin', completed: false },
+            { id: 'aud-3', category: 'Safety', task: 'APD tersedia dan digunakan seluruh operator', completed: false },
+            { id: 'aud-4', category: 'Morale', task: 'Program pelatihan dan reward karyawan berjalan', completed: false },
+          ]
+          setAuditItems(defaultAudit)
+          saveControlAudit(projectId, defaultAudit).catch(console.error)
+        }
+      }
+    }).catch(console.error)
 
-    // Load PSI
-    const savedPsi = localStorage.getItem(`sibimkon_psi_${projectId}`)
-    if (savedPsi) {
-      const parsed = JSON.parse(savedPsi)
-      setPeopleScore(parsed.people || 70)
-      setProcessScore(parsed.process || 65)
-      setSystemScore(parsed.system || 60)
-      setResultScore(parsed.result || 75)
-    }
+    // Load PSI dari Supabase (fallback localStorage)
+    getControlPsi(projectId).then((psi) => {
+      if (psi) {
+        setPeopleScore(psi.people)
+        setProcessScore(psi.process)
+        setSystemScore(psi.system)
+        setResultScore(psi.result)
+      }
+    }).catch(console.error)
   }, [projectId, router])
 
   const handleToggleAudit = (auditId: string) => {
@@ -98,7 +103,7 @@ export default function ControlPage() {
       item.id === auditId ? { ...item, completed: !item.completed } : item
     )
     setAuditItems(updated)
-    localStorage.setItem(`sibimkon_audit_${projectId}`, JSON.stringify(updated))
+    saveControlAudit(projectId, updated).catch(console.error)
   }
 
   const handleAddAudit = () => {
@@ -111,19 +116,19 @@ export default function ControlPage() {
     }
     const updated = [...auditItems, newItem]
     setAuditItems(updated)
-    localStorage.setItem(`sibimkon_audit_${projectId}`, JSON.stringify(updated))
+    saveControlAudit(projectId, updated).catch(console.error)
     setNewAuditTask('')
   }
 
   const handleDeleteAudit = (auditId: string) => {
     const updated = auditItems.filter(item => item.id !== auditId)
     setAuditItems(updated)
-    localStorage.setItem(`sibimkon_audit_${projectId}`, JSON.stringify(updated))
+    saveControlAudit(projectId, updated).catch(console.error)
   }
 
   const handleSavePSI = async () => {
     const psiObj = { people: peopleScore, process: processScore, system: systemScore, result: resultScore }
-    localStorage.setItem(`sibimkon_psi_${projectId}`, JSON.stringify(psiObj))
+    await saveControlPsi(projectId, psiObj)
     setSaveMsg('Productivity Sustainability Index (PSI) berhasil direkam!')
     setTimeout(() => setSaveMsg(null), 3000)
   }

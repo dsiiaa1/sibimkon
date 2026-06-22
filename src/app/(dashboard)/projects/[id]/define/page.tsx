@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { getProjects, getCompanies, getProjectCharter, saveProjectCharter, updateProjectPhase } from '@/lib/db'
+import { getProjects, getCompanies, getProjectCharter, saveProjectCharter, updateProjectPhase, updateCompany } from '@/lib/db'
 import { Project, Company, ProjectCharter } from '@/lib/mockData'
 import { FileCheck, Building2, Save, ArrowRight } from 'lucide-react'
 
@@ -81,24 +81,24 @@ export default function DefinePage() {
     if (!company) return
     setSaving(true)
     try {
-      // Update via mockDB/supabase — currently companies don't have a dedicated save fn in db.ts
-      // so we use the mock layer which is what getCompanies() reads from
+      // Simpan ke Supabase via updateCompany, fallback ke mockDB otomatis di dalam fungsi
+      await updateCompany(company.id, {
+        name: compName,
+        address: compAddress,
+        total_employees: compEmployees,
+        business_field: compField,
+        main_product: compProduct,
+        kadin_membership: compKadin,
+        labor_union: compUnion,
+        pkb_status: compPkb,
+        certifications: compCertifications,
+      })
+      // Sync mockDB agar nama company tampil benar di sidebar
       const { getMockDB, updateMockDB } = await import('@/lib/mockData')
       const db = getMockDB()
       const updatedCompanies = db.companies.map((c: Company) =>
         c.id === company.id
-          ? {
-              ...c,
-              name: compName,
-              address: compAddress,
-              total_employees: compEmployees,
-              business_field: compField,
-              main_product: compProduct,
-              kadin_membership: compKadin,
-              labor_union: compUnion,
-              pkb_status: compPkb,
-              certifications: compCertifications,
-            }
+          ? { ...c, name: compName, address: compAddress, total_employees: compEmployees, business_field: compField, certifications: compCertifications }
           : c
       )
       updateMockDB('companies', updatedCompanies)

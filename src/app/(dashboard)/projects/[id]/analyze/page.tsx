@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { getProjects, getAssessments, getActionPlans, updateProjectPhase } from '@/lib/db'
+import { getProjects, getAssessments, getActionPlans, saveActionPlans, getFishbones, saveFishbones, getFiveWhys, saveFiveWhys, updateProjectPhase } from '@/lib/db'
 import { getMockDB, updateMockDB, Project, FishboneNode, WhyNode, ActionPlan, Assessment } from '@/lib/mockData'
 import { Sparkles, Plus, AlertCircle, ArrowRight } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, ComposedChart, Line } from 'recharts'
@@ -52,10 +52,13 @@ export default function AnalyzePage() {
       const existingAssessments = await getAssessments(projectId)
       setAssessments(existingAssessments)
 
-      // Load fishbone dan 5why dari mockDB
-      const db = getMockDB()
-      setFishboneItems(db.fishbones[projectId] || [])
-      setWhys(db.fiveWhys[projectId] || [])
+      // Load fishbone dan 5why dari Supabase (fallback mockDB)
+      const [fishbones, fiveWhys] = await Promise.all([
+        getFishbones(projectId),
+        getFiveWhys(projectId),
+      ])
+      setFishboneItems(fishbones)
+      setWhys(fiveWhys)
     }
     loadData()
   }, [projectId, router])
@@ -95,18 +98,14 @@ export default function AnalyzePage() {
     }
     const updated = [...fishboneItems, newItem]
     setFishboneItems(updated)
-    const db = getMockDB()
-    db.fishbones[projectId] = updated
-    updateMockDB('fishbones', db.fishbones)
+    saveFishbones(projectId, updated).catch(console.error)
     setNewFbText('')
   }
 
   const handleDeleteFb = (id: string) => {
     const updated = fishboneItems.filter((item) => item.id !== id)
     setFishboneItems(updated)
-    const db = getMockDB()
-    db.fishbones[projectId] = updated
-    updateMockDB('fishbones', db.fishbones)
+    saveFishbones(projectId, updated).catch(console.error)
   }
 
   const handleSave5Why = (
@@ -120,9 +119,7 @@ export default function AnalyzePage() {
     if (l4 !== undefined) node = node.children![l4]
     if (node) node[field] = value
     setWhys(updated)
-    const db = getMockDB()
-    db.fiveWhys[projectId] = updated
-    updateMockDB('fiveWhys', db.fiveWhys)
+    saveFiveWhys(projectId, updated).catch(console.error)
   }
 
   const handleAddWhyNode = () => {
@@ -136,17 +133,13 @@ export default function AnalyzePage() {
     }
     const updated = [...whys, blank]
     setWhys(updated)
-    const db = getMockDB()
-    db.fiveWhys[projectId] = updated
-    updateMockDB('fiveWhys', db.fiveWhys)
+    saveFiveWhys(projectId, updated).catch(console.error)
   }
 
   const handleDeleteWhyNode = (index: number) => {
     const updated = whys.filter((_, i) => i !== index)
     setWhys(updated)
-    const db = getMockDB()
-    db.fiveWhys[projectId] = updated
-    updateMockDB('fiveWhys', db.fiveWhys)
+    saveFiveWhys(projectId, updated).catch(console.error)
   }
 
   const handleTriggerAI = async () => {
@@ -158,8 +151,10 @@ export default function AnalyzePage() {
         return acc
       }, {})
 
-      // VOM entries are keyed per-project in localStorage
-      const vomRaw = localStorage.getItem(`sibimkon_vom_${projectId}`)
+      // VOM entries dari Supabase (sudah load di db.ts getVom)
+      const { getVom } = await import('@/lib/db')
+      const vomData = await getVom(projectId)
+      const vomList = vomData.map((v: any) => v.problem || v.problem_description || '')
 
       // fishboneItems and whys are already loaded from getMockDB()[projectId] in useEffect
       const response = await fetch('/api/ai-consultant', {
@@ -168,7 +163,7 @@ export default function AnalyzePage() {
         body: JSON.stringify({
           projectTitle: project?.title,
           companyName: project?.company_name,
-          vomList: vomRaw ? JSON.parse(vomRaw) : [],
+          vomList: vomList,
           pqcdsmScores: scores,
           whyTree: whys,          // loaded via getMockDB().fiveWhys[projectId]
           fishboneItems,           // loaded via getMockDB().fishbones[projectId]
@@ -188,7 +183,7 @@ export default function AnalyzePage() {
     const db = getMockDB()
     const current = db.actionPlans[projectId] || []
     const newActions: ActionPlan[] = aiResult.priority_recommendations.map((rec: any) => ({
-      id: 'act-ai-' + Math.random().toString(36).substr(2, 9),
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'act-ai-' + Math.random().toString(36).substr(2, 9),
       project_id: projectId,
       title: rec.program,
       description: rec.description,
@@ -202,8 +197,8 @@ export default function AnalyzePage() {
       status: 'belum_mulai' as const,
       progress_percentage: 0,
     }))
-    db.actionPlans[projectId] = [...current, ...newActions]
-    updateMockDB('actionPlans', db.actionPlans)
+    const merged = [...current, ...newActions]
+    saveActionPlans(projectId, merged).catch(console.error)
     alert('Rekomendasi AI berhasil diterapkan ke Action Plan!')
   }
 
