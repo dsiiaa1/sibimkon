@@ -216,9 +216,21 @@ export async function POST(req: Request) {
     }
   }
 
-  try {
-    const { projectTitle, companyName, vomList, pqcdsmScores, whyTree, fishboneItems } = await req.json()
+  let projectTitle = '', companyName = '', vomList: string[] = [], pqcdsmScores: Record<string, number> = {}, whyTree: any[] = [], fishboneItems: any[] = []
 
+  try {
+    const body = await req.json()
+    projectTitle = body.projectTitle ?? ''
+    companyName = body.companyName ?? ''
+    vomList = body.vomList ?? []
+    pqcdsmScores = body.pqcdsmScores ?? {}
+    whyTree = body.whyTree ?? []
+    fishboneItems = body.fishboneItems ?? []
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
+
+  try {
     const geminiKey = process.env.GEMINI_API_KEY
 
     // If Gemini key is missing, build a fully dynamic response from the project's actual data
@@ -284,7 +296,11 @@ Kembalikan HANYA JSON di atas tanpa markdown formatting lainnya.
     )
 
     if (!response.ok) {
-      throw new Error(`Gemini API failed with status ${response.status}`)
+      const errBody = await response.text().catch(() => '')
+      console.warn(`Gemini API failed with status ${response.status}: ${errBody}. Falling back to dynamic response.`)
+      return NextResponse.json(
+        buildDynamicFallback(projectTitle, companyName, vomList, pqcdsmScores, whyTree, fishboneItems ?? []),
+      )
     }
 
     const data = await response.json()
@@ -294,6 +310,13 @@ Kembalikan HANYA JSON di atas tanpa markdown formatting lainnya.
     return NextResponse.json(jsonResult)
   } catch (err: any) {
     console.error('Error calling Gemini:', err)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    // Fallback to dynamic response on any unexpected error
+    try {
+      return NextResponse.json(
+        buildDynamicFallback(projectTitle, companyName, vomList, pqcdsmScores, whyTree, fishboneItems),
+      )
+    } catch {
+      return NextResponse.json({ error: err.message }, { status: 500 })
+    }
   }
 }
