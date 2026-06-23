@@ -13,7 +13,6 @@ const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
     rules: {
-      // Nonaktifkan rules yang terlalu strict untuk codebase ini
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unused-vars": "warn",
       "react/no-unescaped-entities": "off",

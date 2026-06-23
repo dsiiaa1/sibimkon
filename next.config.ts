@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  outputFileTracingExcludes: {
+    // Workaround: skip tracing manifest untuk route group (dashboard)
+    "/(dashboard)": ["**/*"],
+  },
 };
 
 export default nextConfig;
