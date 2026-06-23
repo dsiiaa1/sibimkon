@@ -138,12 +138,13 @@ export default function RegisterPage() {
           console.warn('Profile insert failed (trigger may handle it):', profileErr)
         }
 
+        // Email verifikasi dikirim otomatis oleh Supabase via Brevo SMTP
       }
 
       setSuccess(
         data?.user?.identities?.length === 0
           ? 'Email ini sudah terdaftar. Silakan login.'
-          : 'Pendaftaran berhasil! Silakan cek kotak masuk email Anda untuk verifikasi, lalu login.'
+          : 'Pendaftaran berhasil! Silakan cek kotak masuk email Anda, lalu login.'
       )
 
       setTimeout(() => {
