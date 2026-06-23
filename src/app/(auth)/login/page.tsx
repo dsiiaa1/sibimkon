@@ -38,8 +38,6 @@ function LoginForm() {
       if (signInError) {
         if (signInError.message.includes('Invalid login credentials')) {
           throw new Error('Email atau password salah. Pastikan akun Anda sudah terdaftar.')
-        } else if (signInError.message.includes('Email not confirmed')) {
-          throw new Error('Email belum diverifikasi. Silakan cek kotak masuk email Anda dan klik link verifikasi.')
         }
         throw new Error(signInError.message)
       }
@@ -152,7 +150,7 @@ function LoginForm() {
           <CheckCircle2 className="h-5 w-5 text-emerald-500 flex-shrink-0 mt-0.5" />
           <div>
             <p className="font-bold">Pendaftaran Berhasil!</p>
-            <p className="mt-0.5 text-emerald-600">Silakan cek email Anda untuk memverifikasi akun sebelum masuk.</p>
+            <p className="mt-0.5 text-emerald-600">Akun Anda sudah aktif. Silakan masuk.</p>
           </div>
         </div>
       )}
