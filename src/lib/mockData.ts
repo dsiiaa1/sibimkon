@@ -7,7 +7,7 @@ export interface Profile {
   id: string
   full_name: string
   email: string
-  role: 'konsultan' | 'perusahaan' | 'admin_disnaker' | 'admin_kemnaker'
+  role: 'konsultan' | 'perusahaan' | 'admin'
   organization?: string
 }
 

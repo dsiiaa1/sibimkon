@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getCompanies, updateCompany } from '@/lib/db'
+import { getCompanies, createCompany, updateCompany } from '@/lib/db'
 import { Company } from '@/lib/mockData'
-import { Building, Save, User, Phone, Mail, Sparkles } from 'lucide-react'
+import { Building, Save, User, Phone, Mail } from 'lucide-react'
 
 export default function CompanyProfilePage() {
   const [company, setCompany] = useState<Company | null>(null)
@@ -36,29 +36,24 @@ export default function CompanyProfilePage() {
       const userOrg = u.organization || 'My Company'
       
       const companies = await getCompanies()
-      let comp = companies.find(c => c.name.toLowerCase() === userOrg.toLowerCase())
-      
+      const org = userOrg.toLowerCase().trim()
+      let comp = companies.find((c) => {
+        const name = c.name.toLowerCase().trim()
+        return name === org || name.includes(org) || org.includes(name)
+      })
+
       if (!comp) {
-        // Create an empty mock company record for them so they can edit it
-        comp = {
-          id: 'comp-' + Math.random().toString(36).substr(2, 9),
+        comp = await createCompany({
           name: userOrg,
           address: '',
-          province: 'Jawa Barat',
-          city: 'Bandung',
-          business_field: 'Garmen & Tekstil',
-          total_employees: 10,
+          province: '',
+          city: '',
+          business_field: '',
+          total_employees: 0,
           certifications: [],
-          pic_name: '',
-          pic_position: '',
-          pic_phone: '',
-          pic_email: ''
-        }
-        // Save to mock database
-        const { getMockDB, updateMockDB } = await import('@/lib/mockData')
-        const db = getMockDB()
-        const updated = [...db.companies, comp]
-        updateMockDB('companies', updated)
+          pic_name: u.full_name || '',
+          pic_email: u.email || '',
+        })
       }
 
       setCompany(comp)
@@ -142,6 +137,7 @@ export default function CompanyProfilePage() {
   }
 
   const handleDeleteCert = (certName: string) => {
+    if (!window.confirm(`Hapus sertifikasi "${certName}"?`)) return
     setCompCertifications(compCertifications.filter(c => c !== certName))
   }
 

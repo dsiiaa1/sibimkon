@@ -15,8 +15,7 @@ interface SignatureRecord {
 
 type SigBundle = {
   consultant: SignatureRecord
-  disnaker: SignatureRecord
-  kemnaker: SignatureRecord
+  company: SignatureRecord
 }
 
 const EMPTY_SIG: SignatureRecord = { signed: false, signedAt: '', signerName: '' }
@@ -60,9 +59,8 @@ export default function ReportsPage() {
   // SIG_KEY di-memoize agar tidak berubah setiap render (mencegah useCallback infinite loop)
   const SIG_KEY = useMemo(() => `sibimkon_signatures_${projectId}`, [projectId])
   const [consultantSig, setConsultantSig] = useState<SignatureRecord>(EMPTY_SIG)
-  const [disnakerSig, setDisnakerSig] = useState<SignatureRecord>(EMPTY_SIG)
-  const [kemnakerSig, setKemnakerSig] = useState<SignatureRecord>(EMPTY_SIG)
-  const [sigSaving, setSigSaving] = useState<'consultant' | 'disnaker' | 'kemnaker' | null>(null)
+  const [companySig, setCompanySig] = useState<SignatureRecord>(EMPTY_SIG)
+  const [sigSaving, setSigSaving] = useState<'consultant' | 'company' | null>(null)
 
   const [pdfLoading, setPdfLoading] = useState(false)
   const [certLoading, setCertLoading] = useState(false)
@@ -80,10 +78,13 @@ export default function ReportsPage() {
         .maybeSingle()
 
       if (!error && data?.report_data) {
-        const bundle = data.report_data as SigBundle
+        const raw = data.report_data as SigBundle & { disnaker?: SignatureRecord; kemnaker?: SignatureRecord }
+        const bundle: SigBundle = {
+          consultant: raw.consultant || EMPTY_SIG,
+          company: raw.company || raw.disnaker || raw.kemnaker || EMPTY_SIG,
+        }
         if (bundle.consultant) setConsultantSig(bundle.consultant)
-        if (bundle.disnaker) setDisnakerSig(bundle.disnaker)
-        if (bundle.kemnaker) setKemnakerSig(bundle.kemnaker)
+        if (bundle.company) setCompanySig(bundle.company)
         // Sync ke localStorage sebagai cache lokal
         localStorage.setItem(SIG_KEY, JSON.stringify(bundle))
         return
@@ -94,10 +95,11 @@ export default function ReportsPage() {
     const saved = localStorage.getItem(SIG_KEY)
     if (saved) {
       try {
-        const parsed = JSON.parse(saved) as SigBundle
+        const parsed = JSON.parse(saved) as SigBundle & { disnaker?: SignatureRecord; kemnaker?: SignatureRecord }
         if (parsed.consultant) setConsultantSig(parsed.consultant)
-        if (parsed.disnaker) setDisnakerSig(parsed.disnaker)
-        if (parsed.kemnaker) setKemnakerSig(parsed.kemnaker)
+        if (parsed.company) setCompanySig(parsed.company)
+        else if (parsed.disnaker) setCompanySig(parsed.disnaker)
+        else if (parsed.kemnaker) setCompanySig(parsed.kemnaker)
       } catch (_) { /* data corrupt, abaikan */ }
     }
   }, [projectId, SIG_KEY])
@@ -127,16 +129,14 @@ export default function ReportsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
 
-  const handleSign = async (role: 'consultant' | 'disnaker' | 'kemnaker') => {
+  const handleSign = async (role: 'consultant' | 'company') => {
     const localUser = localStorage.getItem('sibimkon_user')
     const u = localUser ? JSON.parse(localUser) : {}
     const userRole: string = u.role || ''
 
-    // Role validation: hanya role yang sesuai yang boleh TTD
     const allowedRoles: Record<string, string[]> = {
       consultant: ['konsultan'],
-      disnaker:   ['admin_disnaker'],
-      kemnaker:   ['admin_kemnaker'],
+      company: ['perusahaan'],
     }
     if (!allowedRoles[role].includes(userRole)) {
       alert(`Tanda tangan untuk bagian ini hanya diperbolehkan untuk role: ${allowedRoles[role].join(', ')}.\nRole Anda saat ini: ${userRole || 'tidak diketahui'}`)
@@ -146,19 +146,16 @@ export default function ReportsPage() {
     const rec: SignatureRecord = {
       signed: true,
       signedAt: new Date().toLocaleString('id-ID'),
-      signerName: u.full_name || (role === 'consultant' ? consultantName : role === 'disnaker' ? 'Admin Disnaker' : 'Admin Kemnaker'),
+      signerName: u.full_name || (role === 'consultant' ? consultantName : project?.company_name || 'PIC Perusahaan'),
     }
 
     const next: SigBundle = {
       consultant: role === 'consultant' ? rec : consultantSig,
-      disnaker:   role === 'disnaker'   ? rec : disnakerSig,
-      kemnaker:   role === 'kemnaker'   ? rec : kemnakerSig,
+      company: role === 'company' ? rec : companySig,
     }
 
-    // Update state langsung (optimistic UI)
     if (role === 'consultant') setConsultantSig(rec)
-    if (role === 'disnaker')   setDisnakerSig(rec)
-    if (role === 'kemnaker')   setKemnakerSig(rec)
+    if (role === 'company') setCompanySig(rec)
 
     // Simpan ke localStorage dulu (always succeeds)
     localStorage.setItem(SIG_KEY, JSON.stringify(next))
@@ -233,7 +230,7 @@ export default function ReportsPage() {
   const SigBlock = ({
     title, orgLabel, sig, role,
   }: {
-    title: string; orgLabel: string; sig: SignatureRecord; role: 'consultant' | 'disnaker' | 'kemnaker'
+    title: string; orgLabel: string; sig: SignatureRecord; role: 'consultant' | 'company'
   }) => {
     const isSaving = sigSaving === role
     return (
@@ -292,7 +289,7 @@ export default function ReportsPage() {
               <FileText className="h-5 w-5 text-indigo-400" /> Laporan Produktivitas Akhir
             </h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Auto-generate dokumen laporan BIMKON lengkap 7 Bab sesuai format standar Kemnaker RI.
+              Auto-generate dokumen laporan BIMKON lengkap sesuai format standar SIBIMKON.
             </p>
             <div className="grid grid-cols-3 gap-2 bg-slate-950 border border-slate-850 p-4 rounded-2xl">
               <div className="text-center">
@@ -328,7 +325,7 @@ export default function ReportsPage() {
                 <span className="text-[10px] uppercase font-bold tracking-widest text-amber-500">Sertifikat Penghargaan</span>
                 <h4 className="text-sm font-extrabold text-slate-200 uppercase">{project.company_name}</h4>
                 <p className="text-[10px] text-slate-400 leading-normal max-w-xs mx-auto">
-                  Telah menyelesaikan Program Bimbingan Konsultansi Peningkatan Produktivitas Kemnaker RI
+                  Telah menyelesaikan Program Bimbingan Konsultansi Peningkatan Produktivitas SIBIMKON
                 </p>
                 <div className="flex justify-center pt-2">
                   <div className="h-12 w-12 bg-white p-1 rounded flex items-center justify-center">
@@ -397,8 +394,7 @@ export default function ReportsPage() {
             </p>
             <div className="space-y-3">
               <SigBlock title="Konsultan Pendamping" orgLabel={consultantName} sig={consultantSig} role="consultant" />
-              <SigBlock title="Verifikator Disnaker" orgLabel="Dinas Ketenagakerjaan" sig={disnakerSig} role="disnaker" />
-              <SigBlock title="Verifikator Kemnaker" orgLabel="Direktorat Bina Produktivitas" sig={kemnakerSig} role="kemnaker" />
+              <SigBlock title="PIC Perusahaan Klien" orgLabel={project.company_name} sig={companySig} role="company" />
             </div>
           </div>
         </div>

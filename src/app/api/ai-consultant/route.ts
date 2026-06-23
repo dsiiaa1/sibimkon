@@ -233,7 +233,7 @@ export async function POST(req: Request) {
 
     // Call real Google Gemini API
     const prompt = `
-Anda adalah Konsultan Produktivitas Industri Senior dari Kementerian Ketenagakerjaan RI (Kemnaker).
+Anda adalah Konsultan Produktivitas Industri Senior pada platform SIBIMKON.
 Analisa data berikut dan berikan rekomendasi terstruktur untuk perbaikan produktivitas perusahaan klien.
 
 Nama Perusahaan: ${companyName}

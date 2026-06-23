@@ -15,12 +15,12 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "SIBIMKON — Sistem Informasi Bimbingan Konsultansi Peningkatan Produktivitas",
-  description: "Platform terpadu digitalisasi program BIMKON Kementerian Ketenagakerjaan RI. Pendampingan produktivitas perusahaan berbasis metodologi DMAIC dengan AI Consultant.",
-  keywords: "BIMKON, produktivitas, DMAIC, Kemnaker, konsultansi, peningkatan produktivitas, SIBIMKON",
-  authors: [{ name: "Kementerian Ketenagakerjaan RI" }],
+  description: "Platform terpadu digitalisasi program BIMKON. Pendampingan produktivitas perusahaan berbasis metodologi DMAIC dengan AI Consultant.",
+  keywords: "BIMKON, produktivitas, DMAIC, konsultansi, peningkatan produktivitas, SIBIMKON",
+  authors: [{ name: "SIBIMKON" }],
   openGraph: {
     title: "SIBIMKON — Link Productive",
-    description: "Platform digitalisasi program Bimbingan Konsultansi Peningkatan Produktivitas Kemnaker RI",
+    description: "Platform digitalisasi program Bimbingan Konsultansi Peningkatan Produktivitas",
     type: "website",
     locale: "id_ID",
   },

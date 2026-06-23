@@ -147,8 +147,8 @@ const id = {
 
   // Admin page
   admin: {
-    titleNational: 'Panel Admin Nasional — Kemnaker RI',
-    titleRegional: 'Panel Admin Daerah — Disnaker',
+    titleNational: 'Panel Admin SIBIMKON',
+    titleRegional: 'Panel Admin SIBIMKON',
     totalCompanies: 'Total Perusahaan Terdaftar',
     activeConsultants: 'Konsultan Aktif',
     avgProductivity: 'Rata-rata Produktivitas',

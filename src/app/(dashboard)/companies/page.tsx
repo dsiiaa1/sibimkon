@@ -42,8 +42,11 @@ export default function CompaniesPage() {
     loadData()
   }, [])
 
+  const canRegisterCompany = ['konsultan', 'admin'].includes(userRole)
+
   const handleCreateCompany = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!canRegisterCompany) return
     if (!newName) return
 
     const newCompany = await createCompany({
@@ -92,8 +95,7 @@ export default function CompaniesPage() {
           <p className="text-xs text-slate-500">Kelola profil perusahaan dan data kontak PIC terdaftar</p>
         </div>
         <div className="sm:ml-auto">
-          {/* Hanya konsultan dan admin yang bisa tambah perusahaan */}
-          {userRole !== 'perusahaan' && (
+          {canRegisterCompany && (
             <button 
               onClick={() => setShowAddModal(true)}
               className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all cursor-pointer transform hover:-translate-y-0.5"

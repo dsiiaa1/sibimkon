@@ -197,6 +197,7 @@ export default function MeasurePage() {
   }
 
   const handleDeleteVom = (id: string) => {
+    if (!window.confirm('Hapus item VOM ini? Tindakan tidak dapat dibatalkan.')) return
     const updated = vomList.filter((item: any) => item.id !== id)
     setVomList(updated)
     saveVom(projectId, updated).catch(console.error)

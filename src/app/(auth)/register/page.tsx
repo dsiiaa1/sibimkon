@@ -226,7 +226,7 @@ export default function RegisterPage() {
 
         {/* Footer Brand Info */}
         <div className="flex items-center justify-between text-xs text-slate-400 border-t border-slate-800/40 pt-6 z-10">
-          <span>Kementerian Ketenagakerjaan RI</span>
+          <span>SIBIMKON — Link Productive</span>
           <span>© 2026 Link Productive</span>
         </div>
       </div>
@@ -543,7 +543,7 @@ export default function RegisterPage() {
                             required
                             value={organization}
                             onChange={(e) => setOrganization(e.target.value)}
-                            placeholder="Lembaga BIMKON Wilayah / Kemnaker"
+                            placeholder="Nama lembaga / organisasi konsultan"
                             className="block w-full rounded-xl pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 text-sm focus:bg-white transition-all outline-none"
                             style={{ backgroundColor: '#f8fafc', color: '#0f172a', borderColor: '#cbd5e1' }}
                           />

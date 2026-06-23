@@ -166,7 +166,7 @@ export async function generateFinalReport(
   doc.setTextColor(200, 200, 200)
   setNormal(9)
   doc.text('Sistem Informasi Bimbingan Konsultansi Peningkatan Produktivitas', margin, 30)
-  doc.text('Kementerian Ketenagakerjaan Republik Indonesia', margin, 37)
+  doc.text('Platform SIBIMKON — Link Productive', margin, 37)
 
   doc.setTextColor(30, 30, 30)
   setBold(16)
@@ -255,8 +255,7 @@ export async function generateFinalReport(
   drawChapterHeader('BAB 1 - LATAR BELAKANG', 'Identitas Proyek dan Program BIMKON')
   drawSectionTitle('1.1 Identitas Proyek')
   drawText(
-    'Program Bimbingan Konsultansi Peningkatan Produktivitas (BIMKON) adalah program pembinaan ' +
-    'dari Kementerian Ketenagakerjaan RI yang bertujuan meningkatkan produktivitas perusahaan ' +
+    'Program Bimbingan Konsultansi Peningkatan Produktivitas (BIMKON) bertujuan meningkatkan produktivitas perusahaan ' +
     'melalui pendampingan konsultan produktivitas terlatih dengan menggunakan metodologi DMAIC ' +
     '(Define-Measure-Analyze-Improve-Control).'
   )
@@ -373,9 +372,8 @@ export async function generateFinalReport(
   drawChapterHeader('BAB 5 - LEMBAR PENGESAHAN', 'Tanda Tangan Digital Pihak Terkait')
 
   const signatories = [
-    { role: 'Konsultan Pendamping', org: 'Kemnaker RI' },
-    { role: 'Verifikator Disnaker', org: 'Dinas Ketenagakerjaan' },
-    { role: 'Verifikator Kemnaker', org: 'Direktorat Bina Produktivitas' },
+    { role: 'Konsultan Pendamping', org: 'SIBIMKON' },
+    { role: 'PIC Perusahaan Klien', org: project.company_name },
   ]
 
   signatories.forEach(sig => {
@@ -447,8 +445,8 @@ export async function generateCertificate(project: ProjectData) {
   // Header
   doc.setTextColor(212, 160, 23)
   setBold(10)
-  doc.text('KEMENTERIAN KETENAGAKERJAAN REPUBLIK INDONESIA', pageW / 2, 30, { align: 'center' })
-  doc.text('DIREKTORAT BINA PRODUKTIVITAS', pageW / 2, 37, { align: 'center' })
+  doc.text('SIBIMKON', pageW / 2, 30, { align: 'center' })
+  doc.text('Link Productive', pageW / 2, 37, { align: 'center' })
 
   doc.setTextColor(180, 180, 180)
   setNormal(8)
@@ -505,9 +503,9 @@ export async function generateCertificate(project: ProjectData) {
     30,
     pageH - 25
   )
-  doc.text('Direktur Jenderal Binalavotas', 30, pageH - 18)
+  doc.text('Direktur Program SIBIMKON', 30, pageH - 18)
   setBold(8)
-  doc.text('Kementerian Ketenagakerjaan RI', 30, pageH - 12)
+  doc.text('Link Productive', 30, pageH - 12)
 
   return doc
 }

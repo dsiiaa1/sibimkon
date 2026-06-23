@@ -372,7 +372,7 @@ export default function LoginPage() {
 
         {/* Footer Brand Info */}
         <div className="flex items-center justify-between text-xs text-slate-400 border-t border-slate-800/40 pt-6 z-10">
-          <span>Kementerian Ketenagakerjaan RI</span>
+          <span>SIBIMKON — Link Productive</span>
           <span>© 2026 Link Productive</span>
         </div>
       </div>

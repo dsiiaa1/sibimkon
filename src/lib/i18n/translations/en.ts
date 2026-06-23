@@ -149,8 +149,8 @@ const en: TranslationKeys = {
 
   // Admin page
   admin: {
-    titleNational: 'National Admin Panel — Kemnaker RI',
-    titleRegional: 'Regional Admin Panel — Disnaker',
+    titleNational: 'SIBIMKON Admin Panel',
+    titleRegional: 'SIBIMKON Admin Panel',
     totalCompanies: 'Total Registered Companies',
     activeConsultants: 'Active Consultants',
     avgProductivity: 'Average Productivity',
