@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { getProjects, getAssessments, getActionPlans, saveActionPlans, getFishbones, saveFishbones, getFiveWhys, saveFiveWhys, updateProjectPhase } from '@/lib/db'
-import { getMockDB, updateMockDB, Project, FishboneNode, WhyNode, ActionPlan, Assessment } from '@/lib/mockData'
+import { Project, FishboneNode, WhyNode, ActionPlan, Assessment } from '@/lib/mockData'
 import { Sparkles, Plus, AlertCircle, ArrowRight } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, ComposedChart, Line } from 'recharts'
 import { PQCDSM_LABELS } from '@/lib/utils'
