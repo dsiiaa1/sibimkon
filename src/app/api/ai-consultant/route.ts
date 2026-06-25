@@ -281,11 +281,19 @@ Berikan respon dalam format JSON yang valid dengan struktur berikut:
 Kembalikan HANYA JSON di atas tanpa markdown formatting lainnya.
 `
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
-      {
+    // Support both old standard keys (AIza...) and new auth keys (AQ.Ab8...)
+    // New auth keys use x-goog-api-key header instead of ?key= URL param
+    const isAuthKey = geminiKey.startsWith('AQ.')
+    const url = isAuthKey
+      ? 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent'
+      : `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`
+
+    const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(isAuthKey ? { 'x-goog-api-key': geminiKey } : {}),
+        },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
