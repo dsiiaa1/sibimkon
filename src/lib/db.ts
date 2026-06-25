@@ -337,56 +337,54 @@ export async function getActionPlans(projectId: string): Promise<ActionPlan[]> {
 
 export async function saveActionPlans(projectId: string, actions: ActionPlan[]): Promise<void> {
   const db = getMockDB(); db.actionPlans[projectId] = actions; updateMockDB('actionPlans', db.actionPlans)
-  try {
-    const sb = getSupabase()
-    if (!sb) return
+  const sb = getSupabase()
+  if (!sb) throw new Error('Supabase client tidak tersedia')
 
-    // Fetch existing IDs dari Supabase
-    const { data: existing, error: fetchErr } = await sb.from('improve_actions').select('id').eq('project_id', projectId)
-    if (fetchErr) throw fetchErr
-    const existingIds = new Set((existing || []).map((e: any) => e.id))
-    const incomingIds = new Set(actions.map(a => a.id))
+  // Fetch existing IDs dari Supabase
+  const { data: existing, error: fetchErr } = await sb.from('improve_actions').select('id').eq('project_id', projectId)
+  if (fetchErr) throw new Error(`Gagal fetch existing: ${fetchErr.message}`)
+  const existingIds = new Set((existing || []).map((e: any) => e.id))
+  const incomingIds = new Set(actions.map(a => a.id))
 
-    // Hapus yang sudah tidak ada
-    const toDelete = [...existingIds].filter(id => !incomingIds.has(id))
-    if (toDelete.length > 0) {
-      const { error } = await sb.from('improve_actions').delete().in('id', toDelete)
-      if (error) throw error
-    }
+  // Hapus yang sudah tidak ada
+  const toDelete = [...existingIds].filter(id => !incomingIds.has(id))
+  if (toDelete.length > 0) {
+    const { error } = await sb.from('improve_actions').delete().in('id', toDelete)
+    if (error) throw new Error(`Gagal delete: ${error.message}`)
+  }
 
-    if (actions.length === 0) return
+  if (actions.length === 0) return
 
-    // Pisahkan: existing (update) vs baru (insert)
-    const toUpdate = actions.filter(a => existingIds.has(a.id))
-    const toInsert = actions.filter(a => !existingIds.has(a.id))
+  // Pisahkan: existing (update) vs baru (insert)
+  const toUpdate = actions.filter(a => existingIds.has(a.id))
+  const toInsert = actions.filter(a => !existingIds.has(a.id))
 
-    // Update existing rows
-    for (const act of toUpdate) {
-      const { error } = await sb.from('improve_actions').update({
-        action_title: act.title, description: act.description,
-        methodology: act.methodology, dimension: act.dimension, kpi_name: act.kpi_name,
-        kpi_baseline: act.kpi_baseline, kpi_target: act.kpi_target, kpi_unit: act.kpi_unit,
-        kpi_actual: act.kpi_actual || null, pic_name: act.pic_name,
-        start_date: act.start_date, end_date: act.end_date,
-        status: act.status, progress_percentage: act.progress_percentage
-      }).eq('id', act.id)
-      if (error) console.warn('[saveActionPlans] update error:', error)
-    }
+  // Update existing rows
+  for (const act of toUpdate) {
+    const { error } = await sb.from('improve_actions').update({
+      action_title: act.title, description: act.description,
+      methodology: act.methodology, dimension: act.dimension, kpi_name: act.kpi_name,
+      kpi_baseline: act.kpi_baseline, kpi_target: act.kpi_target, kpi_unit: act.kpi_unit,
+      kpi_actual: act.kpi_actual || null, pic_name: act.pic_name,
+      start_date: act.start_date, end_date: act.end_date,
+      status: act.status, progress_percentage: act.progress_percentage
+    }).eq('id', act.id)
+    if (error) throw new Error(`Gagal update action ${act.id}: ${error.message}`)
+  }
 
-    // Insert new rows — tanpa kolom id, biarkan Supabase generate
-    if (toInsert.length > 0) {
-      const rows = toInsert.map(act => ({
-        project_id: projectId, action_title: act.title, description: act.description,
-        methodology: act.methodology, dimension: act.dimension, kpi_name: act.kpi_name,
-        kpi_baseline: act.kpi_baseline, kpi_target: act.kpi_target, kpi_unit: act.kpi_unit,
-        kpi_actual: act.kpi_actual || null, pic_name: act.pic_name,
-        start_date: act.start_date, end_date: act.end_date,
-        status: act.status, progress_percentage: act.progress_percentage
-      }))
-      const { error } = await sb.from('improve_actions').insert(rows)
-      if (error) throw error
-    }
-  } catch (err) { console.warn('[saveActionPlans] Supabase failed, mockDB only:', err) }
+  // Insert new rows — tanpa kolom id, biarkan Supabase generate
+  if (toInsert.length > 0) {
+    const rows = toInsert.map(act => ({
+      project_id: projectId, action_title: act.title, description: act.description,
+      methodology: act.methodology, dimension: act.dimension, kpi_name: act.kpi_name,
+      kpi_baseline: act.kpi_baseline, kpi_target: act.kpi_target, kpi_unit: act.kpi_unit,
+      kpi_actual: act.kpi_actual || null, pic_name: act.pic_name,
+      start_date: act.start_date, end_date: act.end_date,
+      status: act.status, progress_percentage: act.progress_percentage
+    }))
+    const { error } = await sb.from('improve_actions').insert(rows)
+    if (error) throw new Error(`Gagal insert action plans: ${error.message} | detail: ${JSON.stringify(error)}`)
+  }
 }
 
 // ── CONTROL: Audit Checklist ──────────────────────────────────────────────────
