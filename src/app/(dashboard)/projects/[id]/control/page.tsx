@@ -212,9 +212,10 @@ export default function ControlPage() {
             onClick={() => setActiveTab(tab.id as any)}
             className={`px-4 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === tab.id
-                ? 'border-indigo-500 text-indigo-400 bg-indigo-500/5'
+                ? 'bg-amber-50 text-amber-800'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
+            style={activeTab === tab.id ? { borderBottomColor: 'var(--gold-400)', borderBottomWidth: '2px' } : {}}
           >
             {tab.name}
           </button>

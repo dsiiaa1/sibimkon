@@ -372,7 +372,7 @@ export default function ReportsPage() {
               </div>
               <div className="flex justify-between items-center bg-indigo-500/5 border border-indigo-500/10 p-3.5 rounded-xl">
                 <span className="text-xs font-bold text-indigo-300">Estimasi ROI</span>
-                <span className="text-xs font-bold text-white">
+                <span className="text-xs font-bold text-navy-900" style={{ color: 'var(--navy-900)' }}>
                   {roiData.roi > 0 ? `${roiData.roi.toFixed(1)}× Lipat` : '—'}
                 </span>
               </div>

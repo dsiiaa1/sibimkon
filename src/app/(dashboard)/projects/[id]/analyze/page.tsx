@@ -256,9 +256,10 @@ export default function AnalyzePage() {
           <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
             className={`px-4 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === tab.id
-                ? 'border-indigo-500 text-indigo-400 bg-indigo-500/5'
+                ? 'border-b-2 bg-amber-50 text-amber-800'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}>
+            }`}
+            style={activeTab === tab.id ? { borderBottomColor: 'var(--gold-400)', borderBottomWidth: '2px' } : {}}>
             {tab.name}
           </button>
         ))}
@@ -430,7 +431,7 @@ export default function AnalyzePage() {
                         Prioritas Utama
                       </div>
                       <p className="text-xs text-slate-400 leading-normal">
-                        Fokus perbaikan pada dimensi <span className="text-white font-semibold">{top2Labels}</span> untuk menyelesaikan{' '}
+                        Fokus perbaikan pada dimensi <span className="text-indigo-400 font-semibold">{top2Labels}</span> untuk menyelesaikan{' '}
                         <span className="text-indigo-400 font-bold">{paretoData[1]?.cumulative || paretoData[0]?.cumulative}%</span> dari total gap produktivitas.
                       </p>
                     </div>

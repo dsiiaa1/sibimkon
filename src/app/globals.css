@@ -116,14 +116,6 @@ main h6 {
   color: var(--text-primary);
 }
 
-main p,
-main span,
-main li,
-main td,
-main th {
-  color: var(--text-secondary);
-}
-
 
 
 /* Gold accent overrides */
@@ -143,11 +135,15 @@ main th {
 }
 
 /* Consistent base text inside dark surfaces vs light surfaces */
-.glass-card,
 aside,
 header,
 nav {
   color: #ffffff !important;
+}
+
+/* glass-card inside main (light theme) gets navy text; outside main it stays white */
+main .glass-card {
+  color: var(--text-primary) !important;
 }
 
 main,
@@ -162,14 +158,6 @@ select,
 textarea,
 input {
   color: var(--text-primary);
-}
-
-p,
-span,
-li,
-td,
-th {
-  color: var(--text-secondary);
 }
 
 /* ===================================================
@@ -467,6 +455,17 @@ main .text-slate-500 {
   color: var(--text-secondary) !important; /* Slate Gray */
 }
 
+/* text-white inside main should map to primary navy (light theme) */
+main .text-white {
+  color: var(--text-primary) !important;
+}
+
+/* Exception: text-white inside buttons with explicit backgrounds stays as-is */
+main button.text-white,
+main a.text-white {
+  color: var(--text-primary) !important;
+}
+
 main .text-indigo-400,
 main .text-indigo-300 {
   color: var(--gold-500) !important; /* Luxury Gold - slightly darker for contrast */
@@ -704,6 +703,15 @@ main .phase-banner span {
   color: #0a192f !important;
 }
 
+/* Override any text-indigo / text-gold classes inside phase-banner for readability */
+main .phase-banner .text-indigo-300,
+main .phase-banner .text-indigo-400,
+main .phase-banner [class*="text-indigo"],
+main .phase-banner [class*="text-gold"],
+main .phase-banner [class*="text-slate"] {
+  color: #0a192f !important;
+}
+
 main .phase-banner button {
   background: var(--navy-950) !important;
   background-color: var(--navy-950) !important;
@@ -725,3 +733,31 @@ main .phase-banner button:active {
 }
 
 
+
+/* ===================================================
+   TAB ACTIVE STATE — navy text on gold-tinted bg
+   Tab aktif pakai text-indigo-400 + bg-indigo-500/5,
+   keduanya di-remap ke gold → teks tidak terlihat.
+   Override khusus agar tab aktif tetap kontras.
+   =================================================== */
+main button.border-indigo-500.text-indigo-400 {
+  color: var(--navy-900) !important;
+  background-color: rgba(212, 160, 23, 0.12) !important;
+  font-weight: 800 !important;
+}
+
+/* text-indigo-* dan text-white di dalam bg-indigo-500/5 cards
+   Background sudah di-remap ke gold tint → teks perlu navy untuk kontras */
+main [class*="bg-indigo-500\/5"] .text-indigo-400,
+main [class*="bg-indigo-500\/5"] .text-indigo-300,
+main [class*="bg-indigo-500\/5"] .text-white,
+main [class*="bg-indigo-500\/5"] h3,
+main [class*="bg-indigo-500\/5"] h4,
+main [class*="bg-indigo-500\/5"] p {
+  color: var(--navy-900) !important;
+}
+
+main [class*="bg-indigo-500\/10"] .text-indigo-400,
+main [class*="bg-indigo-500\/10"] .text-indigo-300 {
+  color: var(--navy-900) !important;
+}
