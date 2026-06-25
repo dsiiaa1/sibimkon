@@ -273,6 +273,9 @@ export default function ImprovePage() {
     setActionPlans(updated)
     try {
       await saveActionPlansDb(projectId, updated)
+      // Fetch ulang dari Supabase agar ID di state sinkron dengan ID di database
+      const fresh = await getActionPlans(projectId)
+      if (fresh.length > 0) setActionPlans(fresh)
     } catch (err: any) {
       console.error('[saveActionPlans]', err.message)
     }

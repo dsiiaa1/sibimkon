@@ -186,15 +186,17 @@ export default function AnalyzePage() {
   const handleApplyAiRecommendations = async () => {
     if (!aiResult) return
     try {
-      // Fetch current action plans from Supabase (sumber kebenaran)
+      // Fetch current action plans dari Supabase
       const current = await getActionPlans(projectId)
       const newActions: ActionPlan[] = aiResult.priority_recommendations.map((rec: any) => ({
-        id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'act-ai-' + Math.random().toString(36).substr(2, 9),
+        // Biarkan ID kosong/dummy — saveActionPlans akan insert tanpa id,
+        // sehingga Supabase yang generate UUID
+        id: 'new-' + Math.random().toString(36).substr(2, 9),
         project_id: projectId,
         title: rec.program,
         description: rec.description,
         methodology: rec.program,
-        dimension: 'productivity',
+        dimension: 'productivity' as const,
         kpi_name: 'Dampak Perbaikan',
         kpi_baseline: 0, kpi_target: 100, kpi_unit: '%',
         pic_name: 'Supervisor',
