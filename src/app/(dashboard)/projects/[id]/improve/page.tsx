@@ -271,7 +271,11 @@ export default function ImprovePage() {
 
   const saveActionPlans = async (updated: ActionPlan[]) => {
     setActionPlans(updated)
-    await saveActionPlansDb(projectId, updated)
+    try {
+      await saveActionPlansDb(projectId, updated)
+    } catch (err: any) {
+      console.error('[saveActionPlans]', err.message)
+    }
   }
 
   if (!project) return null
