@@ -111,13 +111,14 @@ export default function AnalyzePage() {
 
   const handleSave5Why = (
     index: number, field: 'why' | 'answer', value: string,
-    l2?: number, l3?: number, l4?: number
+    l2?: number, l3?: number, l4?: number, l5?: number
   ) => {
     const updated = [...whys]
     let node = updated[index]
     if (l2 !== undefined) node = node.children![l2]
     if (l3 !== undefined) node = node.children![l3]
     if (l4 !== undefined) node = node.children![l4]
+    if (l5 !== undefined) node = node.children![l5]
     if (node) node[field] = value
     setWhys(updated)
     saveFiveWhys(projectId, updated).catch(console.error)
@@ -128,7 +129,9 @@ export default function AnalyzePage() {
       level: 1, why: 'Mengapa masalah ini terjadi?', answer: '',
       children: [{ level: 2, why: 'Mengapa demikian?', answer: '',
         children: [{ level: 3, why: 'Mengapa demikian?', answer: '',
-          children: [{ level: 4, why: 'Mengapa demikian?', answer: '' }]
+          children: [{ level: 4, why: 'Mengapa demikian?', answer: '',
+            children: [{ level: 5, why: 'Mengapa demikian?', answer: '' }]
+          }]
         }]
       }]
     }
@@ -352,7 +355,7 @@ export default function AnalyzePage() {
                       <input type="text" value={w.answer} onChange={(e) => handleSave5Why(idx, 'answer', e.target.value)}
                         className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-250 focus:outline-none" />
                     </div>
-                    {/* Level 2-4 */}
+                    {/* Level 2-5 */}
                     {w.children?.map((c1, i1) => (
                       <div key={i1} className="pl-6 border-l border-slate-800 space-y-4">
                         <div className="space-y-2 p-4 bg-slate-950/60 border border-slate-850 rounded-2xl relative">
@@ -372,14 +375,25 @@ export default function AnalyzePage() {
                                 placeholder="Jawaban #3" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-250 focus:outline-none" />
                             </div>
                             {c2.children?.map((c3, i3) => (
-                              <div key={i3} className="pl-6 border-l border-slate-800">
+                              <div key={i3} className="pl-6 border-l border-slate-800 space-y-4">
                                 <div className="space-y-2 p-4 bg-slate-950/60 border border-slate-850 rounded-2xl relative">
                                   <span className="absolute -left-3 top-4 h-6 w-6 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-xs font-bold flex items-center justify-center text-indigo-400">4</span>
                                   <input type="text" value={c3.why} onChange={(e) => handleSave5Why(idx, 'why', e.target.value, i1, i2, i3)}
                                     placeholder="Why #4" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-350 focus:outline-none" />
                                   <input type="text" value={c3.answer} onChange={(e) => handleSave5Why(idx, 'answer', e.target.value, i1, i2, i3)}
-                                    placeholder="Jawaban #4 (Akar masalah)" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-250 focus:outline-none" />
+                                    placeholder="Jawaban #4" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-250 focus:outline-none" />
                                 </div>
+                                {c3.children?.map((c4, i4) => (
+                                  <div key={i4} className="pl-6 border-l border-slate-800">
+                                    <div className="space-y-2 p-4 bg-slate-950/60 border border-slate-850 rounded-2xl relative">
+                                      <span className="absolute -left-3 top-4 h-6 w-6 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-xs font-bold flex items-center justify-center text-emerald-400">5</span>
+                                      <input type="text" value={c4.why} onChange={(e) => handleSave5Why(idx, 'why', e.target.value, i1, i2, i3, i4)}
+                                        placeholder="Why #5" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-350 focus:outline-none" />
+                                      <input type="text" value={c4.answer} onChange={(e) => handleSave5Why(idx, 'answer', e.target.value, i1, i2, i3, i4)}
+                                        placeholder="Jawaban #5 (Akar masalah sesungguhnya)" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-250 focus:outline-none" />
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
                             ))}
                           </div>
