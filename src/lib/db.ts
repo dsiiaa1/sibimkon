@@ -350,20 +350,16 @@ export async function saveActionPlans(projectId: string, actions: ActionPlan[]):
       if (error) throw error
     }
     if (actions.length > 0) {
-      const rows = actions.map(act => {
-        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(act.id)
-        const item: any = {
-          project_id: projectId, action_title: act.title, description: act.description,
-          methodology: act.methodology, dimension: act.dimension, kpi_name: act.kpi_name,
-          kpi_baseline: act.kpi_baseline, kpi_target: act.kpi_target, kpi_unit: act.kpi_unit,
-          kpi_actual: act.kpi_actual || null, pic_name: act.pic_name,
-          start_date: act.start_date, end_date: act.end_date,
-          status: act.status, progress_percentage: act.progress_percentage
-        }
-        if (isUUID) item.id = act.id
-        return item
-      })
-      const { error } = await sb.from('improve_actions').upsert(rows)
+      const rows = actions.map(act => ({
+        id: act.id,
+        project_id: projectId, action_title: act.title, description: act.description,
+        methodology: act.methodology, dimension: act.dimension, kpi_name: act.kpi_name,
+        kpi_baseline: act.kpi_baseline, kpi_target: act.kpi_target, kpi_unit: act.kpi_unit,
+        kpi_actual: act.kpi_actual || null, pic_name: act.pic_name,
+        start_date: act.start_date, end_date: act.end_date,
+        status: act.status, progress_percentage: act.progress_percentage
+      }))
+      const { error } = await sb.from('improve_actions').upsert(rows, { onConflict: 'id' })
       if (error) throw error
     }
   } catch (err) { console.warn('[saveActionPlans] Supabase failed, mockDB only:', err) }

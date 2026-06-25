@@ -183,28 +183,32 @@ export default function AnalyzePage() {
     }
   }
 
-  const handleApplyAiRecommendations = () => {
+  const handleApplyAiRecommendations = async () => {
     if (!aiResult) return
-    const db = getMockDB()
-    const current = db.actionPlans[projectId] || []
-    const newActions: ActionPlan[] = aiResult.priority_recommendations.map((rec: any) => ({
-      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'act-ai-' + Math.random().toString(36).substr(2, 9),
-      project_id: projectId,
-      title: rec.program,
-      description: rec.description,
-      methodology: rec.program,
-      dimension: 'productivity',
-      kpi_name: 'Dampak Perbaikan',
-      kpi_baseline: 0, kpi_target: 100, kpi_unit: '%',
-      pic_name: 'Supervisor',
-      start_date: new Date().toISOString().split('T')[0],
-      end_date: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      status: 'belum_mulai' as const,
-      progress_percentage: 0,
-    }))
-    const merged = [...current, ...newActions]
-    saveActionPlans(projectId, merged).catch(console.error)
-    alert('Rekomendasi AI berhasil diterapkan ke Action Plan!')
+    try {
+      // Fetch current action plans from Supabase (sumber kebenaran)
+      const current = await getActionPlans(projectId)
+      const newActions: ActionPlan[] = aiResult.priority_recommendations.map((rec: any) => ({
+        id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'act-ai-' + Math.random().toString(36).substr(2, 9),
+        project_id: projectId,
+        title: rec.program,
+        description: rec.description,
+        methodology: rec.program,
+        dimension: 'productivity',
+        kpi_name: 'Dampak Perbaikan',
+        kpi_baseline: 0, kpi_target: 100, kpi_unit: '%',
+        pic_name: 'Supervisor',
+        start_date: new Date().toISOString().split('T')[0],
+        end_date: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        status: 'belum_mulai' as const,
+        progress_percentage: 0,
+      }))
+      const merged = [...current, ...newActions]
+      await saveActionPlans(projectId, merged)
+      alert('Rekomendasi AI berhasil diterapkan ke Action Plan!')
+    } catch (err: any) {
+      alert(`Gagal menerapkan rekomendasi: ${err.message}`)
+    }
   }
 
   if (!project) return null
