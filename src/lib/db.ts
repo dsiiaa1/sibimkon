@@ -236,10 +236,9 @@ export async function saveVom(projectId: string, vomList: any[]): Promise<void> 
     const { error: delErr } = await sb.from('measure_vom').delete().eq('project_id', projectId)
     if (delErr) throw delErr
     if (vomList.length > 0) {
-      const rows = vomList.map((v) => {
-        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v.id)
-        return { id: isUUID ? v.id : undefined, project_id: projectId, dimension: v.dimension, problem: v.problem, impact: v.impact, priority: v.priority }
-      })
+      const rows = vomList.map((v) => ({
+        project_id: projectId, dimension: v.dimension, problem: v.problem, impact: v.impact, priority: v.priority
+      }))
       const { error: insErr } = await sb.from('measure_vom').insert(rows)
       if (insErr) throw insErr
     }
@@ -492,12 +491,15 @@ export async function saveEvidenceRecord(projectId: string, record: Omit<Evidenc
   try {
     const sb = getSupabase()
     if (!sb) return
-    const { error } = await sb.from('evidence_files').insert({
-      project_id: projectId, action_plan_id: record.action_plan_id, action_title: record.action_title,
-      file_name: record.file_name, file_url: record.file_url,
+    const { error } = await sb.from('action_evidence').insert({
+      project_id: projectId, action_id: record.action_plan_id,
+      evidence_type: 'document',
+      title: record.action_title,
+      description: record.file_name,
+      file_url: record.file_url,
+      file_name: record.file_name,
       kpi_actual_value: record.kpi_actual_value, kpi_unit: record.kpi_unit,
-      uploaded_by_id: record.uploaded_by_id || null, uploaded_by_name: record.uploaded_by_name,
-      uploaded_by_role: record.uploaded_by_role, uploaded_at: new Date().toISOString(),
+      uploaded_by: record.uploaded_by_id || null,
     })
     if (error) console.warn('[saveEvidenceRecord] Supabase error (non-critical):', error.message)
   } catch (err) { console.warn('[saveEvidenceRecord] failed, localStorage only:', err) }
@@ -507,16 +509,16 @@ export async function getEvidenceRecords(projectId: string, actionPlanId?: strin
   try {
     const sb = getSupabase()
     if (!sb) throw new Error('No Supabase client')
-    let q = sb.from('evidence_files').select('*').eq('project_id', projectId).order('uploaded_at', { ascending: false })
-    if (actionPlanId) q = q.eq('action_plan_id', actionPlanId)
+    let q = sb.from('action_evidence').select('*').eq('project_id', projectId).order('created_at', { ascending: false })
+    if (actionPlanId) q = q.eq('action_id', actionPlanId)
     const { data, error } = await q
     if (error) throw error
     return (data || []).map((d: any) => ({
-      id: d.id, action_plan_id: d.action_plan_id, action_title: d.action_title,
+      id: d.id, action_plan_id: d.action_id, action_title: d.title,
       file_name: d.file_name, file_url: d.file_url, kpi_actual_value: d.kpi_actual_value,
-      kpi_unit: d.kpi_unit, uploaded_by_id: d.uploaded_by_id, uploaded_by_name: d.uploaded_by_name,
-      uploaded_by_role: d.uploaded_by_role, uploaded_at: d.uploaded_at,
-    }))
+      kpi_unit: d.kpi_unit, uploaded_by_id: d.uploaded_by,
+      uploaded_at: d.created_at,
+    } as EvidenceRecord))
   } catch {
     if (typeof window === 'undefined') return []
     const all: EvidenceRecord[] = JSON.parse(localStorage.getItem(`sibimkon_evidence_${projectId}`) || '[]')
