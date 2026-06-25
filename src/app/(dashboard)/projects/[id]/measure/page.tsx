@@ -7,7 +7,6 @@ import { Project, Assessment } from '@/lib/mockData'
 import {
   TrendingUp,
   Save,
-  HelpCircle,
   MessageSquareQuote,
   Plus,
   Trash2,
@@ -447,9 +446,21 @@ export default function MeasurePage() {
                       </button>
                     ))}
                   </div>
-                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                    <HelpCircle className="h-3 w-3" />
-                    <span>1 = Sangat Buruk · 5 = Sangat Baik</span>
+                  {/* Keterangan skala */}
+                  <div className="grid grid-cols-5 gap-2 pt-1">
+                    {[
+                      { val: 1, label: 'Sangat Buruk' },
+                      { val: 2, label: 'Buruk' },
+                      { val: 3, label: 'Cukup' },
+                      { val: 4, label: 'Baik' },
+                      { val: 5, label: 'Sangat Baik' },
+                    ].map(({ val, label }) => (
+                      <div key={val} className="text-center">
+                        <span className={`text-[10px] leading-tight block ${q.score === val ? 'text-indigo-400 font-bold' : 'text-slate-500'}`}>
+                          {label}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               ))}
