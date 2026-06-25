@@ -385,7 +385,7 @@ export default function MeasurePage() {
         {/* Left: Questionnaire */}
         <div className="lg:col-span-7 space-y-6">
           {/* Dimension Tabs */}
-          <div className="flex flex-wrap gap-1.5 p-1 bg-slate-950/60 rounded-xl border border-slate-850">
+          <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-950/60 rounded-xl border border-slate-850">
             {(['productivity', 'quality', 'cost', 'delivery', 'safety', 'morale'] as const).map((dim) => {
               const labelInfo = PQCDSM_LABELS[dim] || { label: dim, icon: '📝' }
               const active = activeDimension === dim
@@ -394,7 +394,7 @@ export default function MeasurePage() {
                 <button
                   key={dim}
                   onClick={() => setActiveDimension(dim)}
-                  className={`flex-1 min-w-[100px] flex items-center justify-between gap-2 px-3 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                  className={`flex items-center justify-between gap-2 px-3 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
                     active
                       ? 'bg-slate-905 border border-slate-800 text-indigo-400 font-bold'
                       : 'text-slate-400 hover:text-slate-200'
