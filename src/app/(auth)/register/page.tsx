@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Mail, Lock, Eye, EyeOff, User, Building2, Phone, Briefcase, ArrowLeft, ArrowRight, CheckCircle2 } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, User, Building2, Phone, ArrowLeft, ArrowRight, CheckCircle2 } from 'lucide-react'
 
 export default function RegisterPage() {
   // Navigation step state
@@ -15,13 +15,11 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [role, setRole] = useState<'perusahaan' | 'konsultan'>('perusahaan')
+  const [role] = useState<'perusahaan'>('perusahaan')
   
   // Step 2 Fields
   const [companyName, setCompanyName] = useState('')
   const [businessField, setBusinessField] = useState('Manufaktur')
-  const [specialization, setSpecialization] = useState('')
-  const [organization, setOrganization] = useState('')
 
   // Step 3 Fields
   const [phone, setPhone] = useState('')
@@ -56,10 +54,7 @@ export default function RegisterPage() {
     isConfirmPasswordValid
 
   // Validation helpers for Step 2
-  const isStep2Valid = 
-    role === 'perusahaan' 
-      ? companyName.trim().length >= 3 
-      : (organization.trim().length >= 3 || specialization.trim().length >= 2)
+  const isStep2Valid = companyName.trim().length >= 3
 
   // Validation helpers for Step 3
   const isStep3Valid = isPhoneValid && picPosition.trim().length >= 2
@@ -90,7 +85,7 @@ export default function RegisterPage() {
     setError(null)
     setSuccess(null)
 
-    const finalOrganization = role === 'perusahaan' ? companyName : (organization || 'Konsultan BIMKON')
+    const finalOrganization = companyName
 
     try {
       const supabase = createClient()
@@ -101,7 +96,7 @@ export default function RegisterPage() {
           data: {
             full_name: name,
             role: role,
-            company_name: role === 'perusahaan' ? companyName : undefined,
+            company_name: companyName,
           },
         },
       })
@@ -201,7 +196,7 @@ export default function RegisterPage() {
             <div className="space-y-3">
               {[
                 { stepNum: 1, title: 'Informasi Akun', desc: 'Detail login email dan password aman.' },
-                { stepNum: 2, title: role === 'perusahaan' ? 'Profil Perusahaan' : 'Informasi Konsultan', desc: 'Identitas instansi atau bidang keahlian.' },
+                { stepNum: 2, title: 'Profil Perusahaan', desc: 'Identitas instansi atau bidang usaha.' },
                 { stepNum: 3, title: 'Kontak & PIC', desc: 'Nomor WhatsApp aktif untuk koordinasi bimbingan.' }
               ].map((item) => (
                 <div key={item.stepNum} className="flex gap-3.5 items-start">
@@ -254,7 +249,7 @@ export default function RegisterPage() {
               Daftar SIBIMKON
             </h2>
             <p className="mt-1 text-center text-xs text-slate-500">
-              Registrasi Akun Baru Konsultan atau Klien Perusahaan
+              Registrasi Akun Baru Klien Perusahaan
             </p>
           </div>
 
@@ -317,37 +312,6 @@ export default function RegisterPage() {
               {step === 1 && (
                 <div className="space-y-4 animate-fade-in">
                   
-                  {/* Role tab switcher inside step 1 */}
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
-                      Daftar Sebagai
-                    </label>
-                    <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-100 rounded-xl">
-                      <button
-                        type="button"
-                        onClick={() => setRole('perusahaan')}
-                        className={`py-2 rounded-lg text-xs font-bold transition-all ${
-                          role === 'perusahaan'
-                            ? 'bg-[#0a1628] text-white shadow'
-                            : 'text-slate-600 hover:text-slate-800'
-                        }`}
-                      >
-                        🏭 Perusahaan
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setRole('konsultan')}
-                        className={`py-2 rounded-lg text-xs font-bold transition-all ${
-                          role === 'konsultan'
-                            ? 'bg-[#0a1628] text-white shadow'
-                            : 'text-slate-600 hover:text-slate-800'
-                        }`}
-                      >
-                        👤 Konsultan
-                      </button>
-                    </div>
-                  </div>
-
                   {/* Full Name */}
                   <div>
                     <label htmlFor="name" className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
@@ -478,102 +442,50 @@ export default function RegisterPage() {
               {/* STEP 2: BUSINESS/ENTITY INFO */}
               {step === 2 && (
                 <div className="space-y-4 animate-fade-in">
-                  {role === 'perusahaan' ? (
-                    <>
-                      {/* Company Name */}
-                      <div>
-                        <label htmlFor="companyName" className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
-                          Nama Perusahaan
-                        </label>
-                        <div className="relative">
-                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                            <Building2 className="h-4 w-4 text-slate-400" />
-                          </div>
-                          <input
-                            id="companyName"
-                            name="companyName"
-                            type="text"
-                            required
-                            value={companyName}
-                            onChange={(e) => setCompanyName(e.target.value)}
-                            placeholder="PT Perusahaan Contoh"
-                            className="block w-full rounded-xl pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 text-sm focus:bg-white transition-all outline-none"
-                            style={{ backgroundColor: '#f8fafc', color: '#0f172a', borderColor: '#cbd5e1' }}
-                          />
-                        </div>
+                  {/* Company Name */}
+                  <div>
+                    <label htmlFor="companyName" className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+                      Nama Perusahaan
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                        <Building2 className="h-4 w-4 text-slate-400" />
                       </div>
+                      <input
+                        id="companyName"
+                        name="companyName"
+                        type="text"
+                        required
+                        value={companyName}
+                        onChange={(e) => setCompanyName(e.target.value)}
+                        placeholder="PT Perusahaan Contoh"
+                        className="block w-full rounded-xl pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 text-sm focus:bg-white transition-all outline-none"
+                        style={{ backgroundColor: '#f8fafc', color: '#0f172a', borderColor: '#cbd5e1' }}
+                      />
+                    </div>
+                  </div>
 
-                      {/* Business Field dropdown */}
-                      <div>
-                        <label htmlFor="businessField" className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
-                          Bidang Usaha
-                        </label>
-                        <select
-                          id="businessField"
-                          name="businessField"
-                          value={businessField}
-                          onChange={(e) => setBusinessField(e.target.value)}
-                          className="block w-full rounded-xl px-4 py-3 bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:bg-white transition-all outline-none"
-                          style={{ backgroundColor: '#f8fafc', color: '#0f172a', borderColor: '#cbd5e1' }}
-                        >
-                          <option value="Manufaktur">🏭 Manufaktur / Pabrik</option>
-                          <option value="Jasa">💼 Jasa & Layanan</option>
-                          <option value="Retail">🛒 Perdagangan & Retail</option>
-                          <option value="Logistik">🚚 Logistik & Transportasi</option>
-                          <option value="Konstruksi">🏗️ Konstruksi & Properti</option>
-                          <option value="Lainnya">🧩 Bidang Usaha Lainnya</option>
-                        </select>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      {/* Consultant Organization */}
-                      <div>
-                        <label htmlFor="organization" className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
-                          Nama Lembaga / Instansi
-                        </label>
-                        <div className="relative">
-                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                            <Building2 className="h-4 w-4 text-slate-400" />
-                          </div>
-                          <input
-                            id="organization"
-                            name="organization"
-                            type="text"
-                            required
-                            value={organization}
-                            onChange={(e) => setOrganization(e.target.value)}
-                            placeholder="Nama lembaga / organisasi konsultan"
-                            className="block w-full rounded-xl pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 text-sm focus:bg-white transition-all outline-none"
-                            style={{ backgroundColor: '#f8fafc', color: '#0f172a', borderColor: '#cbd5e1' }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Consultant Specialty */}
-                      <div>
-                        <label htmlFor="specialization" className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
-                          Spesialisasi Keahlian
-                        </label>
-                        <div className="relative">
-                          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                            <Briefcase className="h-4 w-4 text-slate-400" />
-                          </div>
-                          <input
-                            id="specialization"
-                            name="specialization"
-                            type="text"
-                            required
-                            value={specialization}
-                            onChange={(e) => setSpecialization(e.target.value)}
-                            placeholder="Lean, Kaizen, Six Sigma, K3, dll"
-                            className="block w-full rounded-xl pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 text-sm focus:bg-white transition-all outline-none"
-                            style={{ backgroundColor: '#f8fafc', color: '#0f172a', borderColor: '#cbd5e1' }}
-                          />
-                        </div>
-                      </div>
-                    </>
-                  )}
+                  {/* Business Field dropdown */}
+                  <div>
+                    <label htmlFor="businessField" className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+                      Bidang Usaha
+                    </label>
+                    <select
+                      id="businessField"
+                      name="businessField"
+                      value={businessField}
+                      onChange={(e) => setBusinessField(e.target.value)}
+                      className="block w-full rounded-xl px-4 py-3 bg-slate-50 border border-slate-200 text-slate-900 text-sm focus:bg-white transition-all outline-none"
+                      style={{ backgroundColor: '#f8fafc', color: '#0f172a', borderColor: '#cbd5e1' }}
+                    >
+                      <option value="Manufaktur">🏭 Manufaktur / Pabrik</option>
+                      <option value="Jasa">💼 Jasa & Layanan</option>
+                      <option value="Retail">🛒 Perdagangan & Retail</option>
+                      <option value="Logistik">🚚 Logistik & Transportasi</option>
+                      <option value="Konstruksi">🏗️ Konstruksi & Properti</option>
+                      <option value="Lainnya">🧩 Bidang Usaha Lainnya</option>
+                    </select>
+                  </div>
                 </div>
               )}
 
@@ -619,7 +531,7 @@ export default function RegisterPage() {
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                        <Briefcase className="h-4 w-4 text-slate-400" />
+                        <User className="h-4 w-4 text-slate-400" />
                       </div>
                       <input
                         id="picPosition"
