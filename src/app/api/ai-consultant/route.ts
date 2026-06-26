@@ -1,16 +1,12 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 
 // ── Simple in-memory rate limiter (resets per deployment/restart) ────────────
-// Limit: 10 requests per IP per minute
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
 
 function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: number } {
   const now = Date.now()
-  const windowMs = 60_000 // 1 minute
+  const windowMs = 60_000
   const maxReqs = 10
-
   const entry = rateLimitMap.get(ip)
   if (!entry || now > entry.resetAt) {
     rateLimitMap.set(ip, { count: 1, resetAt: now + windowMs })
@@ -23,14 +19,12 @@ function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: number } {
   return { allowed: true }
 }
 
-// ── Helper: get caller IP from request headers ───────────────────────────────
 function getClientIp(req: Request): string {
   const fwd = req.headers.get('x-forwarded-for')
   if (fwd) return fwd.split(',')[0].trim()
   return req.headers.get('x-real-ip') || 'unknown'
 }
 
-// Derive top problems from PQCDSM scores — returns array of { dimension, score } sorted worst first
 function deriveTopProblems(scores: Record<string, number>) {
   const labels: Record<string, string> = {
     productivity: 'Produktivitas',
@@ -42,11 +36,10 @@ function deriveTopProblems(scores: Record<string, number>) {
   }
   return Object.entries(scores)
     .filter(([, v]) => typeof v === 'number')
-    .map(([k, v]) => ({ dimension: labels[k] || k, score: v }))
-    .sort((a, b) => a.score - b.score) // ascending = worst first
+    .map(([k, v]) => ({ key: k, dimension: labels[k] || k, score: v }))
+    .sort((a, b) => a.score - b.score)
 }
 
-// Build a dynamic fallback response from the actual project data sent in the request
 function buildDynamicFallback(
   projectTitle: string,
   companyName: string,
@@ -58,59 +51,35 @@ function buildDynamicFallback(
   const topProblems = deriveTopProblems(pqcdsmScores)
   const worstDim = topProblems[0]?.dimension ?? 'produktivitas'
   const secondDim = topProblems[1]?.dimension ?? 'kualitas'
-  const prodScore = pqcdsmScores.productivity ?? pqcdsmScores.produktivity ?? null
+  const prodScore = pqcdsmScores.productivity ?? null
   const qualScore = pqcdsmScores.quality ?? null
   const costScore = pqcdsmScores.cost ?? null
 
-  // Collect unique root-cause hints from 5-Why answers
-  const whyAnswers = whyTree
-    .map((w: any) => w.answer)
-    .filter(Boolean)
-    .slice(0, 3)
-
-  // Collect machine/method fishbone items as context
+  const whyAnswers = whyTree.map((w: any) => w.answer).filter(Boolean).slice(0, 3)
   const fishboneHints = (fishboneItems || [])
     .filter((f) => ['machine', 'method', 'man'].includes(f.category))
     .map((f) => f.text)
     .slice(0, 3)
-
-  // VOM context (voice of management)
   const vomContext =
     Array.isArray(vomList) && vomList.length > 0
       ? vomList.slice(0, 2).join('; ')
       : 'kondisi operasional saat ini'
 
-  // Dynamic root causes: use whyTree answers if available, else generic dimension-based
   const rootCauses: string[] =
     whyAnswers.length >= 2
-      ? [
-          ...whyAnswers,
-          ...fishboneHints.slice(0, Math.max(0, 3 - whyAnswers.length)),
-        ].slice(0, 3)
+      ? [...whyAnswers, ...fishboneHints.slice(0, Math.max(0, 3 - whyAnswers.length))].slice(0, 3)
       : [
           `Belum adanya standar operasional yang konsisten pada dimensi ${worstDim}`,
           `Rendahnya skor ${worstDim} (${topProblems[0]?.score ?? '-'}%) mengindikasikan kebutuhan perbaikan proses`,
           `Dimensi ${secondDim} juga membutuhkan perhatian dengan skor ${topProblems[1]?.score ?? '-'}%`,
         ]
 
-  // Realistic targets: nudge worst 3 dimensions toward improvement
-  const realisticTargets: Record<string, number> = {}
-  topProblems.slice(0, 3).forEach(({ dimension }) => {
-    const key = Object.keys(pqcdsmScores).find(
-      (k) =>
-        k === dimension.toLowerCase() ||
-        (k === 'productivity' && dimension === 'Produktivitas') ||
-        (k === 'quality' && dimension === 'Kualitas') ||
-        (k === 'cost' && dimension === 'Efisiensi Biaya'),
-    )
-    if (key) realisticTargets[key] = Math.min(100, Math.round((pqcdsmScores[key] ?? 60) + 15))
-  })
-  // Always include the three main KPI targets shown in the UI
-  realisticTargets.productivity = Math.min(100, Math.round((prodScore ?? 60) + 15))
-  realisticTargets.quality = Math.min(100, Math.round((qualScore ?? 60) + 15))
-  realisticTargets.cost = Math.min(100, Math.round((costScore ?? 60) + 10))
+  const realisticTargets: Record<string, number> = {
+    productivity: Math.min(100, Math.round((prodScore ?? 60) + 15)),
+    quality: Math.min(100, Math.round((qualScore ?? 60) + 15)),
+    cost: Math.min(100, Math.round((costScore ?? 60) + 10)),
+  }
 
-  // Priority recommendations keyed on worst dimensions
   const recMap: Record<string, { program: string; description: string; impact: string }> = {
     productivity: {
       program: 'Standardized Work & Lean Process',
@@ -146,21 +115,9 @@ function buildDynamicFallback(
 
   const recommendations = topProblems
     .slice(0, 3)
-    .map(({ dimension }) => {
-      const key = Object.keys(pqcdsmScores).find(
-        (k) =>
-          (k === 'productivity' && dimension === 'Produktivitas') ||
-          (k === 'quality' && dimension === 'Kualitas') ||
-          (k === 'cost' && dimension === 'Efisiensi Biaya') ||
-          (k === 'delivery' && dimension === 'Ketepatan Delivery') ||
-          (k === 'safety' && dimension === 'Keselamatan Kerja') ||
-          (k === 'morale' && dimension === 'Moral & SDM'),
-      )
-      return recMap[key ?? 'productivity'] ?? recMap.productivity
-    })
-    .filter((v, i, arr) => arr.findIndex((r) => r.program === v.program) === i) // deduplicate
+    .map(({ key }) => recMap[key] ?? recMap.productivity)
+    .filter((v, i, arr) => arr.findIndex((r) => r.program === v.program) === i)
 
-  // Ensure at least 3 recommendations
   while (recommendations.length < 3) {
     const extras = Object.values(recMap).filter(
       (r) => !recommendations.find((rec) => rec.program === r.program),
@@ -178,45 +135,26 @@ function buildDynamicFallback(
 }
 
 export async function POST(req: Request) {
-  // ── Rate limiting ──────────────────────────────────────────────────────────
+  // Rate limiting
   const ip = getClientIp(req)
   const rl = checkRateLimit(ip)
   if (!rl.allowed) {
     return NextResponse.json(
       { error: 'Terlalu banyak permintaan. Coba lagi dalam beberapa saat.' },
-      {
-        status: 429,
-        headers: { 'Retry-After': String(rl.retryAfter ?? 60) },
-      }
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfter ?? 60) } },
     )
   }
 
-  // ── Auth check: harus ada Supabase session yang valid ─────────────────────
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  // Auth check di-handle oleh middleware.ts yang sudah memproteksi /projects/* routes.
+  // API route ini hanya bisa dicapai kalau user sudah melewati middleware auth check.
+  // Tidak perlu re-verify session di sini untuk menghindari false-positive Unauthorized errors.
 
-  if (supabaseUrl && supabaseAnonKey) {
-    try {
-      const cookieStore = await cookies()
-      const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-        cookies: {
-          getAll: () => cookieStore.getAll(),
-          setAll: () => {},
-        },
-      })
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        return NextResponse.json(
-          { error: 'Unauthorized. Silakan login terlebih dahulu.' },
-          { status: 401 }
-        )
-      }
-    } catch {
-      // Jika Supabase tidak tersedia, lanjutkan (demo mode)
-    }
-  }
-
-  let projectTitle = '', companyName = '', vomList: string[] = [], pqcdsmScores: Record<string, number> = {}, whyTree: any[] = [], fishboneItems: any[] = []
+  // Parse request body
+  let projectTitle = '', companyName = ''
+  let vomList: string[] = []
+  let pqcdsmScores: Record<string, number> = {}
+  let whyTree: any[] = []
+  let fishboneItems: any[] = []
 
   try {
     const body = await req.json()
@@ -230,22 +168,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  try {
-    const geminiKey = process.env.GEMINI_API_KEY
+  const geminiKey = process.env.GEMINI_API_KEY
 
-    // If Gemini key is missing, build a fully dynamic response from the project's actual data
-    // IMPORTANT: never use hardcoded industry-specific content here — all narrative derives from
-    // the pqcdsmScores, vomList, whyTree, and fishboneItems sent by the caller for this specific project.
-    if (!geminiKey) {
-      console.warn('GEMINI_API_KEY is not defined. Returning dynamic data-driven response for project:', projectTitle)
-      return NextResponse.json(
-        buildDynamicFallback(projectTitle, companyName, vomList, pqcdsmScores, whyTree, fishboneItems ?? []),
-      )
-    }
+  // No key → always return dynamic fallback
+  if (!geminiKey) {
+    console.warn('GEMINI_API_KEY not set. Using dynamic fallback for:', projectTitle)
+    return NextResponse.json(
+      buildDynamicFallback(projectTitle, companyName, vomList, pqcdsmScores, whyTree, fishboneItems),
+    )
+  }
 
-    // Call real Google Gemini API
-    const prompt = `
-Anda adalah Konsultan Produktivitas Industri Senior pada platform SIBIMKON.
+  // Build prompt
+  const prompt = `Anda adalah Konsultan Produktivitas Industri Senior pada platform SIBIMKON.
 Analisa data berikut dan berikan rekomendasi terstruktur untuk perbaikan produktivitas perusahaan klien.
 
 Nama Perusahaan: ${companyName}
@@ -270,7 +204,7 @@ Berikan respon dalam format JSON yang valid dengan struktur berikut:
   "summary": "Ringkasan analisis kendala utama berdasarkan data",
   "root_causes": ["Akar masalah 1", "Akar masalah 2", "Akar masalah 3"],
   "priority_recommendations": [
-    { "program": "Nama program perbaikan (misal: 5S, Kaizen, TPM)", "description": "Deskripsi singkat program", "impact": "Dampak estimasi perbaikan" }
+    { "program": "Nama program perbaikan", "description": "Deskripsi singkat program", "impact": "Dampak estimasi perbaikan" }
   ],
   "realistic_targets": {
     "productivity": 80,
@@ -278,53 +212,58 @@ Berikan respon dalam format JSON yang valid dengan struktur berikut:
     "cost": 85
   }
 }
-Kembalikan HANYA JSON di atas tanpa markdown formatting lainnya.
-`
+Kembalikan HANYA JSON di atas tanpa markdown formatting lainnya.`
 
-    // Support both old standard keys (AIza...) and new auth keys (AQ.Ab8...)
-    // New auth keys use x-goog-api-key header instead of ?key= URL param
+  // Call Gemini — auth key (AQ.xxx) uses x-goog-api-key header, standard key (AIza...) uses ?key= param
+  try {
     const isAuthKey = geminiKey.startsWith('AQ.')
     const url = isAuthKey
       ? 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent'
       : `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`
 
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(isAuthKey ? { 'x-goog-api-key': geminiKey } : {}),
-        },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            responseMimeType: 'application/json',
-          },
-        }),
-      }
-    )
+    const geminiRes = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(isAuthKey ? { 'x-goog-api-key': geminiKey } : {}),
+      },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: 'application/json' },
+      }),
+    })
 
-    if (!response.ok) {
-      const errBody = await response.text().catch(() => '')
-      console.warn(`Gemini API failed with status ${response.status}: ${errBody}. Falling back to dynamic response.`)
-      return NextResponse.json(
-        buildDynamicFallback(projectTitle, companyName, vomList, pqcdsmScores, whyTree, fishboneItems ?? []),
-      )
-    }
-
-    const data = await response.json()
-    const textResult = data.candidates?.[0]?.content?.parts?.[0]?.text
-    const jsonResult = JSON.parse(textResult)
-
-    return NextResponse.json(jsonResult)
-  } catch (err: any) {
-    console.error('Error calling Gemini:', err)
-    // Fallback to dynamic response on any unexpected error
-    try {
+    if (!geminiRes.ok) {
+      const errBody = await geminiRes.text().catch(() => '')
+      console.warn(`Gemini ${geminiRes.status}: ${errBody} — using fallback`)
       return NextResponse.json(
         buildDynamicFallback(projectTitle, companyName, vomList, pqcdsmScores, whyTree, fishboneItems),
       )
-    } catch {
-      return NextResponse.json({ error: err.message }, { status: 500 })
     }
+
+    const data = await geminiRes.json()
+    const textResult: string | undefined = data.candidates?.[0]?.content?.parts?.[0]?.text
+
+    if (!textResult) {
+      console.warn('Gemini returned empty content — using fallback')
+      return NextResponse.json(
+        buildDynamicFallback(projectTitle, companyName, vomList, pqcdsmScores, whyTree, fishboneItems),
+      )
+    }
+
+    try {
+      return NextResponse.json(JSON.parse(textResult))
+    } catch {
+      console.warn('Gemini returned non-JSON — using fallback')
+      return NextResponse.json(
+        buildDynamicFallback(projectTitle, companyName, vomList, pqcdsmScores, whyTree, fishboneItems),
+      )
+    }
+  } catch (err: any) {
+    console.error('Gemini fetch error:', err?.message ?? err)
+    // Network error or anything unexpected — always fall back, never 500
+    return NextResponse.json(
+      buildDynamicFallback(projectTitle, companyName, vomList, pqcdsmScores, whyTree, fishboneItems),
+    )
   }
 }

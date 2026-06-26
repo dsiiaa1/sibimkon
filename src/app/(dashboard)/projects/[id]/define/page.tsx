@@ -81,7 +81,7 @@ export default function DefinePage() {
     if (!company) return
     setSaving(true)
     try {
-      // Simpan ke Supabase via updateCompany, fallback ke mockDB otomatis di dalam fungsi
+      // updateCompany sudah sync mockDB + Supabase secara otomatis di dalam db.ts
       await updateCompany(company.id, {
         name: compName,
         address: compAddress,
@@ -93,19 +93,6 @@ export default function DefinePage() {
         pkb_status: compPkb,
         certifications: compCertifications,
       })
-      // Sync mockDB agar nama company tampil benar di sidebar
-      const { getMockDB, updateMockDB } = await import('@/lib/mockData')
-      const db = getMockDB()
-      const updatedCompanies = db.companies.map((c: Company) =>
-        c.id === company.id
-          ? { ...c, name: compName, address: compAddress, total_employees: compEmployees, business_field: compField, certifications: compCertifications }
-          : c
-      )
-      updateMockDB('companies', updatedCompanies)
-      const updatedProjects = db.projects.map((p: Project) =>
-        p.company_id === company.id ? { ...p, company_name: compName } : p
-      )
-      updateMockDB('projects', updatedProjects)
       showSave('Profil perusahaan berhasil disimpan!')
     } finally {
       setSaving(false)
@@ -132,6 +119,19 @@ export default function DefinePage() {
 
   const handleAdvanceToMeasure = async () => {
     if (!project) return
+
+    // Validasi kelengkapan data sebelum advance
+    if (!charterProblem.trim() || !charterObjectives.trim() || !charterTarget.trim()) {
+      alert('Harap isi Project Charter terlebih dahulu (Problem Statement, Tujuan, dan Target Produktivitas wajib diisi) sebelum melanjutkan ke fase MEASURE.')
+      setActiveTab('charter')
+      return
+    }
+    if (!compName.trim() || !compField.trim() || !compAddress.trim()) {
+      alert('Harap lengkapi Profil Perusahaan (Nama, Bidang Usaha, dan Alamat wajib diisi) sebelum melanjutkan ke fase MEASURE.')
+      setActiveTab('profile')
+      return
+    }
+
     if (project.status !== 'define') {
       router.push(`/projects/${projectId}/measure`)
       return
@@ -232,7 +232,10 @@ export default function DefinePage() {
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Nama Perusahaan</label>
                 <input type="text" value={compName} onChange={(e) => setCompName(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm" />
+                  disabled
+                  title="Nama perusahaan tidak dapat diubah di sini. Edit melalui halaman Profil."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-500 focus:outline-none text-sm cursor-not-allowed opacity-70" />
+                <p className="text-[10px] text-slate-600 mt-1">Untuk mengubah nama, buka halaman <a href="/profile" className="text-indigo-400 hover:underline">Profil</a>.</p>
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Bidang Usaha</label>

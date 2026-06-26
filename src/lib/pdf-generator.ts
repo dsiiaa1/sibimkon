@@ -2,6 +2,21 @@
 
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import QRCode from 'qrcode'
+
+// ── Helper: generate QR code sebagai data URL (PNG base64) ──
+async function generateQRDataURL(text: string): Promise<string | null> {
+  try {
+    return await QRCode.toDataURL(text, {
+      width: 200,
+      margin: 1,
+      color: { dark: '#0A1628', light: '#FFFFFF' },
+      errorCorrectionLevel: 'M',
+    })
+  } catch {
+    return null
+  }
+}
 
 interface ProjectData {
   project_code: string
@@ -35,24 +50,27 @@ interface PQCDSMScore {
 }
 
 // ============================================================
+// Konstanta warna tema
+// ============================================================
+const C_NAVY: [number, number, number]  = [10, 22, 40]
+const C_GOLD: [number, number, number]  = [212, 160, 23]
+const C_LIGHT: [number, number, number] = [180, 180, 180]
+const C_WHITE: [number, number, number] = [255, 255, 255]
+const C_TEXT: [number, number, number]  = [50, 50, 60]
+const C_MUTED: [number, number, number] = [130, 130, 140]
+const C_ROW_ALT: [number, number, number] = [245, 247, 252]
+
+// ============================================================
 // Font Embedding — Noto Sans untuk dukungan karakter Indonesia
 // ============================================================
-
-// Cache agar tidak fetch ulang setiap generate PDF
 let _notoSansRegularB64: string | null = null
 let _notoSansBoldB64: string | null = null
 
-/**
- * Fetch font TTF dari Google Fonts CDN dan konversi ke base64.
- * Hasil di-cache in-memory selama sesi browser.
- * Jika gagal (offline/CORS), kembalikan null → fallback ke helvetica.
- */
 async function fetchFontAsBase64(url: string): Promise<string | null> {
   try {
     const res = await fetch(url)
     if (!res.ok) return null
     const buffer = await res.arrayBuffer()
-    // Konversi ArrayBuffer → base64 tanpa library tambahan
     const bytes = new Uint8Array(buffer)
     let binary = ''
     for (let i = 0; i < bytes.byteLength; i++) {
@@ -64,38 +82,21 @@ async function fetchFontAsBase64(url: string): Promise<string | null> {
   }
 }
 
-/**
- * Load Noto Sans Regular + Bold dan embed ke jsPDF instance.
- * Jika font tidak bisa di-load, fungsi silent-fail (tetap pakai helvetica).
- */
 async function embedNotoSans(doc: jsPDF): Promise<boolean> {
-  // Google Fonts static TTF URLs (ukuran kecil, Latin subset)
   const REGULAR_TTF =
     'https://fonts.gstatic.com/s/notosans/v36/o-0IIpQlx3QUlC5A4PNr5TRASf6M7bE.ttf'
   const BOLD_TTF =
     'https://fonts.gstatic.com/s/notosans/v36/o-0NIpQlx3QUlC5A4PNjXhFVadyBx2pqPA.ttf'
-
   try {
-    // Load regular font jika belum di-cache
-    if (!_notoSansRegularB64) {
-      _notoSansRegularB64 = await fetchFontAsBase64(REGULAR_TTF)
-    }
-    // Load bold font jika belum di-cache
-    if (!_notoSansBoldB64) {
-      _notoSansBoldB64 = await fetchFontAsBase64(BOLD_TTF)
-    }
-
-    if (!_notoSansRegularB64) return false // Tidak bisa load — pakai fallback
-
-    // Inject ke VFS jsPDF
+    if (!_notoSansRegularB64) _notoSansRegularB64 = await fetchFontAsBase64(REGULAR_TTF)
+    if (!_notoSansBoldB64)    _notoSansBoldB64    = await fetchFontAsBase64(BOLD_TTF)
+    if (!_notoSansRegularB64) return false
     doc.addFileToVFS('NotoSans-Regular.ttf', _notoSansRegularB64)
     doc.addFont('NotoSans-Regular.ttf', 'NotoSans', 'normal')
-
     if (_notoSansBoldB64) {
       doc.addFileToVFS('NotoSans-Bold.ttf', _notoSansBoldB64)
       doc.addFont('NotoSans-Bold.ttf', 'NotoSans', 'bold')
     }
-
     return true
   } catch {
     return false
@@ -103,7 +104,7 @@ async function embedNotoSans(doc: jsPDF): Promise<boolean> {
 }
 
 // ============================================================
-// Helper: Format label
+// Helper: label mapping
 // ============================================================
 function getDimLabel(dim: string): string {
   const map: Record<string, string> = {
@@ -127,8 +128,25 @@ function getStatusLabel(status: string): string {
   return map[status] || status
 }
 
+function getCategoryLabel(score: number): string {
+  if (score >= 70) return 'BAIK'
+  if (score >= 50) return 'CUKUP'
+  return 'PERLU PERBAIKAN'
+}
+
+function formatDate(dateStr?: string): string {
+  if (!dateStr) return '-'
+  try {
+    return new Date(dateStr).toLocaleDateString('id-ID', {
+      day: 'numeric', month: 'long', year: 'numeric',
+    })
+  } catch {
+    return dateStr
+  }
+}
+
 // ============================================================
-// Generate Final Productivity Report PDF  (async — embed font)
+// Generate Final Productivity Report PDF
 // ============================================================
 export async function generateFinalReport(
   project: ProjectData,
@@ -136,203 +154,352 @@ export async function generateFinalReport(
   actionPlans: ActionPlanData[]
 ) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-  const pageW = doc.internal.pageSize.getWidth()
-  const margin = 20
+  const pageW  = doc.internal.pageSize.getWidth()   // 210
+  const pageH  = doc.internal.pageSize.getHeight()  // 297
+  const margin = 18
   const contentW = pageW - margin * 2
 
-  // Coba embed Noto Sans; jika gagal, tetap pakai helvetica sebagai fallback
   const fontLoaded = await embedNotoSans(doc)
-  const FONT_NORMAL = fontLoaded ? 'NotoSans' : 'helvetica'
-  const FONT_BOLD   = fontLoaded ? 'NotoSans' : 'helvetica'
+  const FN = fontLoaded ? 'NotoSans' : 'helvetica'
+  const FB = fontLoaded ? 'NotoSans' : 'helvetica'
 
-  // Helper style setters (gunakan font yang tersedia)
-  const setNormal = (size: number) => {
-    doc.setFontSize(size)
-    doc.setFont(FONT_NORMAL, 'normal')
-  }
-  const setBold = (size: number) => {
-    doc.setFontSize(size)
-    doc.setFont(FONT_BOLD, 'bold')
-  }
+  const setN = (size: number) => { doc.setFontSize(size); doc.setFont(FN, 'normal') }
+  const setB = (size: number) => { doc.setFontSize(size); doc.setFont(FB, 'bold') }
+  const setC = (c: [number,number,number]) => doc.setTextColor(...c)
+  const setF = (c: [number,number,number]) => doc.setFillColor(...c)
+  const setD = (c: [number,number,number]) => doc.setDrawColor(...c)
 
-  // ---- Cover Page ----
-  doc.setFillColor(10, 22, 40)
-  doc.rect(0, 0, pageW, 50, 'F')
+  // ----------------------------------------------------------
+  // COVER PAGE
+  // ----------------------------------------------------------
 
-  doc.setTextColor(212, 160, 23)
-  setBold(22)
-  doc.text('SIBIMKON', margin, 22)
+  // Header bar
+  setF(C_NAVY); doc.rect(0, 0, pageW, 52, 'F')
 
-  doc.setTextColor(200, 200, 200)
-  setNormal(9)
-  doc.text('Sistem Informasi Bimbingan Konsultansi Peningkatan Produktivitas', margin, 30)
-  doc.text('Platform SIBIMKON — Link Productive', margin, 37)
+  // Logo / brand text
+  setC(C_GOLD); setB(24)
+  doc.text('SIBIMKON', margin, 24)
+  setC(C_LIGHT); setN(8.5)
+  doc.text('Sistem Informasi Bimbingan Konsultansi Peningkatan Produktivitas', margin, 33)
+  doc.text('Platform SIBIMKON — Link Productive', margin, 40)
 
-  doc.setTextColor(30, 30, 30)
-  setBold(16)
-  doc.text('LAPORAN AKHIR PROGRAM BIMKON', pageW / 2, 70, { align: 'center' })
+  // Thin gold accent line below header
+  setD(C_GOLD); doc.setLineWidth(0.8)
+  doc.line(margin, 52, pageW - margin, 52)
 
-  setNormal(12)
-  doc.setTextColor(80, 80, 80)
-  doc.text(project.title, pageW / 2, 80, { align: 'center' })
+  // Report title block
+  setC(C_NAVY); setB(15)
+  doc.text('LAPORAN AKHIR PROGRAM BIMKON', pageW / 2, 72, { align: 'center' })
+  setC(C_MUTED); setN(10.5)
+  doc.text(project.title, pageW / 2, 81, { align: 'center', maxWidth: contentW })
 
-  // Project info box
-  doc.setDrawColor(200, 200, 200)
-  doc.setFillColor(248, 249, 250)
-  doc.roundedRect(margin, 90, contentW, 55, 3, 3, 'FD')
+  // Thin divider
+  doc.setDrawColor(220, 220, 225); doc.setLineWidth(0.4)
+  doc.line(margin + 20, 88, pageW - margin - 20, 88)
+
+  // Info box — rounded card
+  doc.setDrawColor(210, 215, 225); doc.setLineWidth(0.5)
+  setF([250, 251, 253])
+  doc.roundedRect(margin, 95, contentW, 56, 3, 3, 'FD')
 
   const infoItems = [
-    ['Kode Proyek', project.project_code],
-    ['Perusahaan Klien', project.company_name],
-    ['Tanggal Mulai', project.start_date || '-'],
-    ['Target Selesai', project.target_end_date || '-'],
+    ['Kode Proyek',       project.project_code],
+    ['Perusahaan Klien',  project.company_name],
+    ['Tanggal Mulai',     formatDate(project.start_date)],
+    ['Target Selesai',    formatDate(project.target_end_date)],
   ]
   infoItems.forEach(([label, value], i) => {
-    const y = 100 + i * 10
-    doc.setTextColor(60, 60, 60)
-    setBold(9)
-    doc.text(label + ':', margin + 5, y)
-    setNormal(9)
-    doc.text(String(value), margin + 55, y)
+    const iy = 106 + i * 11
+    // label column
+    setC(C_MUTED); setN(8)
+    doc.text(label, margin + 6, iy)
+    // separator
+    setC([210, 215, 225])
+    doc.text(':', margin + 46, iy)
+    // value column
+    setC(C_TEXT); setB(8.5)
+    doc.text(String(value), margin + 52, iy)
   })
 
-  // Score summary box
-  const baseScore = project.baseline_score || 0
-  const currScore = project.current_score || 0
-  const improvement = currScore - baseScore
+  // Score summary — 3-column card
+  setF(C_NAVY)
+  doc.roundedRect(margin, 160, contentW, 34, 3, 3, 'F')
 
-  doc.setFillColor(10, 22, 40)
-  doc.roundedRect(margin, 155, contentW, 30, 3, 3, 'F')
-  doc.setTextColor(212, 160, 23)
-  setBold(10)
-  doc.text(`Baseline: ${baseScore}%`, margin + 15, 167)
-  doc.setTextColor(100, 200, 150)
-  doc.text(`Aktual: ${currScore}%`, margin + 75, 167)
-  doc.setTextColor(255, 200, 100)
-  doc.text(`Peningkatan: +${improvement}%`, margin + 135, 167)
+  // Gold accent strip at top of score card
+  setF(C_GOLD)
+  doc.roundedRect(margin, 160, contentW, 5, 3, 3, 'F')
+  doc.rect(margin, 162, contentW, 3, 'F') // flatten bottom corners of strip
 
-  doc.setTextColor(150, 150, 150)
-  setNormal(8)
-  doc.text(`Digenerate otomatis: ${new Date().toLocaleString('id-ID')}`, pageW / 2, 200, { align: 'center' })
+  const scoreW = contentW / 3
+  const scores = [
+    { label: 'Skor Baseline', value: `${project.baseline_score || 0}%`, color: C_LIGHT },
+    { label: 'Skor Aktual',   value: `${project.current_score  || 0}%`, color: [100, 210, 160] as [number,number,number] },
+    { label: 'Peningkatan',   value: `+${(project.current_score || 0) - (project.baseline_score || 0)}%`, color: [255, 210, 90] as [number,number,number] },
+  ]
+  scores.forEach((s, i) => {
+    const sx = margin + scoreW * i
+    setC(C_LIGHT); setN(7.5)
+    doc.text(s.label, sx + scoreW / 2, 174, { align: 'center' })
+    setC(s.color); setB(13)
+    doc.text(s.value, sx + scoreW / 2, 184, { align: 'center' })
+    // vertical divider between columns
+    if (i < 2) {
+      doc.setDrawColor(255, 255, 255, 0.3); doc.setLineWidth(0.3)
+      doc.line(margin + scoreW * (i + 1), 165, margin + scoreW * (i + 1), 192)
+    }
+  })
 
-  // ============================================================
-  // BAB 1 — Latar Belakang
-  // ============================================================
-  doc.addPage()
+  // Generated timestamp
+  setC(C_MUTED); setN(7.5)
+  doc.text(
+    `Digenerate: ${new Date().toLocaleString('id-ID')}`,
+    pageW / 2, 210, { align: 'center' }
+  )
+
+  // ----------------------------------------------------------
+  // HELPER FUNCTIONS (used across chapters)
+  // ----------------------------------------------------------
   let y = 25
 
+  // Ensure there's enough room; if not, add new page first
+  const ensureSpace = (needed: number) => {
+    if (y + needed > pageH - 22) { doc.addPage(); y = 25 }
+  }
+
+  // Chapter header: full-width navy bar with gold title + grey subtitle
   const drawChapterHeader = (title: string, subtitle: string) => {
-    doc.setFillColor(10, 22, 40)
-    doc.rect(margin, y - 6, contentW, 14, 'F')
-    doc.setTextColor(212, 160, 23)
-    setBold(11)
-    doc.text(title, margin + 3, y + 2)
-    doc.setTextColor(180, 180, 180)
-    setNormal(8)
-    doc.text(subtitle, margin + 3, y + 8)
-    y += 20
+    ensureSpace(20)
+    const barH = 16
+    setF(C_NAVY); doc.rect(margin, y, contentW, barH, 'F')
+    // Gold left accent
+    setF(C_GOLD); doc.rect(margin, y, 4, barH, 'F')
+    setC(C_GOLD); setB(10.5)
+    doc.text(title, margin + 8, y + 7)
+    setC(C_LIGHT); setN(7.5)
+    doc.text(subtitle, margin + 8, y + 13)
+    y += barH + 6
   }
 
+  // Section title with left rule
   const drawSectionTitle = (title: string) => {
-    doc.setTextColor(10, 22, 40)
-    setBold(10)
-    doc.text(title, margin, y)
-    y += 7
+    ensureSpace(12)
+    setD(C_GOLD); doc.setLineWidth(1.5)
+    doc.line(margin, y + 1, margin + 2.5, y + 1)
+    doc.setLineWidth(0.3)
+    setC(C_NAVY); setB(9.5)
+    doc.text(title, margin + 5, y + 3)
+    y += 9
   }
 
-  const drawText = (text: string, maxWidth = contentW) => {
-    doc.setTextColor(60, 60, 60)
-    setNormal(9)
-    const lines = doc.splitTextToSize(text, maxWidth)
+  // Body text with automatic page overflow
+  const drawText = (text: string, maxWidth = contentW, indent = 0) => {
+    setC(C_TEXT); setN(9)
+    const lines = doc.splitTextToSize(text, maxWidth - indent)
     lines.forEach((line: string) => {
-      if (y > 270) { doc.addPage(); y = 25 }
-      doc.text(line, margin, y)
-      y += 5
+      ensureSpace(6)
+      doc.text(line, margin + indent, y)
+      y += 5.2
     })
     y += 2
   }
 
+  // Key-value info row
+  const drawInfoRow = (label: string, value: string) => {
+    ensureSpace(7)
+    setC(C_MUTED); setN(8.5)
+    doc.text(label + ':', margin + 2, y)
+    setC(C_TEXT); setB(8.5)
+    doc.text(value, margin + 52, y)
+    y += 7
+  }
+
+  // ----------------------------------------------------------
+  // BAB 1 — Latar Belakang
+  // ----------------------------------------------------------
+  doc.addPage(); y = 25
+
   drawChapterHeader('BAB 1 - LATAR BELAKANG', 'Identitas Proyek dan Program BIMKON')
+
   drawSectionTitle('1.1 Identitas Proyek')
+  drawInfoRow('Kode Proyek',     project.project_code)
+  drawInfoRow('Perusahaan',      project.company_name)
+  drawInfoRow('Judul Program',   project.title)
+  drawInfoRow('Tanggal Mulai',   formatDate(project.start_date))
+  drawInfoRow('Target Selesai',  formatDate(project.target_end_date))
+  y += 3
+
+  drawSectionTitle('1.2 Latar Belakang Program')
   drawText(
-    'Program Bimbingan Konsultansi Peningkatan Produktivitas (BIMKON) bertujuan meningkatkan produktivitas perusahaan ' +
-    'melalui pendampingan konsultan produktivitas terlatih dengan menggunakan metodologi DMAIC ' +
-    '(Define-Measure-Analyze-Improve-Control).'
+    'Program Bimbingan Konsultansi Peningkatan Produktivitas (BIMKON) merupakan program ' +
+    'pendampingan konsultan produktivitas terlatih yang bertujuan meningkatkan kinerja operasional ' +
+    'perusahaan secara terstruktur dan berkelanjutan.'
   )
   drawText(
     `Proyek ini dilaksanakan untuk perusahaan ${project.company_name} ` +
-    `dengan kode proyek ${project.project_code}.`
+    `dengan kode proyek ${project.project_code}, mencakup seluruh tahapan metodologi ` +
+    'DMAIC (Define-Measure-Analyze-Improve-Control) untuk memastikan perbaikan yang ' +
+    'terukur dan berbasis data.'
   )
 
-  // ============================================================
+  drawSectionTitle('1.3 Tujuan Program')
+  const tujuan = [
+    'Mengidentifikasi gap produktivitas perusahaan melalui asesmen PQCDSM.',
+    'Merancang dan mengimplementasikan action plan perbaikan yang terukur.',
+    'Meningkatkan indeks produktivitas perusahaan secara signifikan.',
+    'Membangun kapabilitas internal untuk perbaikan berkelanjutan (continuous improvement).',
+  ]
+  tujuan.forEach((t, i) => {
+    ensureSpace(8)
+    setC(C_GOLD); setB(9)
+    doc.text(`${i + 1}.`, margin + 3, y)
+    setC(C_TEXT); setN(9)
+    const lines = doc.splitTextToSize(t, contentW - 14)
+    lines.forEach((line: string, li: number) => {
+      doc.text(line, margin + 10, y + li * 5.2)
+    })
+    y += lines.length * 5.2 + 2
+  })
+
+  // ----------------------------------------------------------
   // BAB 2 — Hasil Assessment PQCDSM
-  // ============================================================
-  if (y > 230) { doc.addPage(); y = 25 }
+  // ----------------------------------------------------------
+  ensureSpace(80)
+  if (y > 200) { doc.addPage(); y = 25 }
   drawChapterHeader('BAB 2 - HASIL ASSESSMENT PQCDSM', 'Skor Baseline Produktivitas per Dimensi')
 
   if (assessments.length > 0) {
-    const tableData = assessments.map(a => [
-      getDimLabel(a.dimension),
-      `${a.percentage_score}%`,
-      a.percentage_score >= 70 ? 'BAIK' : a.percentage_score >= 50 ? 'CUKUP' : 'PERLU PERBAIKAN',
-    ])
+    // Color-coded score column: BAIK=green, CUKUP=orange, PERLU PERBAIKAN=red
+    const tableData = assessments.map(a => {
+      const cat = getCategoryLabel(a.percentage_score)
+      return [getDimLabel(a.dimension), `${a.percentage_score}%`, cat]
+    })
+
     autoTable(doc, {
       startY: y,
       head: [['Dimensi PQCDSM', 'Skor Baseline', 'Kategori']],
       body: tableData,
-      margin: { left: margin },
+      margin: { left: margin, right: margin },
       tableWidth: contentW,
-      styles: { fontSize: 9, cellPadding: 3, font: FONT_NORMAL },
-      headStyles: { fillColor: [10, 22, 40], textColor: [212, 160, 23], fontStyle: 'bold', font: FONT_BOLD },
-      alternateRowStyles: { fillColor: [245, 247, 250] },
+      styles: {
+        fontSize: 9,
+        cellPadding: { top: 4, bottom: 4, left: 5, right: 5 },
+        font: FN,
+        textColor: C_TEXT,
+        lineColor: [220, 225, 235],
+        lineWidth: 0.3,
+      },
+      headStyles: {
+        fillColor: C_NAVY,
+        textColor: C_GOLD,
+        fontStyle: 'bold',
+        font: FB,
+        fontSize: 9,
+        cellPadding: { top: 5, bottom: 5, left: 5, right: 5 },
+      },
+      alternateRowStyles: { fillColor: C_ROW_ALT },
       columnStyles: {
-        0: { cellWidth: 70 },
-        1: { cellWidth: 40, halign: 'center' },
-        2: { cellWidth: 60, halign: 'center' },
+        0: { cellWidth: 80 },
+        1: { cellWidth: 45, halign: 'center' },
+        2: { cellWidth: contentW - 80 - 45, halign: 'center' },
+      },
+      didParseCell(data) {
+        if (data.section === 'body' && data.column.index === 2) {
+          const val = String(data.cell.raw)
+          if (val === 'BAIK')              data.cell.styles.textColor = [34, 139, 34]
+          else if (val === 'CUKUP')        data.cell.styles.textColor = [200, 130, 20]
+          else                             data.cell.styles.textColor = [180, 40, 40]
+          data.cell.styles.fontStyle = 'bold'
+        }
       },
     })
     y = (doc as any).lastAutoTable.finalY + 10
+
+    // Summary note
+    const totalAvg = Math.round(assessments.reduce((s, a) => s + a.percentage_score, 0) / assessments.length)
+    drawText(
+      `Rata-rata skor PQCDSM baseline: ${totalAvg}% (${getCategoryLabel(totalAvg)}). ` +
+      'Dimensi yang memerlukan perhatian utama menjadi prioritas dalam rancangan action plan.',
+      contentW, 0
+    )
   } else {
     drawText('Data assessment PQCDSM belum tersedia.')
   }
 
-  // ============================================================
-  // BAB 3 — Action Plan & Hasil Implementasi
-  // ============================================================
-  if (y > 220) { doc.addPage(); y = 25 }
-  drawChapterHeader('BAB 3 - ACTION PLAN & IMPLEMENTASI', 'Rencana dan Hasil Perbaikan')
+  // ----------------------------------------------------------
+  // BAB 3 — Action Plan & Implementasi
+  // ----------------------------------------------------------
+  if (y > 200) { doc.addPage(); y = 25 }
+  drawChapterHeader('BAB 3 - ACTION PLAN & IMPLEMENTASI', 'Rencana dan Hasil Perbaikan per Dimensi')
 
   if (actionPlans.length > 0) {
-    const apData = actionPlans.map(ap => [
-      ap.title.substring(0, 30),
-      ap.methodology,
+    // Columns: No | Program | Dimensi | KPI (Baseline → Target → Aktual) | Status | Progress
+    const apData = actionPlans.map((ap, idx) => [
+      String(idx + 1),
+      ap.title.length > 32 ? ap.title.substring(0, 30) + '…' : ap.title,
       getDimLabel(ap.dimension),
-      `${ap.kpi_baseline} -> ${ap.kpi_target}`,
-      ap.kpi_actual !== undefined ? String(ap.kpi_actual) : '-',
-      ap.kpi_unit,
+      `${ap.kpi_name}\n${ap.kpi_baseline} → ${ap.kpi_target}${ap.kpi_actual !== undefined ? ` → ${ap.kpi_actual}` : ''} ${ap.kpi_unit}`,
+      ap.pic_name || '-',
       getStatusLabel(ap.status),
       `${ap.progress_percentage}%`,
     ])
+
     autoTable(doc, {
       startY: y,
-      head: [['Program', 'Metodologi', 'Dimensi', 'Baseline->Target', 'Aktual', 'Satuan', 'Status', 'Progress']],
+      head: [['#', 'Program Perbaikan', 'Dimensi', 'KPI (Baseline→Target→Aktual)', 'PIC', 'Status', 'Progress']],
       body: apData,
-      margin: { left: margin },
+      margin: { left: margin, right: margin },
       tableWidth: contentW,
-      styles: { fontSize: 7, cellPadding: 2, font: FONT_NORMAL },
-      headStyles: { fillColor: [10, 22, 40], textColor: [212, 160, 23], fontStyle: 'bold', fontSize: 7, font: FONT_BOLD },
-      alternateRowStyles: { fillColor: [245, 247, 250] },
+      styles: {
+        fontSize: 7.5,
+        cellPadding: { top: 3, bottom: 3, left: 4, right: 4 },
+        font: FN,
+        textColor: C_TEXT,
+        lineColor: [220, 225, 235],
+        lineWidth: 0.3,
+        overflow: 'linebreak',
+      },
+      headStyles: {
+        fillColor: C_NAVY,
+        textColor: C_GOLD,
+        fontStyle: 'bold',
+        font: FB,
+        fontSize: 7.5,
+        cellPadding: { top: 4, bottom: 4, left: 4, right: 4 },
+      },
+      alternateRowStyles: { fillColor: C_ROW_ALT },
+      columnStyles: {
+        0: { cellWidth: 8,  halign: 'center' },
+        1: { cellWidth: 42 },
+        2: { cellWidth: 28 },
+        3: { cellWidth: 50 },
+        4: { cellWidth: 22 },
+        5: { cellWidth: 26 },
+        6: { cellWidth: 16, halign: 'center' },
+      },
+      didParseCell(data) {
+        if (data.section === 'body' && data.column.index === 5) {
+          const val = String(data.cell.raw)
+          if (val === 'Selesai')              data.cell.styles.textColor = [34, 139, 34]
+          else if (val === 'Sedang Berjalan') data.cell.styles.textColor = [30, 120, 200]
+          else if (val === 'Tertunda')        data.cell.styles.textColor = [180, 40, 40]
+          data.cell.styles.fontStyle = 'bold'
+        }
+      },
     })
     y = (doc as any).lastAutoTable.finalY + 10
   } else {
     drawText('Belum ada action plan yang dibuat.')
   }
 
-  // ============================================================
+  // ----------------------------------------------------------
   // BAB 4 — Dampak Ekonomi & ROI
-  // ============================================================
-  if (y > 220) { doc.addPage(); y = 25 }
+  // ----------------------------------------------------------
+  if (y > 200) { doc.addPage(); y = 25 }
   drawChapterHeader('BAB 4 - DAMPAK EKONOMI & ROI', 'Estimasi Penghematan Biaya dan Return on Investment')
+
+  const baseScore = project.baseline_score || 0
+  const currScore = project.current_score  || 0
+  const improvement = currScore - baseScore
 
   const costSaving = actionPlans.reduce((acc, act) => {
     if (act.kpi_actual === undefined) return acc
@@ -347,165 +514,361 @@ export async function generateFinalReport(
 
   autoTable(doc, {
     startY: y,
-    head: [['Komponen', 'Nilai']],
+    head: [['Komponen Ekonomi', 'Nilai']],
     body: [
-      ['Estimasi Cost Saving (3 bulan)', `Rp ${costSaving.toLocaleString('id-ID')}`],
-      ['Total Investasi Program', `Rp ${investment.toLocaleString('id-ID')}`],
-      ['Estimasi ROI', `${roi}x Lipat`],
-      ['Productivity Index Baseline', `${baseScore}%`],
-      ['Productivity Index Aktual', `${currScore}%`],
-      ['Peningkatan Produktivitas', `+${improvement}%`],
+      ['Estimasi Cost Saving (3 bulan)',  `Rp ${costSaving.toLocaleString('id-ID')}`],
+      ['Total Investasi Program',          `Rp ${investment.toLocaleString('id-ID')}`],
+      ['Estimasi ROI',                     `${roi}x lipat`],
+      ['Productivity Index Baseline',      `${baseScore}%`],
+      ['Productivity Index Aktual',        `${currScore}%`],
+      ['Peningkatan Produktivitas',        `+${improvement}%`],
     ],
-    margin: { left: margin },
+    margin: { left: margin, right: margin },
     tableWidth: contentW,
-    styles: { fontSize: 9, cellPadding: 3, font: FONT_NORMAL },
-    headStyles: { fillColor: [10, 22, 40], textColor: [212, 160, 23], fontStyle: 'bold', font: FONT_BOLD },
-    alternateRowStyles: { fillColor: [245, 247, 250] },
-    columnStyles: { 0: { fontStyle: 'bold' } },
+    styles: {
+      fontSize: 9.5,
+      cellPadding: { top: 4, bottom: 4, left: 6, right: 6 },
+      font: FN,
+      textColor: C_TEXT,
+      lineColor: [220, 225, 235],
+      lineWidth: 0.3,
+    },
+    headStyles: {
+      fillColor: C_NAVY,
+      textColor: C_GOLD,
+      fontStyle: 'bold',
+      font: FB,
+      fontSize: 9.5,
+    },
+    alternateRowStyles: { fillColor: C_ROW_ALT },
+    columnStyles: {
+      0: { fontStyle: 'bold', cellWidth: 110 },
+      1: { cellWidth: contentW - 110 },
+    },
+    didParseCell(data) {
+      // Highlight ROI row
+      if (data.section === 'body' && data.row.index === 2) {
+        data.cell.styles.textColor = [34, 139, 34]
+        data.cell.styles.fontStyle = 'bold'
+      }
+      // Highlight improvement row
+      if (data.section === 'body' && data.row.index === 5) {
+        data.cell.styles.textColor = [30, 120, 200]
+        data.cell.styles.fontStyle = 'bold'
+      }
+    },
   })
-  y = (doc as any).lastAutoTable.finalY + 15
+  y = (doc as any).lastAutoTable.finalY + 12
 
-  // ============================================================
+  drawText(
+    'Catatan: Estimasi cost saving dihitung berdasarkan selisih KPI aktual terhadap baseline, ' +
+    'dikalikan nilai unit perbaikan Rp 500.000 per unit. Investasi program dihitung sebesar ' +
+    'Rp 2.500.000 per action plan yang sudah berjalan. Angka merupakan estimasi indikatif.'
+  )
+
+  // ----------------------------------------------------------
   // BAB 5 — Lembar Pengesahan
-  // ============================================================
-  if (y > 200) { doc.addPage(); y = 25 }
+  // ----------------------------------------------------------
+  if (y > 190) { doc.addPage(); y = 25 }
   drawChapterHeader('BAB 5 - LEMBAR PENGESAHAN', 'Tanda Tangan Digital Pihak Terkait')
 
+  drawText(
+    'Laporan Akhir Program BIMKON ini telah disusun berdasarkan data yang dikumpulkan ' +
+    'selama masa pendampingan dan disahkan oleh pihak-pihak berikut:'
+  )
+  y += 4
+
+  // Two signature boxes side-by-side
+  const sigW   = (contentW - 10) / 2   // width of each box
+  const sigH   = 52
+  const sigGap = 10
+
   const signatories = [
-    { role: 'Konsultan Pendamping', org: 'SIBIMKON' },
-    { role: 'PIC Perusahaan Klien', org: project.company_name },
+    { role: 'Konsultan Pendamping',  org: 'SIBIMKON — Link Productive' },
+    { role: 'PIC Perusahaan Klien',  org: project.company_name },
   ]
 
-  signatories.forEach(sig => {
-    if (y > 260) { doc.addPage(); y = 25 }
-    doc.setDrawColor(200, 200, 200)
-    doc.setFillColor(250, 250, 250)
-    doc.roundedRect(margin, y, contentW / 3 - 5, 40, 2, 2, 'FD')
-    setBold(8)
-    doc.setTextColor(60, 60, 60)
-    doc.text(sig.role, margin + 3, y + 8)
-    setNormal(7)
-    doc.setTextColor(120, 120, 120)
-    doc.text(sig.org, margin + 3, y + 14)
-    doc.text('TTD: ____________________', margin + 3, y + 30)
+  ensureSpace(sigH + 10)
+
+  signatories.forEach((sig, i) => {
+    const sx = margin + i * (sigW + sigGap)
+
+    // Box background + border
+    doc.setDrawColor(210, 215, 225); doc.setLineWidth(0.5)
+    setF([250, 251, 253])
+    doc.roundedRect(sx, y, sigW, sigH, 3, 3, 'FD')
+
+    // Top accent bar
+    setF(C_NAVY)
+    doc.roundedRect(sx, y, sigW, 7, 3, 3, 'F')
+    doc.rect(sx, y + 4, sigW, 3, 'F') // flatten bottom corners of accent
+
+    setC(C_GOLD); setB(7.5)
+    doc.text(sig.role.toUpperCase(), sx + sigW / 2, y + 5.5, { align: 'center' })
+
+    setC(C_TEXT); setN(8)
+    doc.text(sig.org, sx + sigW / 2, y + 15, { align: 'center', maxWidth: sigW - 8 })
+
+    // Signature line
+    doc.setDrawColor(180, 185, 195); doc.setLineWidth(0.4)
+    doc.line(sx + 8, y + 37, sx + sigW - 8, y + 37)
+
+    setC(C_MUTED); setN(7.5)
+    doc.text('Tanda Tangan', sx + sigW / 2, y + 43, { align: 'center' })
+
+    // Date placeholder
+    const today = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+    setC(C_TEXT); setN(7)
+    doc.text(today, sx + sigW / 2, y + 50, { align: 'center' })
   })
 
-  // Footer setiap halaman
-  const totalPages = (doc as any).internal.pages.length - 1
+  y += sigH + 14
+
+  // ----------------------------------------------------------
+  // FOOTER — every page except cover (page 1)
+  // ----------------------------------------------------------
+  const totalPages = doc.getNumberOfPages()
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i)
-    setNormal(7)
-    doc.setTextColor(150, 150, 150)
-    doc.text(
-      `SIBIMKON - ${project.company_name} | ${project.project_code} | Halaman ${i} dari ${totalPages}`,
-      pageW / 2,
-      290,
-      { align: 'center' }
-    )
-    doc.setDrawColor(212, 160, 23)
-    doc.line(margin, 285, pageW - margin, 285)
+
+    // Gold separator line
+    setD(C_GOLD); doc.setLineWidth(0.5)
+    doc.line(margin, pageH - 12, pageW - margin, pageH - 12)
+
+    // Footer text
+    setC(C_MUTED); setN(7)
+    if (i === 1) {
+      // Cover: only show generation info, no "Halaman X"
+      doc.text(
+        `SIBIMKON — Laporan Akhir ${project.project_code}`,
+        pageW / 2, pageH - 7, { align: 'center' }
+      )
+    } else {
+      doc.text(
+        `SIBIMKON  |  ${project.company_name}  |  ${project.project_code}`,
+        margin, pageH - 7
+      )
+      doc.text(
+        `Halaman ${i} dari ${totalPages}`,
+        pageW - margin, pageH - 7, { align: 'right' }
+      )
+    }
   }
 
   return doc
 }
 
 // ============================================================
-// Generate E-Certificate PDF  (async — embed font)
+// Generate E-Certificate PDF  (landscape A4)
 // ============================================================
-export async function generateCertificate(project: ProjectData) {
+
+export interface SignatureData {
+  consultant: { signed: boolean; signerName: string; signedAt: string }
+  company:    { signed: boolean; signerName: string; signedAt: string }
+}
+
+export async function generateCertificate(
+  project: ProjectData,
+  signatures?: SignatureData
+) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-  const pageW = doc.internal.pageSize.getWidth()
-  const pageH = doc.internal.pageSize.getHeight()
+  const pageW = doc.internal.pageSize.getWidth()   // 297
+  const pageH = doc.internal.pageSize.getHeight()  // 210
+  const cx    = pageW / 2
 
   const fontLoaded = await embedNotoSans(doc)
-  const FONT_NORMAL = fontLoaded ? 'NotoSans' : 'helvetica'
-  const FONT_BOLD   = fontLoaded ? 'NotoSans' : 'helvetica'
+  const FN = fontLoaded ? 'NotoSans' : 'helvetica'
+  const FB = fontLoaded ? 'NotoSans' : 'helvetica'
 
-  const setNormal = (size: number) => { doc.setFontSize(size); doc.setFont(FONT_NORMAL, 'normal') }
-  const setBold   = (size: number) => { doc.setFontSize(size); doc.setFont(FONT_BOLD, 'bold') }
+  const setN = (size: number) => { doc.setFontSize(size); doc.setFont(FN, 'normal') }
+  const setB = (size: number) => { doc.setFontSize(size); doc.setFont(FB, 'bold') }
 
-  // Background
-  doc.setFillColor(5, 10, 24)
+  // Sanitize: only replace fancy quotes; keep all printable chars intact
+  const safe = (str: string) =>
+    str
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/\u2013/g, '-')
+      .replace(/\u2014/g, '--')
+
+  // ═══════════════════════════════════════════════════════════
+  // LAYOUT GRID  (semua Y absolut, landscape 297 × 210 mm)
+  //
+  //  20  ┌─ border luar
+  //  22  │  SIBIMKON  (brand)
+  //  29  │  Link Productive
+  //  36  │  subtitle kecil
+  //  43  ── garis emas
+  //  55  │  SERTIFIKAT PENGHARGAAN
+  //  65  │  "Dengan bangga diberikan kepada"
+  //  82  │  NAMA PERUSAHAAN  (besar)
+  //  98  │  Deskripsi baris 1
+  // 106  │  Judul proyek
+  // 114  │  Kode proyek
+  // 122  ── garis emas tengah
+  // 131  │  BADGE skor
+  // 149  ── garis footer
+  // 154  │  Tanggal + TTD              QR (154–184)
+  // 184  │  Nama jabatan
+  // 191  │  Link Productive (bold)
+  // ═══════════════════════════════════════════════════════════
+
+  // ── Background ─────────────────────────────────────────────
+  doc.setFillColor(8, 15, 32)
   doc.rect(0, 0, pageW, pageH, 'F')
 
-  // Gold border
-  doc.setDrawColor(212, 160, 23)
-  doc.setLineWidth(2)
-  doc.rect(10, 10, pageW - 20, pageH - 20)
+  // ── Double border ──────────────────────────────────────────
+  doc.setDrawColor(...C_GOLD as [number,number,number]); doc.setLineWidth(2)
+  doc.rect(9, 9, pageW - 18, pageH - 18)
   doc.setLineWidth(0.5)
   doc.rect(13, 13, pageW - 26, pageH - 26)
 
-  // Corner decorations
-  const corners = [[15, 15], [pageW - 15, 15], [15, pageH - 15], [pageW - 15, pageH - 15]] as const
-  corners.forEach(([cx, cy]) => {
-    doc.setFillColor(212, 160, 23)
-    doc.circle(cx, cy, 3, 'F')
+  // ── Corner ornaments ───────────────────────────────────────
+  const corners: [number,number][] = [
+    [17, 17], [pageW - 17, 17], [17, pageH - 17], [pageW - 17, pageH - 17],
+  ]
+  corners.forEach(([ox, oy]) => {
+    doc.setFillColor(...C_GOLD as [number,number,number]); doc.circle(ox, oy, 3, 'F')
+    doc.setFillColor(8, 15, 32);                          doc.circle(ox, oy, 1.2, 'F')
   })
 
-  // Header
-  doc.setTextColor(212, 160, 23)
-  setBold(10)
-  doc.text('SIBIMKON', pageW / 2, 30, { align: 'center' })
-  doc.text('Link Productive', pageW / 2, 37, { align: 'center' })
+  // ── BRAND HEADER  (Y = 22–42) ──────────────────────────────
+  doc.setTextColor(...C_GOLD as [number,number,number]); setB(13)
+  doc.text('SIBIMKON', cx, 27, { align: 'center' })
 
-  doc.setTextColor(180, 180, 180)
-  setNormal(8)
-  doc.text('- Program Bimbingan Konsultansi Peningkatan Produktivitas (BIMKON) -', pageW / 2, 44, { align: 'center' })
+  doc.setTextColor(160, 165, 175); setN(8)
+  doc.text('Link Productive', cx, 34, { align: 'center' })
 
-  doc.setDrawColor(212, 160, 23)
-  doc.setLineWidth(0.5)
-  doc.line(40, 48, pageW - 40, 48)
-
-  doc.setTextColor(230, 230, 230)
-  setBold(13)
-  doc.text('SERTIFIKAT PENGHARGAAN', pageW / 2, 62, { align: 'center' })
-
-  doc.setTextColor(180, 180, 180)
-  setNormal(9)
-  doc.text('Dengan bangga diberikan kepada:', pageW / 2, 72, { align: 'center' })
-
-  doc.setTextColor(255, 220, 100)
-  setBold(20)
-  doc.text(project.company_name.toUpperCase(), pageW / 2, 90, { align: 'center' })
-
-  doc.setTextColor(200, 200, 200)
-  setNormal(9)
-  const desc =
-    'Telah berhasil menyelesaikan Program Bimbingan Konsultansi Peningkatan Produktivitas\n' +
-    `dengan proyek "${project.title}"`
-  doc.text(desc, pageW / 2, 104, { align: 'center' })
-
-  doc.setTextColor(150, 150, 150)
-  setNormal(8)
-  doc.text(`Kode Proyek: ${project.project_code}`, pageW / 2, 120, { align: 'center' })
-
-  doc.setDrawColor(212, 160, 23)
-  doc.line(80, 128, pageW - 80, 128)
-
-  doc.setFillColor(212, 160, 23)
-  doc.roundedRect(pageW / 2 - 30, 133, 60, 18, 3, 3, 'F')
-  doc.setTextColor(10, 22, 40)
-  setBold(10)
-  doc.text(`Indeks Produktivitas: ${project.current_score || 0}%`, pageW / 2, 144, { align: 'center' })
-
-  // QR placeholder
-  doc.setFillColor(255, 255, 255)
-  doc.roundedRect(pageW - 60, pageH - 55, 40, 40, 2, 2, 'F')
-  doc.setTextColor(10, 22, 40)
-  setBold(6)
-  doc.text('QR VERIFIKASI', pageW - 40, pageH - 12, { align: 'center' })
-
-  // Date & signature
-  doc.setTextColor(180, 180, 180)
-  setNormal(8)
+  doc.setTextColor(100, 105, 115); setN(7)
   doc.text(
-    `Diterbitkan: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`,
-    30,
-    pageH - 25
+    'Program Bimbingan Konsultansi Peningkatan Produktivitas (BIMKON)',
+    cx, 41, { align: 'center' }
   )
-  doc.text('Direktur Program SIBIMKON', 30, pageH - 18)
-  setBold(8)
-  doc.text('Link Productive', 30, pageH - 12)
+
+  // Garis emas dengan diamond  Y = 47
+  doc.setDrawColor(...C_GOLD as [number,number,number]); doc.setLineWidth(0.5)
+  doc.line(28, 47, cx - 5, 47)
+  doc.line(cx + 5, 47, pageW - 28, 47)
+  doc.setFillColor(...C_GOLD as [number,number,number])
+  doc.triangle(cx, 44.5, cx - 2.5, 47, cx, 49.5, 'F')
+  doc.triangle(cx, 44.5, cx + 2.5, 47, cx, 49.5, 'F')
+
+  // ── JUDUL SERTIFIKAT  (Y = 57) ─────────────────────────────
+  doc.setTextColor(238, 240, 248); setB(15)
+  doc.text('SERTIFIKAT PENGHARGAAN', cx, 57, { align: 'center' })
+  doc.setDrawColor(...C_GOLD as [number,number,number]); doc.setLineWidth(0.8)
+  doc.line(cx - 52, 60, cx + 52, 60)
+
+  // ── SUB-JUDUL  (Y = 68) ────────────────────────────────────
+  doc.setTextColor(155, 158, 168); setN(9)
+  doc.text('Dengan bangga diberikan kepada', cx, 68, { align: 'center' })
+
+  // ── NAMA PERUSAHAAN  (Y = 82) — fixed position ─────────────
+  const compName = safe(project.company_name).toUpperCase()
+  doc.setTextColor(255, 218, 68); setB(24)
+  // Jika terlalu panjang, kecilkan font
+  const compW = doc.getTextWidth(compName)
+  if (compW > pageW - 80) { setB(18) }
+  if (doc.getTextWidth(compName) > pageW - 60) { setB(14) }
+  doc.text(compName, cx, 82, { align: 'center', maxWidth: pageW - 50 })
+
+  // ── DESKRIPSI  (Y = 96–112) — fixed, 2 baris ───────────────
+  doc.setTextColor(195, 198, 208); setN(9)
+  doc.text(
+    'Telah berhasil menyelesaikan Program Bimbingan Konsultansi Peningkatan Produktivitas',
+    cx, 96, { align: 'center' }
+  )
+
+  // Judul proyek — pakai font yang di-load, strip hanya karakter benar-benar non-printable
+  const projTitle = safe(project.title)
+  doc.setTextColor(175, 178, 190); setN(8.5)
+  doc.text(
+    `"${projTitle}"`,
+    cx, 104, { align: 'center', maxWidth: pageW - 80 }
+  )
+
+  // Kode proyek
+  doc.setTextColor(120, 125, 138); setN(8)
+  doc.text(`Kode Proyek: ${project.project_code}`, cx, 113, { align: 'center' })
+
+  // ── GARIS TENGAH  (Y = 120) ────────────────────────────────
+  doc.setDrawColor(...C_GOLD as [number,number,number]); doc.setLineWidth(0.4)
+  doc.line(50, 120, pageW - 50, 120)
+
+  // ── SCORE BADGE  (Y = 125–140) ─────────────────────────────
+  const bW = 74, bH = 13
+  doc.setFillColor(...C_GOLD as [number,number,number])
+  doc.roundedRect(cx - bW / 2, 124, bW, bH, 3, 3, 'F')
+  doc.setTextColor(8, 15, 32); setB(9)
+  doc.text(
+    `Indeks Produktivitas: ${project.current_score || 0}%`,
+    cx, 132.5, { align: 'center' }
+  )
+
+  // ── Generate QR code (berisi teks verifikasi) ───────────────
+  const consultantSigned = signatures?.consultant?.signed
+  const companySigned    = signatures?.company?.signed
+
+  const qrText = [
+    'SIBIMKON VERIFIED',
+    `Proyek  : ${project.project_code}`,
+    `Perusahaan: ${project.company_name}`,
+    `Konsultan : ${consultantSigned ? `${signatures!.consultant.signerName} (${signatures!.consultant.signedAt})` : 'Belum TTD'}`,
+    `Perusahaan: ${companySigned    ? `${signatures!.company.signerName} (${signatures!.company.signedAt})`    : 'Belum TTD'}`,
+    `Generated : ${new Date().toLocaleString('id-ID')}`,
+  ].join('\n')
+
+  const qrDataUrl = await generateQRDataURL(qrText)
+
+  // ── GARIS FOOTER  (Y = 148) ────────────────────────────────
+  doc.setDrawColor(50, 58, 80); doc.setLineWidth(0.3)
+  doc.line(20, 148, pageW - 20, 148)
+
+  // ── TTD KIRI  (Y = 152–196) ────────────────────────────────
+  const issueDate = new Date().toLocaleDateString('id-ID', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  })
+  doc.setTextColor(135, 140, 152); setN(7.5)
+  doc.text(`Diterbitkan: ${issueDate}`, 28, 156)
+
+  // Nama konsultan (jika sudah TTD)
+  if (consultantSigned && signatures?.consultant.signerName) {
+    doc.setTextColor(...C_GOLD as [number,number,number]); setB(8)
+    doc.text(signatures.consultant.signerName, 28, 165)
+    doc.setTextColor(135, 140, 152); setN(7)
+    doc.text(`TTD: ${signatures.consultant.signedAt}`, 28, 171)
+  }
+
+  // Garis TTD
+  doc.setDrawColor(100, 108, 125); doc.setLineWidth(0.4)
+  doc.line(28, 178, 115, 178)
+
+  doc.setTextColor(135, 140, 152); setN(7.5)
+  doc.text('Direktur Program SIBIMKON', 28, 184)
+  doc.setTextColor(...C_GOLD as [number,number,number]); setB(8)
+  doc.text('Link Productive', 28, 191)
+
+  // ── QR CODE KANAN  (28×28 mm, Y = 150–178) ─────────────────
+  const qrX = pageW - 30 - 28   // right-aligned dengan margin 30mm
+  const qrY = 150
+  const qrS = 28
+
+  if (qrDataUrl) {
+    // White background
+    doc.setFillColor(255, 255, 255)
+    doc.roundedRect(qrX - 1, qrY - 1, qrS + 2, qrS + 2, 1.5, 1.5, 'F')
+    // QR image
+    doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrS, qrS)
+  } else {
+    // Fallback jika QR gagal generate
+    doc.setFillColor(255, 255, 255)
+    doc.roundedRect(qrX - 1, qrY - 1, qrS + 2, qrS + 2, 1.5, 1.5, 'F')
+    doc.setFillColor(8, 15, 32); doc.setTextColor(8, 15, 32); setN(6)
+    doc.text('QR', qrX + qrS / 2, qrY + qrS / 2, { align: 'center' })
+  }
+
+  doc.setTextColor(100, 105, 115); setN(6)
+  doc.text('SCAN VERIFIKASI', qrX + qrS / 2 + 1, qrY + qrS + 5, { align: 'center' })
 
   return doc
 }

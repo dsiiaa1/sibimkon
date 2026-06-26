@@ -13,6 +13,9 @@ import {
   ArrowRight,
   Plus,
   Trash2,
+  DollarSign,
+  TrendingUp,
+  Edit3,
 } from 'lucide-react'
 import { updateProjectPhase, getProjects, getActionPlans, getControlAudit, saveControlAudit, getControlPsi, saveControlPsi } from '@/lib/db'
 import { 
@@ -36,6 +39,11 @@ export default function ControlPage() {
   const [actionPlans, setActionPlans] = useState<ActionPlan[]>([])
   const [activeTab, setActiveTab] = useState<'kpi' | 'audit' | 'sustainability'>('kpi')
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
+
+  // Inline edit state for economic impact per action plan
+  const [editingEconId, setEditingEconId] = useState<string | null>(null)
+  const [editCostSaving, setEditCostSaving] = useState<number>(0)
+  const [editInvestment, setEditInvestment] = useState<number>(0)
 
   // Audit Checklist state
   const [auditItems, setAuditItems] = useState<any[]>([])
@@ -129,6 +137,26 @@ export default function ControlPage() {
     const psiObj = { people: peopleScore, process: processScore, system: systemScore, result: resultScore }
     await saveControlPsi(projectId, psiObj)
     setSaveMsg('Productivity Sustainability Index (PSI) berhasil direkam!')
+    setTimeout(() => setSaveMsg(null), 3000)
+  }
+
+  const handleSaveEconEdit = async (actionId: string) => {
+    const { saveActionPlans: saveActionPlansDb, getActionPlans: getActionPlansDb } = await import('@/lib/db')
+    const updated = actionPlans.map(act =>
+      act.id === actionId
+        ? { ...act, cost_saving_manual: editCostSaving, investment_manual: editInvestment }
+        : act
+    )
+    setActionPlans(updated)
+    try {
+      await saveActionPlansDb(projectId, updated)
+      const fresh = await getActionPlansDb(projectId)
+      if (fresh.length > 0) setActionPlans(fresh)
+    } catch (err) {
+      console.warn('[handleSaveEconEdit] Supabase error, saved to local only')
+    }
+    setEditingEconId(null)
+    setSaveMsg('Data dampak ekonomi berhasil disimpan!')
     setTimeout(() => setSaveMsg(null), 3000)
   }
 
@@ -268,6 +296,146 @@ export default function ControlPage() {
                 </ResponsiveContainer>
               </div>
             )}
+
+            {/* ── Dampak Ekonomi & ROI ── */}
+            {actionPlans.length > 0 && (() => {
+              const totalCostSaving = actionPlans.reduce((acc, a) => acc + (a.cost_saving_manual ?? 0), 0)
+              const totalInvestment = actionPlans.reduce((acc, a) => acc + (a.investment_manual ?? 0), 0)
+              const roiTotal = totalInvestment > 0 ? totalCostSaving / totalInvestment : 0
+              const hasAnyManual = actionPlans.some(a => (a.cost_saving_manual ?? 0) > 0 || (a.investment_manual ?? 0) > 0)
+
+              return (
+                <div className="space-y-4 border-t border-slate-850 pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+                        <DollarSign className="h-4 w-4 text-amber-400" />
+                        Dampak Ekonomi & ROI per Program
+                      </h3>
+                      <p className="text-[10px] text-slate-500 mt-0.5">
+                        Input atau revisi nilai cost saving dan investasi di sini — akan otomatis terbaca di Laporan Akhir.
+                      </p>
+                    </div>
+                    {hasAnyManual && (
+                      <div className="text-right bg-amber-500/10 border border-amber-500/20 rounded-2xl px-4 py-2">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">Total ROI Program</span>
+                        <span className="text-lg font-black text-amber-400">
+                          {roiTotal > 0 ? `${roiTotal.toFixed(1)}× Lipat` : '—'}
+                        </span>
+                        <span className="text-[10px] text-slate-500 block mt-0.5">
+                          Saving: Rp {totalCostSaving.toLocaleString('id-ID')} / Investasi: Rp {totalInvestment.toLocaleString('id-ID')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    {actionPlans.map(act => (
+                      <div key={act.id} className="bg-slate-950/50 border border-slate-850 rounded-2xl p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-slate-200 truncate">{act.title}</p>
+                            <p className="text-[10px] text-slate-500 mt-0.5">
+                              KPI: {act.kpi_baseline} → {act.kpi_target} {act.kpi_unit}
+                              {act.kpi_actual !== undefined && (
+                                <span className="text-emerald-400 ml-2">Aktual: {act.kpi_actual}</span>
+                              )}
+                            </p>
+                          </div>
+                          {editingEconId !== act.id && (
+                            <button
+                              onClick={() => {
+                                setEditingEconId(act.id)
+                                setEditCostSaving(act.cost_saving_manual ?? 0)
+                                setEditInvestment(act.investment_manual ?? 0)
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[10px] font-bold rounded-lg text-indigo-400 hover:text-white transition-all cursor-pointer shrink-0"
+                            >
+                              <Edit3 className="h-3 w-3" /> Edit
+                            </button>
+                          )}
+                        </div>
+
+                        {editingEconId === act.id ? (
+                          <div className="mt-3 space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Estimasi Cost Saving (Rp)</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  placeholder="Misal: 15000000"
+                                  value={editCostSaving || ''}
+                                  onChange={(e) => setEditCostSaving(Number(e.target.value))}
+                                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-250 focus:outline-none focus:border-amber-500/50"
+                                />
+                                {editCostSaving > 0 && (
+                                  <p className="text-[10px] text-emerald-400 mt-1">Rp {editCostSaving.toLocaleString('id-ID')}</p>
+                                )}
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Estimasi Investasi (Rp)</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  placeholder="Misal: 3500000"
+                                  value={editInvestment || ''}
+                                  onChange={(e) => setEditInvestment(Number(e.target.value))}
+                                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-250 focus:outline-none focus:border-amber-500/50"
+                                />
+                                {editInvestment > 0 && (
+                                  <p className="text-[10px] text-slate-400 mt-1">Rp {editInvestment.toLocaleString('id-ID')}</p>
+                                )}
+                              </div>
+                            </div>
+                            {editCostSaving > 0 && editInvestment > 0 && (
+                              <div className="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-1.5 flex justify-between">
+                                <span>ROI program ini:</span>
+                                <span className="font-black">{(editCostSaving / editInvestment).toFixed(1)}× Lipat</span>
+                              </div>
+                            )}
+                            <div className="flex gap-2 justify-end">
+                              <button
+                                onClick={() => setEditingEconId(null)}
+                                className="px-3 py-1.5 text-[10px] text-slate-400 hover:text-slate-200 cursor-pointer"
+                              >
+                                Batal
+                              </button>
+                              <button
+                                onClick={() => handleSaveEconEdit(act.id)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-[10px] font-bold rounded-lg text-white cursor-pointer"
+                              >
+                                <Save className="h-3 w-3" /> Simpan
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-2 flex gap-4 text-[10px]">
+                            <span className="text-slate-500">
+                              Cost Saving:{' '}
+                              {act.cost_saving_manual
+                                ? <span className="text-emerald-400 font-semibold">Rp {act.cost_saving_manual.toLocaleString('id-ID')}</span>
+                                : <span className="text-slate-700 italic">Belum diinput</span>}
+                            </span>
+                            <span className="text-slate-500">
+                              Investasi:{' '}
+                              {act.investment_manual
+                                ? <span className="text-slate-300 font-semibold">Rp {act.investment_manual.toLocaleString('id-ID')}</span>
+                                : <span className="text-slate-700 italic">Belum diinput</span>}
+                            </span>
+                            {act.cost_saving_manual && act.investment_manual && (
+                              <span className="text-amber-400 font-bold">
+                                ROI: {(act.cost_saving_manual / act.investment_manual).toFixed(1)}×
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         )}
 

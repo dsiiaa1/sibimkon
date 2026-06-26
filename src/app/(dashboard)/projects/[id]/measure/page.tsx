@@ -168,6 +168,14 @@ export default function MeasurePage() {
 
   const handleAdvanceToAnalyze = async () => {
     if (!project) return
+
+    // Validasi: pastikan semua assessment sudah disimpan (setidaknya ada skor yang bukan default 60)
+    const hasRealScores = assessments.some(a => a.percentage_score !== 60)
+    if (!hasRealScores) {
+      alert('Harap isi dan simpan Assessment PQCDSM terlebih dahulu sebelum melanjutkan ke fase ANALYZE. Minimal satu dimensi harus memiliki skor yang berbeda dari nilai awal.')
+      return
+    }
+
     setSaving(true)
     try {
       if (project.status === 'measure' || project.status === 'define') {

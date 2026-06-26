@@ -7,6 +7,7 @@ import { Project, FishboneNode, WhyNode, ActionPlan, Assessment } from '@/lib/mo
 import { Sparkles, Plus, AlertCircle, ArrowRight } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, ComposedChart, Line } from 'recharts'
 import { PQCDSM_LABELS } from '@/lib/utils'
+import { useUserRole } from '@/hooks/useUserRole'
 
 export default function AnalyzePage() {
   const router = useRouter()
@@ -29,17 +30,12 @@ export default function AnalyzePage() {
   const [aiLoading, setAiLoading] = useState(false)
   const [aiResult, setAiResult] = useState<any>(null)
 
-  // Role-based permission — loaded from localStorage (same source as layout.tsx)
-  const [userRole, setUserRole] = useState<string>('konsultan')
+  // Role-based permission — diverifikasi dari server via useUserRole()
+  // verified=true berarti role sudah dikonfirmasi dari Supabase session (tidak bisa dimanipulasi)
+  const { userInfo } = useUserRole()
+  const userRole = userInfo?.role ?? 'perusahaan'
   // Perusahaan = satu-satunya role yang dibatasi. Semua role lain (konsultan, admin, dll) dapat akses penuh.
   const isKonsultan = userRole.toLowerCase() !== 'perusahaan'
-
-  useEffect(() => {
-    const localUser = localStorage.getItem('sibimkon_user')
-    if (localUser) {
-      try { setUserRole(JSON.parse(localUser)?.role || 'konsultan') } catch (_) {}
-    }
-  }, [])
 
   useEffect(() => {
     async function loadData() {
@@ -170,12 +166,15 @@ export default function AnalyzePage() {
           companyName: project?.company_name,
           vomList: vomList,
           pqcdsmScores: scores,
-          whyTree: whys,          // loaded via getMockDB().fiveWhys[projectId]
-          fishboneItems,           // loaded via getMockDB().fishbones[projectId]
+          whyTree: whys,
+          fishboneItems,
         }),
       })
-      if (!response.ok) throw new Error('AI consultation API error')
-      setAiResult(await response.json())
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result?.error || `Server error (${response.status})`)
+      }
+      setAiResult(result)
     } catch (err: any) {
       alert(`Gagal memanggil AI Consultant: ${err.message}`)
     } finally {
@@ -243,7 +242,12 @@ export default function AnalyzePage() {
         </div>
         <button
           onClick={async () => {
-            if (project.status === 'analyze' || project.status === 'measure') {
+            // Validasi: minimal ada 1 item fishbone atau 1 analisis 5-why sebelum lanjut ke IMPROVE
+            if (fishboneItems.length === 0 && whys.length === 0) {
+              alert('Harap isi minimal satu item Fishbone atau satu analisis 5-Why sebelum melanjutkan ke fase IMPROVE.')
+              return
+            }
+            if (project.status === 'analyze') {
               await updateProjectPhase(projectId, 'improve')
             }
             router.push(`/projects/${projectId}/improve`)

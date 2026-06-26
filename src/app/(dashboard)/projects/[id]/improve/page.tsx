@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { getMockDB, updateMockDB, Project, ActionPlan } from '@/lib/mockData'
-import { LineChart, Plus, CheckCircle2, AlertTriangle, Calendar, User, DollarSign, ArrowUpRight, Check, Trash, Upload, FileText, X, Loader2, ArrowRight, Lock } from 'lucide-react'
+import { Project, ActionPlan } from '@/lib/mockData'
+import { Plus, CheckCircle2, AlertTriangle, Calendar, User, DollarSign, ArrowUpRight, Check, Trash, Upload, FileText, X, Loader2, ArrowRight, Lock } from 'lucide-react'
 import { ACTION_STATUS_LABELS, sanitizeText } from '@/lib/utils'
 import { getProjects, getActionPlans, saveActionPlans as saveActionPlansDb, updateProjectPhase, saveAuditLog, saveEvidenceRecord, saveNotification } from '@/lib/db'
+import { useUserRole } from '@/hooks/useUserRole'
 
 export default function ImprovePage() {
   const router = useRouter()
@@ -15,8 +16,10 @@ export default function ImprovePage() {
   const [project, setProject] = useState<Project | null>(null)
   const [actionPlans, setActionPlans] = useState<ActionPlan[]>([])
 
-  // Role-based permission — loaded from localStorage (same source as layout.tsx)
-  const [userRole, setUserRole] = useState<string>('konsultan')
+  // Role-based permission — diverifikasi dari server via useUserRole()
+  // verified=true berarti role sudah dikonfirmasi dari Supabase session (tidak bisa dimanipulasi)
+  const { userInfo } = useUserRole()
+  const userRole = userInfo?.role ?? 'perusahaan'
   // Perusahaan = satu-satunya role yang dibatasi. Semua role lain (konsultan, admin, dll) dapat akses penuh.
   const isKonsultan = userRole.toLowerCase() !== 'perusahaan'
   
@@ -41,6 +44,8 @@ export default function ImprovePage() {
   // Selected Action Plan for Evidence / KPI actual update
   const [selectedAction, setSelectedAction] = useState<ActionPlan | null>(null)
   const [kpiActualInput, setKpiActualInput] = useState<number>(0)
+  const [costSavingInput, setCostSavingInput] = useState<number>(0)
+  const [investmentInput, setInvestmentInput] = useState<number>(0)
   const [evidenceName, setEvidenceName] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [uploadProgress, setUploadProgress] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle')
@@ -48,15 +53,6 @@ export default function ImprovePage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    // Load user role from localStorage (same auth flow as dashboard layout)
-    const localUser = localStorage.getItem('sibimkon_user')
-    if (localUser) {
-      try {
-        const parsed = JSON.parse(localUser)
-        setUserRole(parsed.role || 'konsultan')
-      } catch (_) {}
-    }
-
     async function loadData() {
       const [projects, actions] = await Promise.all([
         getProjects(),
@@ -190,7 +186,13 @@ export default function ImprovePage() {
     // Update KPI actual di action plan
     const updated = actionPlans.map(act =>
       act.id === selectedAction.id
-        ? { ...act, kpi_actual: Number(kpiActualInput), progress_percentage: kpiActualInput >= act.kpi_target ? 100 : act.progress_percentage }
+        ? {
+            ...act,
+            kpi_actual: Number(kpiActualInput),
+            cost_saving_manual: costSavingInput > 0 ? costSavingInput : act.cost_saving_manual,
+            investment_manual: investmentInput > 0 ? investmentInput : act.investment_manual,
+            progress_percentage: kpiActualInput >= act.kpi_target ? 100 : act.progress_percentage,
+          }
         : act
     )
     saveActionPlans(updated)
@@ -243,13 +245,9 @@ export default function ImprovePage() {
     }
 
     // Update project state jika semua selesai
-    const db = getMockDB()
     const allCompleted = updated.every(act => act.status === 'selesai')
     if (allCompleted && project?.status === 'improve') {
-      const updatedProjects = db.projects.map((p: Project) =>
-        p.id === projectId ? { ...p, status: 'control' } : p
-      )
-      updateMockDB('projects', updatedProjects)
+      await updateProjectPhase(projectId, 'control')
       setProject({ ...project!, status: 'control' })
     }
 
@@ -295,6 +293,11 @@ export default function ImprovePage() {
         <div className="flex items-center gap-3">
           <button
             onClick={async () => {
+              // Validasi: minimal ada 1 action plan sebelum advance ke CONTROL
+              if (actionPlans.length === 0) {
+                alert('Harap tambahkan minimal satu Action Plan sebelum melanjutkan ke fase CONTROL.')
+                return
+              }
               await updateProjectPhase(projectId, 'control')
               router.push(`/projects/${projectId}/control`)
             }}
@@ -447,7 +450,9 @@ export default function ImprovePage() {
                   <button
                     onClick={() => {
                       setSelectedAction(act)
-                      setKpiActualInput(act.kpi_actual || act.kpi_baseline)
+                      setKpiActualInput(act.kpi_actual ?? act.kpi_baseline)
+                      setCostSavingInput(act.cost_saving_manual ?? 0)
+                      setInvestmentInput(act.investment_manual ?? 0)
                     }}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 text-xs font-bold rounded-xl text-indigo-400 hover:text-white transition-all cursor-pointer"
                   >
@@ -611,6 +616,61 @@ export default function ImprovePage() {
                   onChange={(e) => setKpiActualInput(Number(e.target.value))}
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-250 focus:outline-none"
                 />
+              </div>
+
+              {/* ── Dampak Ekonomi Nyata ── */}
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 space-y-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                  <DollarSign className="h-3.5 w-3.5" />
+                  Estimasi Dampak Ekonomi Nyata
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                      Estimasi Cost Saving (Rp)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Misal: 15000000"
+                      value={costSavingInput || ''}
+                      onChange={(e) => setCostSavingInput(Number(e.target.value))}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-250 focus:outline-none focus:border-amber-500/50"
+                    />
+                    {costSavingInput > 0 && (
+                      <p className="text-[10px] text-emerald-400 mt-1">
+                        Rp {costSavingInput.toLocaleString('id-ID')}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                      Estimasi Investasi Program (Rp)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Misal: 3500000"
+                      value={investmentInput || ''}
+                      onChange={(e) => setInvestmentInput(Number(e.target.value))}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-250 focus:outline-none focus:border-amber-500/50"
+                    />
+                    {investmentInput > 0 && (
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Rp {investmentInput.toLocaleString('id-ID')}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {costSavingInput > 0 && investmentInput > 0 && (
+                  <div className="flex items-center justify-between text-xs bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2">
+                    <span className="text-slate-400 font-semibold">Estimasi ROI program ini:</span>
+                    <span className="font-black text-amber-400">
+                      {(costSavingInput / investmentInput).toFixed(1)}× Lipat
+                    </span>
+                  </div>
+                )}
+                <p className="text-[10px] text-slate-600">Nilai ini akan menggantikan estimasi otomatis pada halaman Laporan Akhir.</p>
               </div>
 
               <div>

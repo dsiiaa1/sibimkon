@@ -6,6 +6,7 @@ import { getProjects, getAssessments, getActionPlans } from '@/lib/db'
 import { Project, ActionPlan, Assessment } from '@/lib/mockData'
 import { generateFinalReport, generateCertificate } from '@/lib/pdf-generator'
 import { FileText, Award, ShieldCheck, Download, Edit3, CheckCircle2, Loader2 } from 'lucide-react'
+import { useUserRole } from '@/hooks/useUserRole'
 
 interface SignatureRecord {
   signed: boolean
@@ -54,6 +55,9 @@ export default function ReportsPage() {
   const [actionPlans, setActionPlans] = useState<ActionPlan[]>([])
   const [assessments, setAssessments] = useState<Assessment[]>([])
   const [consultantName, setConsultantName] = useState('Konsultan SIBIMKON')
+
+  // Role diverifikasi dari server — tidak bisa dimanipulasi via DevTools
+  const { userInfo, verified } = useUserRole()
 
   // Tanda tangan — primary: Supabase, fallback: localStorage
   // SIG_KEY di-memoize agar tidak berubah setiap render (mencegah useCallback infinite loop)
@@ -106,10 +110,15 @@ export default function ReportsPage() {
 
   useEffect(() => {
     async function loadData() {
-      const localUser = localStorage.getItem('sibimkon_user')
-      if (localUser) {
-        const u = JSON.parse(localUser)
-        setConsultantName(u.full_name || 'Konsultan SIBIMKON')
+      // consultantName diambil dari userInfo (server-verified jika tersedia)
+      if (userInfo?.full_name) {
+        setConsultantName(userInfo.full_name)
+      } else {
+        // fallback saat hook masih loading
+        const local = localStorage.getItem('sibimkon_user')
+        if (local) {
+          try { setConsultantName(JSON.parse(local)?.full_name || 'Konsultan SIBIMKON') } catch { /* noop */ }
+        }
       }
 
       const projects = await getProjects()
@@ -127,26 +136,38 @@ export default function ReportsPage() {
     }
     loadData()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId])
+  }, [projectId, userInfo])
 
   const handleSign = async (role: 'consultant' | 'company') => {
-    const localUser = localStorage.getItem('sibimkon_user')
-    const u = localUser ? JSON.parse(localUser) : {}
-    const userRole: string = u.role || ''
+    // Prioritas: gunakan userInfo dari server (verified). Jika belum verified (masih
+    // loading atau Supabase offline), fallback ke localStorage tetapi tampilkan peringatan.
+    const effectiveUser = userInfo ?? (() => {
+      const local = localStorage.getItem('sibimkon_user')
+      return local ? JSON.parse(local) : {}
+    })()
+
+    const userRoleRaw: string = effectiveUser?.role ?? ''
 
     const allowedRoles: Record<string, string[]> = {
       consultant: ['konsultan'],
       company: ['perusahaan'],
     }
-    if (!allowedRoles[role].includes(userRole)) {
-      alert(`Tanda tangan untuk bagian ini hanya diperbolehkan untuk role: ${allowedRoles[role].join(', ')}.\nRole Anda saat ini: ${userRole || 'tidak diketahui'}`)
+
+    if (!allowedRoles[role].includes(userRoleRaw)) {
+      const modeNote = verified
+        ? '(diverifikasi dari server)'
+        : '(belum diverifikasi — pastikan koneksi aktif)'
+      alert(
+        `Tanda tangan untuk bagian ini hanya diperbolehkan untuk role: ${allowedRoles[role].join(', ')}.\n` +
+        `Role Anda saat ini: ${userRoleRaw || 'tidak diketahui'} ${modeNote}`
+      )
       return
     }
 
     const rec: SignatureRecord = {
       signed: true,
       signedAt: new Date().toLocaleString('id-ID'),
-      signerName: u.full_name || (role === 'consultant' ? consultantName : project?.company_name || 'PIC Perusahaan'),
+      signerName: effectiveUser?.full_name || (role === 'consultant' ? consultantName : project?.company_name || 'PIC Perusahaan'),
     }
 
     const next: SigBundle = {
@@ -169,26 +190,34 @@ export default function ReportsPage() {
     }
   }
 
-  // ── ROI dari data KPI aktual vs baseline (Fix #7) ──
+  // ── ROI dari data KPI aktual vs baseline ──
+  // Prioritas: gunakan nilai manual (cost_saving_manual / investment_manual) jika ada,
+  // fallback ke estimasi otomatis hanya jika belum ada input manual sama sekali.
   const roiData = (() => {
-    if (actionPlans.length === 0) return { costSaving: 0, investment: 0, roi: 0 }
+    if (actionPlans.length === 0) return { costSaving: 0, investment: 0, roi: 0, isManual: false }
 
-    // Cost saving: hitung dari KPI yang sudah ada aktual dan mencapai target
-    // Estimasi: setiap unit perbaikan KPI diasumsikan setara Rp 500.000 nilai bisnis
+    const totalManualSaving = actionPlans.reduce((acc, a) => acc + (a.cost_saving_manual ?? 0), 0)
+    const totalManualInvestment = actionPlans.reduce((acc, a) => acc + (a.investment_manual ?? 0), 0)
+    const hasManualData = totalManualSaving > 0 || totalManualInvestment > 0
+
+    if (hasManualData) {
+      // Gunakan nilai yang diinput langsung oleh konsultan
+      const roi = totalManualInvestment > 0 ? totalManualSaving / totalManualInvestment : 0
+      return { costSaving: totalManualSaving, investment: totalManualInvestment, roi, isManual: true }
+    }
+
+    // Fallback: estimasi otomatis dari perbaikan KPI
     const costSaving = actionPlans.reduce((acc, act) => {
       if (act.kpi_actual === undefined) return acc
       const achieved = act.kpi_target > act.kpi_baseline
         ? Math.max(0, act.kpi_actual - act.kpi_baseline)   // higher is better
         : Math.max(0, act.kpi_baseline - act.kpi_actual)   // lower is better
-      const unitValue = 500000 // Rp 500rb per unit perbaikan KPI
+      const unitValue = 500000 // Rp 500rb per unit perbaikan KPI (estimasi default)
       return acc + achieved * unitValue
     }, 0)
-
-    // Investment: dihitung dari jumlah action plan aktif × estimasi biaya per plan
     const investment = actionPlans.filter(a => a.status !== 'belum_mulai').length * 2500000
-
     const roi = investment > 0 ? costSaving / investment : 0
-    return { costSaving, investment, roi }
+    return { costSaving, investment, roi, isManual: false }
   })()
 
   const beforeScore = project?.baseline_score || 0
@@ -213,7 +242,10 @@ export default function ReportsPage() {
     if (!project) return
     setCertLoading(true)
     try {
-      const doc = await generateCertificate(project)
+      const doc = await generateCertificate(project, {
+        consultant: consultantSig,
+        company: companySig,
+      })
       doc.save(`E-Sertifikat_${project.company_name.replace(/\s+/g, '_')}.pdf`)
     } catch (err) {
       console.error(err)
@@ -345,12 +377,16 @@ export default function ReportsPage() {
         {/* Right col */}
         <div className="lg:col-span-5 space-y-6">
 
-          {/* ROI — dihitung dari data KPI aktual */}
+          {/* ROI — menggunakan nilai manual jika ada, fallback ke estimasi KPI */}
           <div className="glass-card rounded-3xl border border-slate-800 bg-slate-950/20 p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-slate-200">Dampak Ekonomi &amp; ROI</h3>
-              <span className="text-[10px] text-slate-500 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded">
-                Dari data KPI aktual
+              <span className={`text-[10px] px-2 py-0.5 rounded border ${
+                roiData.isManual
+                  ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                  : 'text-slate-500 bg-slate-900 border-slate-800'
+              }`}>
+                {roiData.isManual ? 'Dari input manual konsultan' : 'Estimasi dari data KPI'}
               </span>
             </div>
             <div className="space-y-3">
@@ -392,6 +428,17 @@ export default function ReportsPage() {
             <p className="text-xs text-slate-500 leading-normal">
               Tanda tangan disimpan ke server (Supabase) dan dicache lokal. Tersedia di semua browser &amp; perangkat.
             </p>
+            {/* Badge verifikasi role */}
+            <div className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border ${
+              verified
+                ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                : 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+            }`}>
+              <ShieldCheck className="h-3 w-3" />
+              {verified
+                ? `Role terverifikasi server: ${userInfo?.role ?? '—'}`
+                : 'Role belum terverifikasi — mode offline/demo'}
+            </div>
             <div className="space-y-3">
               <SigBlock title="Konsultan Pendamping" orgLabel={consultantName} sig={consultantSig} role="consultant" />
               <SigBlock title="PIC Perusahaan Klien" orgLabel={project.company_name} sig={companySig} role="company" />

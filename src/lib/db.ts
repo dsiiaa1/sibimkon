@@ -195,7 +195,8 @@ export async function saveAssessments(projectId: string, assessments: Assessment
       const { error } = await sb.from('measure_assessments').upsert({
         project_id: projectId, dimension: assess.dimension,
         percentage_score: assess.percentage_score,
-        responses: { questions: assess.responses }
+        responses: { questions: assess.responses },
+        assessment_version: 1
       }, { onConflict: 'project_id,dimension,assessment_version' })
       if (error) throw error
     }
@@ -216,23 +217,36 @@ export async function saveAssessments(projectId: string, assessments: Assessment
 // ── MEASURE: VOM ──────────────────────────────────────────────────────────────
 
 export async function getVom(projectId: string): Promise<any[]> {
+  // Coba dari Supabase dulu
   try {
     const sb = getSupabase()
     if (!sb) throw new Error('No Supabase client')
     const { data, error } = await sb.from('measure_vom').select('*')
       .eq('project_id', projectId).order('priority', { ascending: true })
     if (error) throw error
+    // Sync hasil ke localStorage sebagai cache
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`sibimkon_vom_${projectId}`, JSON.stringify(data || []))
+    }
     return data || []
   } catch (err) {
-    console.warn('[getVom] failed:', err)
+    console.warn('[getVom] fallback to localStorage:', err)
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(`sibimkon_vom_${projectId}`)
+      return saved ? JSON.parse(saved) : []
+    }
     return []
   }
 }
 
 export async function saveVom(projectId: string, vomList: any[]): Promise<void> {
+  // Simpan ke localStorage dulu sebagai fallback
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(`sibimkon_vom_${projectId}`, JSON.stringify(vomList))
+  }
   try {
     const sb = getSupabase()
-    if (!sb) throw new Error('No Supabase client')
+    if (!sb) return // Sudah disimpan ke localStorage di atas
     const { error: delErr } = await sb.from('measure_vom').delete().eq('project_id', projectId)
     if (delErr) throw delErr
     if (vomList.length > 0) {
@@ -244,7 +258,7 @@ export async function saveVom(projectId: string, vomList: any[]): Promise<void> 
     }
     console.log('[saveVom] saved', vomList.length, 'items')
   } catch (err) {
-    console.warn('[saveVom] failed:', err)
+    console.warn('[saveVom] Supabase failed, localStorage only:', err)
   }
 }
 
@@ -326,6 +340,8 @@ export async function getActionPlans(projectId: string): Promise<ActionPlan[]> {
       kpi_name: d.kpi_name, kpi_baseline: Number(d.kpi_baseline || 0),
       kpi_target: Number(d.kpi_target || 0), kpi_unit: d.kpi_unit,
       kpi_actual: d.kpi_actual != null ? Number(d.kpi_actual) : undefined,
+      cost_saving_manual: d.cost_saving_manual != null ? Number(d.cost_saving_manual) : undefined,
+      investment_manual: d.investment_manual != null ? Number(d.investment_manual) : undefined,
       pic_name: d.pic_name, start_date: d.start_date,
       end_date: d.end_date, status: d.status, progress_percentage: d.progress_percentage
     }))
@@ -338,7 +354,8 @@ export async function getActionPlans(projectId: string): Promise<ActionPlan[]> {
 export async function saveActionPlans(projectId: string, actions: ActionPlan[]): Promise<void> {
   const db = getMockDB(); db.actionPlans[projectId] = actions; updateMockDB('actionPlans', db.actionPlans)
   const sb = getSupabase()
-  if (!sb) throw new Error('Supabase client tidak tersedia')
+  // Data sudah tersimpan ke mockDB di atas — jangan throw, cukup return
+  if (!sb) return
 
   // Fetch existing IDs dari Supabase
   const { data: existing, error: fetchErr } = await sb.from('improve_actions').select('id').eq('project_id', projectId)
@@ -366,6 +383,8 @@ export async function saveActionPlans(projectId: string, actions: ActionPlan[]):
       methodology: act.methodology, dimension: act.dimension, kpi_name: act.kpi_name,
       kpi_baseline: act.kpi_baseline, kpi_target: act.kpi_target, kpi_unit: act.kpi_unit,
       kpi_actual: act.kpi_actual != null ? act.kpi_actual : null,
+      cost_saving_manual: act.cost_saving_manual != null ? act.cost_saving_manual : null,
+      investment_manual: act.investment_manual != null ? act.investment_manual : null,
       pic_name: act.pic_name,
       start_date: act.start_date, end_date: act.end_date,
       status: act.status, progress_percentage: act.progress_percentage
@@ -379,6 +398,8 @@ export async function saveActionPlans(projectId: string, actions: ActionPlan[]):
       project_id: projectId, action_title: act.title, description: act.description,
       methodology: act.methodology, dimension: act.dimension, kpi_name: act.kpi_name,
       kpi_baseline: act.kpi_baseline, kpi_target: act.kpi_target, kpi_unit: act.kpi_unit,
+      cost_saving_manual: act.cost_saving_manual != null ? act.cost_saving_manual : null,
+      investment_manual: act.investment_manual != null ? act.investment_manual : null,
       pic_name: act.pic_name,
       start_date: act.start_date, end_date: act.end_date,
       status: act.status, progress_percentage: act.progress_percentage

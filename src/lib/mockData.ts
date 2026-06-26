@@ -95,6 +95,10 @@ export interface ActionPlan {
   kpi_target: number
   kpi_unit: string
   kpi_actual?: number
+  /** Estimasi penghematan biaya nyata (Rp) — diinput manual oleh konsultan */
+  cost_saving_manual?: number
+  /** Estimasi biaya investasi program nyata (Rp) — diinput manual oleh konsultan */
+  investment_manual?: number
   pic_name: string
   start_date: string
   end_date: string
