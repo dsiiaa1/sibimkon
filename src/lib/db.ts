@@ -494,6 +494,72 @@ export async function updateProjectPhase(projectId: string, newPhase: DmaicPhase
   }
 }
 
+/**
+ * updateProjectScore
+ *
+ * Update `current_productivity_index` (current_score) di project.
+ * Dipanggil setelah KPI aktual diinput di fase Improve agar angka
+ * Produktivitas Aktual di Reports/header ikut berubah tanpa harus
+ * kembali ke halaman Measure.
+ *
+ * Kalkulasi: rata-rata persentase pencapaian seluruh action plan
+ *   achievement% = clamp((actual - baseline) / (target - baseline) * 100, 0, 100)
+ * lalu blended dengan baseline_score:
+ *   new_current = baseline + (100 - baseline) * avg_achievement / 100
+ */
+export async function updateProjectScore(projectId: string, actionPlans: ActionPlan[]): Promise<number> {
+  const plansWithActual = actionPlans.filter(a => a.kpi_actual !== undefined && a.kpi_target !== a.kpi_baseline)
+
+  let newScore: number
+
+  if (plansWithActual.length === 0) {
+    // Belum ada KPI aktual — kembalikan score existing
+    const projects = await getProjects()
+    const proj = projects.find((p: Project) => p.id === projectId)
+    return proj?.current_score ?? 0
+  }
+
+  const avgAchievement = plansWithActual.reduce((acc, a) => {
+    const range = Math.abs(a.kpi_target - a.kpi_baseline)
+    // Support both "higher is better" dan "lower is better"
+    const improvement = a.kpi_target > a.kpi_baseline
+      ? (a.kpi_actual! - a.kpi_baseline)
+      : (a.kpi_baseline - a.kpi_actual!)
+    const pct = range > 0 ? Math.min(100, Math.max(0, (improvement / range) * 100)) : 0
+    return acc + pct
+  }, 0) / plansWithActual.length
+
+  // Ambil baseline dari project
+  const projects = await getProjects()
+  const proj = projects.find((p: Project) => p.id === projectId)
+  const baseline = proj?.baseline_score ?? 0
+
+  // Blended formula: baseline + headroom * achievement
+  newScore = Math.round(baseline + (100 - baseline) * (avgAchievement / 100))
+  newScore = Math.min(100, Math.max(0, newScore))
+
+  // Simpan ke mockDB
+  const db = getMockDB()
+  updateMockDB('projects', db.projects.map((p: Project) =>
+    p.id === projectId ? { ...p, current_score: newScore } : p
+  ))
+
+  // Simpan ke Supabase
+  try {
+    const sb = getSupabase()
+    if (sb) {
+      await sb.from('bimkon_projects').update({
+        current_productivity_index: newScore,
+        updated_at: new Date().toISOString()
+      }).eq('id', projectId)
+    }
+  } catch (err) {
+    console.warn('[updateProjectScore] Supabase fallback to mockDB only:', err)
+  }
+
+  return newScore
+}
+
 // ── Evidence Files ────────────────────────────────────────────────────────────
 
 export interface EvidenceRecord {

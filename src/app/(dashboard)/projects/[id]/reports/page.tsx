@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { getProjects, getAssessments, getActionPlans } from '@/lib/db'
+import { getProjects, getAssessments, getActionPlans, updateProjectScore } from '@/lib/db'
 import { Project, ActionPlan, Assessment } from '@/lib/mockData'
 import { generateFinalReport, generateCertificate } from '@/lib/pdf-generator'
 import { FileText, Award, ShieldCheck, Download, Edit3, CheckCircle2, Loader2 } from 'lucide-react'
@@ -133,6 +133,12 @@ export default function ReportsPage() {
       ])
       setActionPlans(plans)
       setAssessments(assess)
+
+      // Sync current_score ke Supabase/mockDB dari KPI aktual yang sudah ada
+      // Ini memastikan field DB tetap up-to-date meski user tidak buka Improve lagi
+      if (plans.some(a => a.kpi_actual !== undefined)) {
+        updateProjectScore(projectId, plans).catch(console.warn)
+      }
     }
     loadData()
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -221,7 +227,34 @@ export default function ReportsPage() {
   })()
 
   const beforeScore = project?.baseline_score || 0
-  const afterScore = project?.current_score || 0
+
+  // Hitung afterScore langsung dari kpi_actual action plans
+  // TIDAK bergantung pada project.current_score / current_productivity_index di DB
+  // karena field itu hanya diupdate dari Measure, bukan dari Improve.
+  //
+  // Formula: sama dengan updateProjectScore di db.ts
+  //   achievement% per plan = clamp((actual - baseline) / |target - baseline| * 100, 0, 100)
+  //   afterScore = baseline + (100 - baseline) * avg_achievement / 100
+  const afterScore = (() => {
+    const plansWithActual = actionPlans.filter(
+      a => a.kpi_actual !== undefined && a.kpi_target !== a.kpi_baseline
+    )
+    if (plansWithActual.length === 0) {
+      // Belum ada KPI aktual — tampilkan angka dari DB (nilai Measure)
+      return project?.current_score || beforeScore
+    }
+    const avgAchievement = plansWithActual.reduce((acc, a) => {
+      const range = Math.abs(a.kpi_target - a.kpi_baseline)
+      const improvement = a.kpi_target > a.kpi_baseline
+        ? (a.kpi_actual! - a.kpi_baseline)        // higher is better
+        : (a.kpi_baseline - a.kpi_actual!)         // lower is better
+      const pct = range > 0 ? Math.min(100, Math.max(0, (improvement / range) * 100)) : 0
+      return acc + pct
+    }, 0) / plansWithActual.length
+
+    return Math.min(100, Math.round(beforeScore + (100 - beforeScore) * (avgAchievement / 100)))
+  })()
+
   const improvement = afterScore - beforeScore
 
   const handleDownloadPDF = async () => {

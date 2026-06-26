@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { Project, ActionPlan } from '@/lib/mockData'
 import { Plus, CheckCircle2, AlertTriangle, Calendar, User, DollarSign, ArrowUpRight, Check, Trash, Upload, FileText, X, Loader2, ArrowRight, Lock } from 'lucide-react'
 import { ACTION_STATUS_LABELS, sanitizeText } from '@/lib/utils'
-import { getProjects, getActionPlans, saveActionPlans as saveActionPlansDb, updateProjectPhase, saveAuditLog, saveEvidenceRecord, saveNotification } from '@/lib/db'
+import { getProjects, getActionPlans, saveActionPlans as saveActionPlansDb, updateProjectPhase, updateProjectScore, saveAuditLog, saveEvidenceRecord, saveNotification } from '@/lib/db'
 import { useUserRole } from '@/hooks/useUserRole'
 
 export default function ImprovePage() {
@@ -196,6 +196,12 @@ export default function ImprovePage() {
         : act
     )
     saveActionPlans(updated)
+
+    // Hitung ulang current_score project dari KPI aktual semua action plan
+    // sehingga angka "Aktual" di Reports/header langsung berubah tanpa harus ke Measure dulu
+    updateProjectScore(projectId, updated).then(newScore => {
+      setProject(prev => prev ? { ...prev, current_score: newScore } : prev)
+    }).catch(console.warn)
 
     const localUser = localStorage.getItem('sibimkon_user')
     const uploaderInfo = localUser ? JSON.parse(localUser) : null
