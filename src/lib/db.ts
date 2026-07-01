@@ -1039,23 +1039,28 @@ export async function submitEvidence(
   // Simpan ke Supabase
   try {
     const sb = getSupabase()
-    if (sb) {
-      const { data, error } = await sb.from('action_evidence').insert({
-        project_id: projectId,
-        action_id: record.action_plan_id,
-        evidence_type: 'document',
-        title: record.action_title,
-        file_name: record.file_name,
-        file_url: record.file_url,
-        kpi_actual_value: record.kpi_submitted_value ?? null,
-        kpi_unit: record.kpi_unit ?? null,
-        uploaded_by: record.uploaded_by_id ?? null,
-        evidence_status: 'pending',
-      }).select('id').single()
-      if (!error && data?.id) newItem.id = data.id
+    if (!sb) throw new Error('No Supabase client')
+    const { data, error } = await sb.from('action_evidence').insert({
+      project_id:       projectId,
+      action_id:        record.action_plan_id,
+      evidence_type:    'document',
+      title:            record.action_title ?? null,
+      file_name:        record.file_name,
+      file_url:         record.file_url,
+      kpi_actual_value: record.kpi_submitted_value ?? null,
+      kpi_unit:         record.kpi_unit ?? null,
+      uploaded_by:      record.uploaded_by_id ?? null,
+      uploaded_by_name: record.uploaded_by_name ?? null,
+      uploaded_by_role: record.uploaded_by_role ?? null,
+      evidence_status:  'pending',
+    }).select('id').single()
+    if (error) {
+      console.error('[submitEvidence] Supabase insert error:', error.message, error.details, error.hint)
+    } else if (data?.id) {
+      newItem.id = data.id
     }
-  } catch (err) {
-    console.warn('[submitEvidence] Supabase failed, localStorage only:', err)
+  } catch (err: any) {
+    console.error('[submitEvidence] Exception:', err?.message || err)
   }
 
   return newItem
