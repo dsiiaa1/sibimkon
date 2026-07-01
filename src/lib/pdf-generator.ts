@@ -151,7 +151,8 @@ function formatDate(dateStr?: string): string {
 export async function generateFinalReport(
   project: ProjectData,
   assessments: PQCDSMScore[],
-  actionPlans: ActionPlanData[]
+  actionPlans: ActionPlanData[],
+  signatures?: SignatureData
 ) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pageW  = doc.internal.pageSize.getWidth()   // 210
@@ -592,6 +593,8 @@ export async function generateFinalReport(
 
   signatories.forEach((sig, i) => {
     const sx = margin + i * (sigW + sigGap)
+    const sigKey = i === 0 ? 'consultant' : 'company'
+    const sigRecord = signatures?.[sigKey]
 
     // Box background + border
     doc.setDrawColor(210, 215, 225); doc.setLineWidth(0.5)
@@ -613,8 +616,23 @@ export async function generateFinalReport(
     doc.setDrawColor(180, 185, 195); doc.setLineWidth(0.4)
     doc.line(sx + 8, y + 37, sx + sigW - 8, y + 37)
 
-    setC(C_MUTED); setN(7.5)
-    doc.text('Tanda Tangan', sx + sigW / 2, y + 43, { align: 'center' })
+    if (sigRecord?.signed) {
+      if (sigRecord.signatureImg) {
+        try {
+          doc.addImage(sigRecord.signatureImg, 'PNG', sx + (sigW - 40) / 2, y + 19, 40, 16)
+        } catch (e) {
+          console.warn('Failed to add signature image:', e)
+        }
+      }
+      setC(C_TEXT); setB(7.5)
+      doc.text(sigRecord.signerName, sx + sigW / 2, y + 42, { align: 'center' })
+      setC(C_MUTED); setN(6.5)
+      doc.text(`TTD: ${sigRecord.signedAt}`, sx + sigW / 2, y + 46, { align: 'center' })
+    } else {
+      setC(C_MUTED); setN(7.5)
+      doc.text('(Belum TTD)', sx + sigW / 2, y + 27, { align: 'center' })
+      doc.text('Tanda Tangan', sx + sigW / 2, y + 43, { align: 'center' })
+    }
 
     // Date placeholder
     const today = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -833,6 +851,13 @@ export async function generateCertificate(
 
   // Nama konsultan (jika sudah TTD)
   if (consultantSigned && signatures?.consultant.signerName) {
+    if (signatures.consultant.signatureImg) {
+      try {
+        doc.addImage(signatures.consultant.signatureImg, 'PNG', 42, 156, 35, 14)
+      } catch (e) {
+        console.warn('Failed to add cert signature image:', e)
+      }
+    }
     doc.setTextColor(...C_GOLD as [number,number,number]); setB(8)
     doc.text(signatures.consultant.signerName, 28, 165)
     doc.setTextColor(135, 140, 152); setN(7)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { getProjects, getAssessments, getActionPlans, updateProjectScore } from '@/lib/db'
 import { Project, ActionPlan, Assessment } from '@/lib/mockData'
@@ -12,6 +12,7 @@ interface SignatureRecord {
   signed: boolean
   signedAt: string
   signerName: string
+  signatureImg?: string
 }
 
 type SigBundle = {
@@ -65,6 +66,9 @@ export default function ReportsPage() {
   const [consultantSig, setConsultantSig] = useState<SignatureRecord>(EMPTY_SIG)
   const [companySig, setCompanySig] = useState<SignatureRecord>(EMPTY_SIG)
   const [sigSaving, setSigSaving] = useState<'consultant' | 'company' | null>(null)
+
+  const [showSigModal, setShowSigModal] = useState(false)
+  const [sigRole, setSigRole] = useState<'consultant' | 'company' | null>(null)
 
   const [pdfLoading, setPdfLoading] = useState(false)
   const [certLoading, setCertLoading] = useState(false)
@@ -144,7 +148,7 @@ export default function ReportsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, userInfo])
 
-  const handleSign = async (role: 'consultant' | 'company') => {
+  const handleSign = async (role: 'consultant' | 'company', signatureImg?: string) => {
     // Prioritas: gunakan userInfo dari server (verified). Jika belum verified (masih
     // loading atau Supabase offline), fallback ke localStorage tetapi tampilkan peringatan.
     const effectiveUser = userInfo ?? (() => {
@@ -174,6 +178,7 @@ export default function ReportsPage() {
       signed: true,
       signedAt: new Date().toLocaleString('id-ID'),
       signerName: effectiveUser?.full_name || (role === 'consultant' ? consultantName : project?.company_name || 'PIC Perusahaan'),
+      signatureImg,
     }
 
     const next: SigBundle = {
@@ -261,7 +266,10 @@ export default function ReportsPage() {
     if (!project) return
     setPdfLoading(true)
     try {
-      const doc = await generateFinalReport(project, assessments, actionPlans)
+      const doc = await generateFinalReport(project, assessments, actionPlans, {
+        consultant: consultantSig,
+        company: companySig,
+      })
       doc.save(`Laporan_Akhir_${project.project_code}.pdf`)
     } catch (err) {
       console.error(err)
@@ -320,7 +328,7 @@ export default function ReportsPage() {
           </span>
         ) : (
           <button
-            onClick={() => handleSign(role)}
+            onClick={() => { setSigRole(role); setShowSigModal(true); }}
             disabled={isSaving}
             className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-550 text-xs font-bold rounded-lg text-white cursor-pointer shrink-0 disabled:opacity-60"
           >
@@ -330,6 +338,159 @@ export default function ReportsPage() {
             }
           </button>
         )}
+      </div>
+    )
+  }
+
+  /* ── Modal Signature Pad ── */
+  const SignatureModal = () => {
+    const canvasRef = useRef<HTMLCanvasElement>(null)
+    const [isDrawing, setIsDrawing] = useState(false)
+
+    // Setup canvas resolution and styling
+    useEffect(() => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+      
+      // Clear canvas with white background
+      ctx.fillStyle = '#FFFFFF'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+    }, [])
+
+    const getCoordinates = (e: React.MouseEvent | React.TouchEvent) => {
+      const canvas = canvasRef.current
+      if (!canvas) return { x: 0, y: 0 }
+      const rect = canvas.getBoundingClientRect()
+      
+      // Handle touch vs mouse
+      if ('touches' in e) {
+        if (e.touches.length === 0) return { x: 0, y: 0 }
+        return {
+          x: e.touches[0].clientX - rect.left,
+          y: e.touches[0].clientY - rect.top
+        }
+      } else {
+        return {
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top
+        }
+      }
+    }
+
+    const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
+      e.preventDefault()
+      const canvas = canvasRef.current
+      if (!canvas) return
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+
+      const { x, y } = getCoordinates(e)
+      ctx.beginPath()
+      ctx.moveTo(x, y)
+      ctx.lineWidth = 2.5
+      ctx.lineCap = 'round'
+      ctx.strokeStyle = '#0F172A' // Dark navy/black signature for white PDF background
+      setIsDrawing(true)
+    }
+
+    const draw = (e: React.MouseEvent | React.TouchEvent) => {
+      if (!isDrawing) return
+      e.preventDefault()
+      const canvas = canvasRef.current
+      if (!canvas) return
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+
+      const { x, y } = getCoordinates(e)
+      ctx.lineTo(x, y)
+      ctx.stroke()
+    }
+
+    const stopDrawing = () => {
+      setIsDrawing(false)
+    }
+
+    const clearCanvas = () => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+      ctx.fillStyle = '#FFFFFF'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+    }
+
+    const saveSignature = () => {
+      const canvas = canvasRef.current
+      if (!canvas || !sigRole) return
+      
+      // Convert to base64 PNG
+      const dataUrl = canvas.toDataURL('image/png')
+      handleSign(sigRole, dataUrl)
+      setShowSigModal(false)
+      setSigRole(null)
+    }
+
+    if (!showSigModal || !sigRole) return null
+
+    const roleLabel = sigRole === 'consultant' ? 'Konsultan Pendamping' : 'PIC Perusahaan Klien'
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div className="w-full max-w-md bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+          <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+            <h3 className="text-sm font-bold text-slate-200">Tanda Tangan Digital — {roleLabel}</h3>
+            <button onClick={() => { setShowSigModal(false); setSigRole(null); }} className="text-slate-500 hover:text-slate-300">✕</button>
+          </div>
+          <div className="p-6 space-y-4">
+            <p className="text-xs text-slate-400 leading-normal">
+              Gunakan mouse atau layar sentuh Anda untuk menggambar tanda tangan di bawah ini:
+            </p>
+            
+            <div className="border border-slate-850 rounded-2xl overflow-hidden bg-white">
+              <canvas
+                ref={canvasRef}
+                width={400}
+                height={180}
+                className="w-full h-44 cursor-crosshair touch-none bg-white"
+                onMouseDown={startDrawing}
+                onMouseMove={draw}
+                onMouseUp={stopDrawing}
+                onMouseLeave={stopDrawing}
+                onTouchStart={startDrawing}
+                onTouchMove={draw}
+                onTouchEnd={stopDrawing}
+              />
+            </div>
+
+            <div className="flex justify-between gap-3 pt-2">
+              <button
+                type="button"
+                onClick={clearCanvas}
+                className="px-4 py-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-xs font-bold rounded-xl text-slate-400 hover:text-slate-200 transition-all"
+              >
+                Bersihkan
+              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowSigModal(false); setSigRole(null); }}
+                  className="px-4 py-2 text-xs text-slate-400 hover:text-slate-200"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={saveSignature}
+                  className="px-5 py-2 bg-indigo-650 hover:bg-indigo-600 text-xs font-bold rounded-xl text-white transition-all"
+                >
+                  Simpan &amp; Verifikasi
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     )
   }
@@ -479,6 +640,7 @@ export default function ReportsPage() {
           </div>
         </div>
       </div>
+      <SignatureModal />
     </div>
   )
 }

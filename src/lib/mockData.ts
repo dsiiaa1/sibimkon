@@ -95,6 +95,10 @@ export interface ActionPlan {
   kpi_target: number
   kpi_unit: string
   kpi_actual?: number
+  /** Nilai KPI aktual terverifikasi — diinput oleh konsultan setelah cek bukti */
+  verified_kpi_actual?: number
+  verified_by?: string
+  verified_at?: string
   /** Estimasi penghematan biaya nyata (Rp) — diinput manual oleh konsultan */
   cost_saving_manual?: number
   /** Estimasi biaya investasi program nyata (Rp) — diinput manual oleh konsultan */
@@ -104,6 +108,81 @@ export interface ActionPlan {
   end_date: string
   status: 'belum_mulai' | 'sedang_berjalan' | 'selesai' | 'tertunda'
   progress_percentage: number
+}
+
+// ── Tipe baru untuk revisi 2026 ───────────────────────────────────────────────
+
+/** Rekomendasi metode per masalah */
+export interface MethodRecommendation {
+  method: string
+  reason: string
+  priority: number
+}
+
+/** Masalah dari charter yang dikategorikan ke PQCDSM + rekomendasi metode */
+export interface MeasureProblem {
+  id: string
+  project_id: string
+  problem_text: string
+  source: 'charter' | 'manual'
+  pqcdsm_dimension: 'productivity' | 'quality' | 'cost' | 'delivery' | 'safety' | 'morale'
+  /** Alasan AI mengapa masalah ini masuk dimensi ini */
+  dimension_reason?: string
+  recommended_methods: MethodRecommendation[]
+  impact?: string
+  priority_rank: number
+  notes?: string
+  /** true = data sudah dihasilkan Gemini AI, false = data lama dari keyword matching */
+  ai_analyzed?: boolean
+}
+
+/** Kebutuhan implementasi metode di fase Analyze */
+export interface AnalyzeNeed {
+  id: string
+  project_id: string
+  method_name: string
+  pqcdsm_dimension?: string
+  need_category: 'sdm' | 'alat' | 'bahan' | 'sop' | 'pelatihan' | 'anggaran' | 'lainnya'
+  need_item: string
+  quantity?: string
+  estimated_cost?: number
+  responsible?: string
+  notes?: string
+  is_available: boolean
+}
+
+/** Bukti implementasi dengan status verifikasi */
+export interface EvidenceItem {
+  id: string
+  project_id: string
+  action_plan_id: string
+  action_title?: string
+  file_name: string
+  file_url: string
+  /** Nilai KPI aktual yang di-submit perusahaan (belum terverifikasi) */
+  kpi_submitted_value?: number
+  kpi_unit?: string
+  evidence_status: 'pending' | 'reviewed' | 'verified' | 'rejected'
+  reviewer_id?: string
+  reviewed_at?: string
+  reviewer_notes?: string
+  uploaded_by_id?: string
+  uploaded_by_name?: string
+  uploaded_by_role?: string
+  uploaded_at?: string
+}
+
+/** Catatan konsultan di KPI Dashboard (Control) */
+export interface ConsultantControlNote {
+  id: string
+  project_id: string
+  action_plan_id?: string
+  note_text: string
+  note_type: 'general' | 'kpi_comment' | 'warning' | 'recommendation'
+  is_visible_to_company: boolean
+  created_by?: string
+  created_by_name?: string
+  created_at: string
 }
 
 // Initial mock data
@@ -378,7 +457,11 @@ export const getMockDB = () => {
       assessments: INITIAL_ASSESSMENTS,
       fishbones: INITIAL_FISHBONES,
       fiveWhys: INITIAL_5WHY,
-      actionPlans: INITIAL_ACTION_PLANS
+      actionPlans: INITIAL_ACTION_PLANS,
+      measureProblems: {} as Record<string, MeasureProblem[]>,
+      analyzeNeeds: {} as Record<string, AnalyzeNeed[]>,
+      evidenceItems: {} as Record<string, EvidenceItem[]>,
+      consultantNotes: {} as Record<string, ConsultantControlNote[]>,
     }
   }
 
@@ -397,7 +480,11 @@ export const getMockDB = () => {
     assessments: getOrSet('assessments', INITIAL_ASSESSMENTS),
     fishbones: getOrSet('fishbones', INITIAL_FISHBONES),
     fiveWhys: getOrSet('fiveWhys', INITIAL_5WHY),
-    actionPlans: getOrSet('actionPlans', INITIAL_ACTION_PLANS)
+    actionPlans: getOrSet('actionPlans', INITIAL_ACTION_PLANS),
+    measureProblems: getOrSet('measureProblems', {}),
+    analyzeNeeds: getOrSet('analyzeNeeds', {}),
+    evidenceItems: getOrSet('evidenceItems', {}),
+    consultantNotes: getOrSet('consultantNotes', {}),
   }
 }
 

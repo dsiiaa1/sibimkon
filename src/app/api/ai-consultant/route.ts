@@ -168,13 +168,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const geminiKey = process.env.GEMINI_API_KEY
+  const groqKey = process.env.GROQ_API_KEY
 
-  // No key → always return dynamic fallback
-  if (!geminiKey) {
-    console.warn('GEMINI_API_KEY not set. Using dynamic fallback for:', projectTitle)
+  // No key → return error
+  if (!groqKey) {
+    console.warn('GROQ_API_KEY not set')
     return NextResponse.json(
-      buildDynamicFallback(projectTitle, companyName, vomList, pqcdsmScores, whyTree, fishboneItems),
+      { error: 'Konfigurasi AI belum tersedia. Tambahkan GROQ_API_KEY di .env.local' },
+      { status: 503 },
     )
   }
 
@@ -214,56 +215,85 @@ Berikan respon dalam format JSON yang valid dengan struktur berikut:
 }
 Kembalikan HANYA JSON di atas tanpa markdown formatting lainnya.`
 
-  // Call Gemini — auth key (AQ.xxx) uses x-goog-api-key header, standard key (AIza...) uses ?key= param
-  try {
-    const isAuthKey = geminiKey.startsWith('AQ.')
-    const url = isAuthKey
-      ? 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent'
-      : `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`
+  // Call Groq — OpenAI-compatible, retry dengan exponential backoff jika 429
+  const GROQ_MODEL = 'llama-3.3-70b-versatile'
+  const MAX_RETRIES = 4
+  const groqUrl = 'https://api.groq.com/openai/v1/chat/completions'
 
-    const geminiRes = await fetch(url, {
+  let lastErr: Error | null = null
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const groqRes = await fetch(groqUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(isAuthKey ? { 'x-goog-api-key': geminiKey } : {}),
+        'Authorization': `Bearer ${groqKey}`,
       },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json' },
+        model: GROQ_MODEL,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.1,
+        max_tokens: 2048,
       }),
     })
 
-    if (!geminiRes.ok) {
-      const errBody = await geminiRes.text().catch(() => '')
-      console.warn(`Gemini ${geminiRes.status}: ${errBody} — using fallback`)
-      return NextResponse.json(
-        buildDynamicFallback(projectTitle, companyName, vomList, pqcdsmScores, whyTree, fishboneItems),
-      )
+    if (groqRes.ok) {
+      const data = await groqRes.json()
+      const textResult: string | undefined = data.choices?.[0]?.message?.content
+
+      if (!textResult) {
+        return NextResponse.json(
+          { error: 'Groq tidak mengembalikan konten. Coba lagi dalam beberapa saat.' },
+          { status: 502 },
+        )
+      }
+
+      // Parse JSON dari teks (Groq mungkin bungkus dalam ```json ... ```)
+      const cleaned = textResult.trim()
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```$/i, '')
+        .trim()
+      try {
+        return NextResponse.json(JSON.parse(cleaned))
+      } catch {
+        // Coba cari kurung kurawal pertama
+        const start = cleaned.indexOf('{')
+        const end   = cleaned.lastIndexOf('}')
+        if (start !== -1 && end > start) {
+          try {
+            return NextResponse.json(JSON.parse(cleaned.substring(start, end + 1)))
+          } catch { /* lanjut */ }
+        }
+        return NextResponse.json(
+          { error: 'Groq mengembalikan format tidak valid. Coba lagi.' },
+          { status: 502 },
+        )
+      }
     }
 
-    const data = await geminiRes.json()
-    const textResult: string | undefined = data.candidates?.[0]?.content?.parts?.[0]?.text
+    if (groqRes.status === 429) {
+      const retryAfterSec = parseInt(groqRes.headers.get('Retry-After') ?? '0', 10)
+      const backoffMs = retryAfterSec > 0
+        ? retryAfterSec * 1000
+        : Math.min(1000 * 2 ** attempt, 16000)
 
-    if (!textResult) {
-      console.warn('Gemini returned empty content — using fallback')
-      return NextResponse.json(
-        buildDynamicFallback(projectTitle, companyName, vomList, pqcdsmScores, whyTree, fishboneItems),
-      )
+      console.warn(`[ai-consultant] 429 rate limit, retry ${attempt + 1}/${MAX_RETRIES} dalam ${backoffMs}ms`)
+      lastErr = new Error(`Rate limit — retry ${attempt + 1}/${MAX_RETRIES}`)
+      await new Promise((r) => setTimeout(r, backoffMs))
+      continue
     }
 
-    try {
-      return NextResponse.json(JSON.parse(textResult))
-    } catch {
-      console.warn('Gemini returned non-JSON — using fallback')
-      return NextResponse.json(
-        buildDynamicFallback(projectTitle, companyName, vomList, pqcdsmScores, whyTree, fishboneItems),
-      )
-    }
-  } catch (err: any) {
-    console.error('Gemini fetch error:', err?.message ?? err)
-    // Network error or anything unexpected — always fall back, never 500
+    // Error lain — lempar langsung
+    const errBody = await groqRes.text().catch(() => '')
     return NextResponse.json(
-      buildDynamicFallback(projectTitle, companyName, vomList, pqcdsmScores, whyTree, fishboneItems),
+      { error: `Groq API error ${groqRes.status}: ${errBody.substring(0, 200)}` },
+      { status: 502 },
     )
   }
+
+  // Semua retry habis
+  return NextResponse.json(
+    { error: `Groq API gagal setelah ${MAX_RETRIES} percobaan karena rate limit. Tunggu 1 menit lalu coba lagi.` },
+    { status: 429 },
+  )
 }
