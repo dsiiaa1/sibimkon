@@ -187,11 +187,20 @@ export async function POST(req: Request) {
       throw new Error('Response tidak memiliki field problems yang valid')
     }
 
-    // Validasi dan normalisasi setiap problem
-    const validDimensions = ['productivity', 'quality', 'cost', 'delivery', 'safety', 'morale']
+    // Helper robust untuk memastikan dimensi ter-map dengan benar
+    const mapDimension = (raw: any) => {
+      const s = String(raw || '').toLowerCase()
+      if (s.includes('qual') || s === 'q') return 'quality'
+      if (s.includes('cost') || s === 'c') return 'cost'
+      if (s.includes('deliv') || s === 'd') return 'delivery'
+      if (s.includes('safe') || s === 's') return 'safety'
+      if (s.includes('moral') || s === 'm') return 'morale'
+      return 'productivity' // default
+    }
+
     const normalized = parsed.problems.map((p: any, idx: number) => ({
       problem_text:     String(p.problem_text || '').trim(),
-      pqcdsm_dimension: validDimensions.includes(p.pqcdsm_dimension) ? p.pqcdsm_dimension : 'productivity',
+      pqcdsm_dimension: mapDimension(p.pqcdsm_dimension),
       dimension_reason: String(p.dimension_reason || '').trim(),
       recommended_methods: Array.isArray(p.recommended_methods)
         ? p.recommended_methods.map((m: any, ri: number) => ({
