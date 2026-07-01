@@ -118,7 +118,7 @@ main h6 {
 
 
 
-/* Gold accent overrides */
+/* Gold accent overrides (default/dark theme) */
 .text-indigo-400,
 .text-indigo-300 {
   color: var(--gold-400) !important;
@@ -467,8 +467,23 @@ main a.text-white {
 }
 
 main .text-indigo-400,
-main .text-indigo-300 {
-  color: var(--gold-500) !important; /* Luxury Gold - slightly darker for contrast */
+main .text-indigo-300,
+main [class*="text-indigo-"] {
+  color: var(--gold-600) !important; /* Dark Gold for contrast */
+}
+
+/* Fix light colored text with opacities in light mode (e.g., text-amber-400/70) */
+main [class*="text-amber-"] {
+  color: #b45309 !important; /* amber-700 */
+}
+main [class*="text-emerald-"] {
+  color: #059669 !important; /* emerald-600 */
+}
+main [class*="text-red-"] {
+  color: #dc2626 !important; /* red-600 */
+}
+main [class*="text-blue-"] {
+  color: #2563eb !important; /* blue-600 */
 }
 
 /* ===================================================
