@@ -972,7 +972,10 @@ export async function getEvidenceItems(projectId: string, actionPlanId?: string)
     let q = sb.from('action_evidence').select('*').eq('project_id', projectId).order('created_at', { ascending: false })
     if (actionPlanId) q = q.eq('action_id', actionPlanId)
     const { data, error } = await q
-    if (error) throw error
+    if (error) {
+      console.error('[getEvidenceItems] Supabase error:', error.message, error.details)
+      throw error
+    }
     return (data || []).map((d: any) => ({
       id: d.id,
       project_id: d.project_id,
@@ -987,10 +990,12 @@ export async function getEvidenceItems(projectId: string, actionPlanId?: string)
       reviewed_at: d.reviewed_at,
       reviewer_notes: d.reviewer_notes,
       uploaded_by_id: d.uploaded_by,
+      uploaded_by_name: d.uploaded_by_name,
+      uploaded_by_role: d.uploaded_by_role,
       uploaded_at: d.created_at,
     })) as EvidenceItem[]
-  } catch (err) {
-    console.warn('[getEvidenceItems] fallback to localStorage:', err)
+  } catch (err: any) {
+    console.error('[getEvidenceItems] Exception, fallback to localStorage:', err?.message || err)
     if (typeof window === 'undefined') return []
     const all: EvidenceItem[] = JSON.parse(localStorage.getItem(`sibimkon_evidence_${projectId}`) || '[]')
     return actionPlanId ? all.filter((e) => e.action_plan_id === actionPlanId) : all
