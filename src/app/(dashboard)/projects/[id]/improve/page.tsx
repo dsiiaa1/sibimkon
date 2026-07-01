@@ -552,15 +552,34 @@ export default function ImprovePage() {
                         <Upload className="h-3.5 w-3.5" /> Upload Bukti
                       </button>
                     )}
-                    {/* konsultan: juga bisa upload bukti */}
-                    {isKonsultan && (
-                      <button
-                        onClick={() => { setUploadAction(act); setKpiSubmitted(act.kpi_actual ?? act.kpi_baseline) }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-bold rounded-xl text-slate-400 hover:text-white transition-all cursor-pointer"
-                      >
-                        <ArrowUpRight className="h-3.5 w-3.5" /> Upload / Lihat Bukti
-                      </button>
-                    )}
+                    {/* konsultan: lihat & verifikasi bukti (bukan upload) */}
+                    {isKonsultan && (() => {
+                      const pendingEv = evidences.find(e => e.evidence_status === 'pending' || e.evidence_status === 'reviewed')
+                      if (evidences.length === 0) {
+                        return (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-slate-800 text-xs font-bold rounded-xl text-slate-600 italic">
+                            <Eye className="h-3.5 w-3.5" /> Belum ada bukti
+                          </span>
+                        )
+                      }
+                      return (
+                        <button
+                          onClick={() => {
+                            const ev = pendingEv || evidences[0]
+                            setVerifyTarget(ev)
+                            setVerifyActionId(act.id)
+                            setVerifiedKpi(ev.kpi_submitted_value ?? act.kpi_baseline)
+                            setVerifyNotes('')
+                            setVerifyStatus('verified')
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/40 text-xs font-bold rounded-xl text-indigo-300 hover:text-white transition-all cursor-pointer"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          {pendingEv ? 'Verifikasi Bukti' : 'Lihat Bukti'}
+                          {pendingEv && <span className="ml-1 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />}
+                        </button>
+                      )
+                    })()}
                   </div>
 
                 </div>
