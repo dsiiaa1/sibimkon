@@ -190,11 +190,11 @@ export async function POST(req: Request) {
     // Helper robust untuk memastikan dimensi ter-map dengan benar
     const mapDimension = (raw: any) => {
       const s = String(raw || '').toLowerCase()
-      if (s.includes('qual') || s === 'q') return 'quality'
-      if (s.includes('cost') || s === 'c') return 'cost'
-      if (s.includes('deliv') || s === 'd') return 'delivery'
-      if (s.includes('safe') || s === 's') return 'safety'
-      if (s.includes('moral') || s === 'm') return 'morale'
+      if (s.includes('qual') || s.includes('kualitas') || s.includes('mutu') || s === 'q') return 'quality'
+      if (s.includes('cost') || s.includes('biaya') || s.includes('uang') || s.includes('harga') || s === 'c') return 'cost'
+      if (s.includes('deliv') || s.includes('pengiriman') || s.includes('waktu') || s.includes('terlambat') || s === 'd') return 'delivery'
+      if (s.includes('safe') || s.includes('aman') || s.includes('keselamatan') || s.includes('risiko') || s === 's') return 'safety'
+      if (s.includes('moral') || s.includes('sdm') || s.includes('karyawan') || s.includes('motivasi') || s === 'm') return 'morale'
       return 'productivity' // default
     }
 
