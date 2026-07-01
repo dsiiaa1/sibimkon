@@ -681,8 +681,8 @@ export async function generateFinalReport(
 // ============================================================
 
 export interface SignatureData {
-  consultant: { signed: boolean; signerName: string; signedAt: string }
-  company:    { signed: boolean; signerName: string; signedAt: string }
+  consultant: { signed: boolean; signerName: string; signedAt: string; signatureImg?: string }
+  company:    { signed: boolean; signerName: string; signedAt: string; signatureImg?: string }
 }
 
 export async function generateCertificate(
