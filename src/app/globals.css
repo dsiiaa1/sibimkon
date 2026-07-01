@@ -240,9 +240,7 @@ input {
 
 /* Indigo buttons → Gold */
 .bg-indigo-600,
-.bg-indigo-500,
-[class*="bg-indigo-6"],
-[class*="bg-indigo-5"] {
+.bg-indigo-500 {
   background: linear-gradient(
     135deg,
     #aa821c 0%,
@@ -255,10 +253,8 @@ input {
 }
 .bg-indigo-600:hover,
 .bg-indigo-500:hover,
-[class*="bg-indigo-6"]:hover,
-[class*="bg-indigo-5"]:hover,
-[class*="hover\:bg-indigo-5"]:hover,
-[class*="hover\:bg-indigo-6"]:hover {
+.hover\:bg-indigo-500:hover,
+.hover\:bg-indigo-600:hover {
   background: linear-gradient(
     135deg,
     #c19a2d 0%,
@@ -276,10 +272,14 @@ input {
 }
 
 /* Indigo tinted backgrounds */
+.bg-indigo-500\/5 {
+  background-color: rgba(212, 160, 23, 0.04) !important;
+}
 .bg-indigo-500\/10 {
   background-color: rgba(212, 160, 23, 0.08) !important;
 }
-.bg-indigo-500\/20 {
+.bg-indigo-500\/20,
+.bg-indigo-600\/20 {
   background-color: rgba(212, 160, 23, 0.15) !important;
 }
 .bg-cyan-500\/10 {
