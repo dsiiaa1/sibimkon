@@ -10,17 +10,18 @@ import { Project, ProjectCharter, MeasureProblem, MethodRecommendation } from '@
 import {
   ArrowRight, Sparkles, AlertCircle, CheckCircle2,
   Lightbulb, ChevronDown, ChevronUp, Plus, Trash2, RefreshCw, Loader2,
+  Settings, DollarSign, Truck, ShieldAlert, Users, BadgeCheck
 } from 'lucide-react'
 import { useUserRole } from '@/hooks/useUserRole'
 
 /* ── metadata tampilan per dimensi ── */
-const DIM_META: Record<string, { label: string; icon: string; color: string; bg: string; border: string }> = {
-  productivity: { label: 'Productivity (P)', icon: '⚙️', color: 'text-indigo-400',  bg: 'bg-indigo-500/10',  border: 'border-indigo-500/30' },
-  quality:      { label: 'Quality (Q)',      icon: '✅', color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' },
-  cost:         { label: 'Cost (C)',         icon: '💰', color: 'text-amber-400',   bg: 'bg-amber-500/10',   border: 'border-amber-500/30' },
-  delivery:     { label: 'Delivery (D)',     icon: '🚚', color: 'text-cyan-400',    bg: 'bg-cyan-500/10',    border: 'border-cyan-500/30' },
-  safety:       { label: 'Safety (S)',       icon: '🦺', color: 'text-red-400',     bg: 'bg-red-500/10',     border: 'border-red-500/30' },
-  morale:       { label: 'Morale (M)',       icon: '👥', color: 'text-purple-400',  bg: 'bg-purple-500/10',  border: 'border-purple-500/30' },
+const DIM_META: Record<string, { label: string; icon: React.ElementType; color: string; bg: string; border: string }> = {
+  productivity: { label: 'Productivity (P)', icon: Settings,    color: 'text-indigo-400',  bg: 'bg-indigo-500/10',  border: 'border-indigo-500/30' },
+  quality:      { label: 'Quality (Q)',      icon: BadgeCheck,  color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' },
+  cost:         { label: 'Cost (C)',         icon: DollarSign,  color: 'text-amber-400',   bg: 'bg-amber-500/10',   border: 'border-amber-500/30' },
+  delivery:     { label: 'Delivery (D)',     icon: Truck,       color: 'text-cyan-400',    bg: 'bg-cyan-500/10',    border: 'border-cyan-500/30' },
+  safety:       { label: 'Safety (S)',       icon: ShieldAlert, color: 'text-red-400',     bg: 'bg-red-500/10',     border: 'border-red-500/30' },
+  morale:       { label: 'Morale (M)',       icon: Users,       color: 'text-purple-400',  bg: 'bg-purple-500/10',  border: 'border-purple-500/30' },
 }
 
 const ALL_DIMS = ['productivity', 'quality', 'cost', 'delivery', 'safety', 'morale']
@@ -363,8 +364,8 @@ export default function MeasurePage() {
           {dimCount.map(({ dim, count }) => {
             const m = DIM_META[dim]
             return (
-              <div key={dim} className={`p-3 rounded-2xl border text-center transition-all ${count > 0 ? `${m.bg} ${m.border}` : 'bg-slate-950/30 border-slate-800'}`}>
-                <span className="text-lg block">{m.icon}</span>
+                <div key={dim} className={`p-3 rounded-2xl border text-center transition-all ${count > 0 ? `${m.bg} ${m.border}` : 'bg-slate-950/30 border-slate-800'}`}>
+                  <m.icon className={`h-6 w-6 mx-auto mb-1 ${count > 0 ? m.color : 'text-slate-600 opacity-50'}`} />
                 <span className={`text-[10px] font-bold block mt-1 ${count > 0 ? m.color : 'text-slate-600'}`}>{m.label.split(' ')[0]}</span>
                 <span className={`text-xl font-black block ${count > 0 ? m.color : 'text-slate-700'}`}>{count}</span>
               </div>
@@ -417,7 +418,7 @@ export default function MeasurePage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Dimensi:</span>
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border text-xs font-bold ${meta.bg} ${meta.border} ${meta.color}`}>
-                        {meta.icon} {meta.label}
+                        <meta.icon className="h-3.5 w-3.5" /> {meta.label}
                       </span>
                       {(prob as any).dimension_reason && (
                         <span className="text-[10px] text-slate-500 italic">— {(prob as any).dimension_reason}</span>
