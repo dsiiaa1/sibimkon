@@ -83,6 +83,13 @@ export interface WhyNode {
   children?: WhyNode[]
 }
 
+export interface ParetoItem {
+  id?: string
+  project_id: string
+  problem_name: string
+  score: number
+}
+
 export interface ActionPlan {
   id: string
   project_id: string

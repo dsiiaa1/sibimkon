@@ -203,5 +203,14 @@ CREATE TABLE IF NOT EXISTS public.consultant_control_notes (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Tabel Pareto Data (Input Manual Masalah & Skor)
+CREATE TABLE IF NOT EXISTS public.pareto_data (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID REFERENCES public.bimkon_projects(id) ON DELETE CASCADE,
+    problem_name TEXT NOT NULL,
+    score INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Memastikan PostgREST me-reload schema
 NOTIFY pgrst, 'reload schema';

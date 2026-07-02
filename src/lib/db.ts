@@ -1,7 +1,7 @@
 'use client'
 
 import { createClient } from './supabase/client'
-import { getMockDB, updateMockDB, Project, Company, ProjectCharter, Assessment, FishboneNode, WhyNode, ActionPlan, MeasureProblem, AnalyzeNeed, EvidenceItem, ConsultantControlNote } from './mockData'
+import { getMockDB, updateMockDB, Project, Company, ProjectCharter, Assessment, FishboneNode, WhyNode, ActionPlan, MeasureProblem, AnalyzeNeed, EvidenceItem, ConsultantControlNote, ParetoItem } from './mockData'
 
 function handleDbError(error: any): never {
   console.error('[DB Error]', error)
@@ -1214,5 +1214,60 @@ export async function deleteConsultantNote(projectId: string, noteId: string): P
     }
   } catch (err) {
     console.warn('[deleteConsultantNote] Supabase failed, localStorage only:', err)
+  }
+}
+
+/* ═══════════════════════════════════════════════════ */
+/*  PARETO DATA (Input Manual Masalah & Skor)         */
+/* ═══════════════════════════════════════════════════ */
+
+export async function getParetoData(projectId: string): Promise<ParetoItem[]> {
+  // localStorage fallback
+  const key = `sibimkon_pareto_${projectId}`
+  const local: ParetoItem[] = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem(key) || '[]') : []
+
+  try {
+    const sb = getSupabase()
+    if (sb) {
+      const { data, error } = await sb.from('pareto_data').select('*').eq('project_id', projectId).order('score', { ascending: false })
+      if (!error && data && data.length > 0) {
+        const items: ParetoItem[] = data.map((d: any) => ({
+          id: d.id,
+          project_id: d.project_id,
+          problem_name: d.problem_name,
+          score: d.score,
+        }))
+        if (typeof window !== 'undefined') localStorage.setItem(key, JSON.stringify(items))
+        return items
+      }
+    }
+  } catch (err) {
+    console.warn('[getParetoData] Supabase failed, using localStorage:', err)
+  }
+  return local
+}
+
+export async function saveParetoData(projectId: string, items: ParetoItem[]): Promise<void> {
+  // localStorage
+  const key = `sibimkon_pareto_${projectId}`
+  if (typeof window !== 'undefined') localStorage.setItem(key, JSON.stringify(items))
+
+  try {
+    const sb = getSupabase()
+    if (sb) {
+      // Hapus data lama lalu insert semua baris baru (upsert sederhana)
+      await sb.from('pareto_data').delete().eq('project_id', projectId)
+      if (items.length > 0) {
+        const rows = items.map((item) => ({
+          project_id: projectId,
+          problem_name: item.problem_name,
+          score: item.score,
+        }))
+        const { error } = await sb.from('pareto_data').insert(rows)
+        if (error) console.error('[saveParetoData] insert error:', error.message)
+      }
+    }
+  } catch (err) {
+    console.warn('[saveParetoData] Supabase failed, localStorage only:', err)
   }
 }

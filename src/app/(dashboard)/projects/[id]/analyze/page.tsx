@@ -5,15 +5,16 @@ import { useRouter, useParams } from 'next/navigation'
 import {
   getProjects, getAssessments, getActionPlans, saveActionPlans,
   getFishbones, saveFishbones, getFiveWhys, saveFiveWhys,
-  updateProjectPhase, getMeasureProblems, getAnalyzeNeeds, saveAnalyzeNeeds, getProjectCharter
+  updateProjectPhase, getMeasureProblems, getAnalyzeNeeds, saveAnalyzeNeeds, getProjectCharter,
+  getParetoData, saveParetoData,
 } from '@/lib/db'
 import {
   Project, FishboneNode, WhyNode, ActionPlan, Assessment,
-  MeasureProblem, AnalyzeNeed,
+  MeasureProblem, AnalyzeNeed, ParetoItem,
 } from '@/lib/mockData'
 import {
-  Sparkles, Plus, AlertCircle, ArrowRight,
-  PackageCheck, Trash2, CheckCircle2, Download,
+  Sparkles, Plus, AlertCircle, ArrowRight, Trash2, Save, CheckCircle,
+  PackageCheck, CheckCircle2, Download,
 } from 'lucide-react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip,
@@ -66,6 +67,10 @@ export default function AnalyzePage() {
   const [needAvailable,   setNeedAvailable]   = useState(false)
   const [projectCharter,  setProjectCharter]  = useState<any>(null)
 
+  /* ── pareto input manual ── */
+  const [paretoItems,    setParetoItems]    = useState<ParetoItem[]>([])
+  const [paretoSaveMsg,  setParetoSaveMsg]  = useState<string | null>(null)
+
   /* ── load ── */
   useEffect(() => {
     async function loadData() {
@@ -74,13 +79,14 @@ export default function AnalyzePage() {
       if (!proj) { router.push('/dashboard'); return }
       setProject(proj)
 
-      const [existingAssessments, fishbones, fiveWhys, mProblems, aNeeds, charter] = await Promise.all([
+      const [existingAssessments, fishbones, fiveWhys, mProblems, aNeeds, charter, pareto] = await Promise.all([
         getAssessments(projectId),
         getFishbones(projectId),
         getFiveWhys(projectId),
         getMeasureProblems(projectId),
         getAnalyzeNeeds(projectId),
         getProjectCharter(projectId),
+        getParetoData(projectId),
       ])
       setAssessments(existingAssessments)
       setFishboneItems(fishbones)
@@ -88,6 +94,7 @@ export default function AnalyzePage() {
       setMeasureProblems(mProblems)
       setAnalyzeNeeds(aNeeds)
       setProjectCharter(charter)
+      setParetoItems(pareto)
 
       if (mProblems.length > 0 && mProblems[0].recommended_methods?.length > 0) {
         setNeedMethod(mProblems[0].recommended_methods[0].method)
@@ -97,27 +104,38 @@ export default function AnalyzePage() {
     loadData()
   }, [projectId, router])
 
-  /* ── pareto (computed) ── */
+  /* ── pareto (computed from user input) ── */
   const paretoData = (() => {
-    const data = [
-      { name: '📄 Project Charter', value: projectCharter?.problem_statement ? 1 : 0 },
-      { name: '📊 Measure (VOM)', value: measureProblems.length },
-      { name: '🐟 Ishikawa Fishbone', value: fishboneItems.length },
-      { name: '❓ 5-Why Analysis', value: whys.length }
-    ].filter(d => d.value > 0)
-
-    if (data.length === 0) return []
-
-    const sorted = data.sort((a, b) => b.value - a.value)
-    const total = sorted.reduce((acc, a) => acc + a.value, 0) || 1
+    if (paretoItems.length === 0) return []
+    const sorted = [...paretoItems].sort((a, b) => b.score - a.score)
+    const total = sorted.reduce((acc, a) => acc + a.score, 0) || 1
     let cumulative = 0
     return sorted.map((a) => {
-      const pct = Math.round((a.value / total) * 100)
+      const pct = Math.round((a.score / total) * 100)
       cumulative += pct
-      return { name: a.name, value: a.value, percentage: pct, cumulative: Math.min(cumulative, 100) }
+      return { name: a.problem_name, value: a.score, percentage: pct, cumulative: Math.min(cumulative, 100) }
     })
   })()
   const top2Labels = paretoData.slice(0, 2).map((d) => d.name).join(' dan ')
+
+  /* ── pareto handlers ── */
+  const handleAddParetoRow = () => {
+    setParetoItems([...paretoItems, { project_id: projectId, problem_name: '', score: 0 }])
+  }
+  const handleParetoChange = (index: number, field: 'problem_name' | 'score', value: string) => {
+    const updated = [...paretoItems]
+    if (field === 'score') updated[index].score = parseInt(value) || 0
+    else updated[index].problem_name = value
+    setParetoItems(updated)
+  }
+  const handleDeleteParetoRow = (index: number) => {
+    setParetoItems(paretoItems.filter((_, i) => i !== index))
+  }
+  const handleSavePareto = async () => {
+    await saveParetoData(projectId, paretoItems)
+    setParetoSaveMsg('Data Pareto berhasil disimpan!')
+    setTimeout(() => setParetoSaveMsg(null), 3000)
+  }
 
   /* ── computed for needs tab ── */
   const needMethods        = Array.from(new Set(analyzeNeeds.map((n) => n.method_name)))
@@ -486,13 +504,79 @@ export default function AnalyzePage() {
           <div className="space-y-6">
             <div className="border-b border-slate-850 pb-4">
               <h2 className="text-lg font-bold text-slate-200">Analisis Pareto (80/20 Rule)</h2>
-              <p className="text-xs text-slate-500">Dihitung otomatis berdasarkan jumlah identifikasi masalah pada setiap tahap analisis</p>
+              <p className="text-xs text-slate-500">Masukkan daftar masalah beserta skor/jumlahnya, lalu diagram Pareto akan otomatis terbentuk</p>
             </div>
-            {paretoData.length === 0 ? (
-              <div className="text-center py-12 border border-dashed border-slate-800 rounded-2xl text-slate-500 text-sm">
-                Belum ada masalah yang diidentifikasi. Isi Project Charter, Measure (VOM), Fishbone, atau 5-Why terlebih dahulu.
+
+            {/* ── Tabel Input Masalah ── */}
+            <div className="bg-slate-950/40 border border-slate-850 rounded-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-300">Daftar Masalah & Skor</h3>
+                <div className="flex items-center gap-2">
+                  {paretoSaveMsg && (
+                    <span className="flex items-center gap-1 text-xs text-emerald-400 font-semibold animate-pulse">
+                      <CheckCircle className="h-3.5 w-3.5" /> {paretoSaveMsg}
+                    </span>
+                  )}
+                  <button onClick={handleSavePareto} className="flex items-center gap-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-2 rounded-xl transition-colors cursor-pointer">
+                    <Save className="h-3.5 w-3.5" /> Simpan
+                  </button>
+                </div>
               </div>
-            ) : (
+
+              {/* Header tabel */}
+              <div className="grid grid-cols-12 gap-3 text-xs font-bold uppercase tracking-wider text-slate-500 px-1">
+                <div className="col-span-1 text-center">No</div>
+                <div className="col-span-7">Nama Masalah / Faktor</div>
+                <div className="col-span-3 text-center">Skor / Jumlah</div>
+                <div className="col-span-1 text-center">Aksi</div>
+              </div>
+
+              {/* Baris data */}
+              {paretoItems.length === 0 ? (
+                <div className="text-center py-8 text-slate-600 text-sm border border-dashed border-slate-800 rounded-xl">
+                  Belum ada data. Klik tombol &quot;Tambah Baris&quot; di bawah untuk mulai.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {paretoItems.map((item, idx) => (
+                    <div key={idx} className="grid grid-cols-12 gap-3 items-center bg-slate-900/60 border border-slate-800 rounded-xl px-3 py-2">
+                      <div className="col-span-1 text-center text-xs font-bold text-slate-500">{idx + 1}</div>
+                      <div className="col-span-7">
+                        <input
+                          type="text"
+                          value={item.problem_name}
+                          onChange={(e) => handleParetoChange(idx, 'problem_name', e.target.value)}
+                          placeholder="Contoh: Cacat produk, Keterlambatan pengiriman..."
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-sm text-slate-300 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50 transition-colors"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <input
+                          type="number"
+                          value={item.score || ''}
+                          onChange={(e) => handleParetoChange(idx, 'score', e.target.value)}
+                          placeholder="0"
+                          min={0}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-sm text-center text-slate-300 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50 transition-colors"
+                        />
+                      </div>
+                      <div className="col-span-1 text-center">
+                        <button onClick={() => handleDeleteParetoRow(idx)} className="text-red-500/60 hover:text-red-400 transition-colors cursor-pointer">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <button onClick={handleAddParetoRow} className="flex items-center gap-1.5 text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer mt-1">
+                <Plus className="h-4 w-4" /> Tambah Baris Masalah
+              </button>
+            </div>
+
+            {/* ── Chart ── */}
+            {paretoData.length > 0 && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
                 <div className="lg:col-span-8 bg-slate-950/40 border border-slate-850 p-4 rounded-3xl h-80">
                   <ResponsiveContainer width="100%" height="100%">
@@ -504,11 +588,11 @@ export default function AnalyzePage() {
                         </linearGradient>
                       </defs>
                       <XAxis dataKey="name" tick={{ fill:'#94a3b8', fontSize:10 }} axisLine={false} tickLine={false} />
-                      <YAxis yAxisId="left" tick={{ fill:'#64748b', fontSize:10 }} axisLine={false} tickLine={false} label={{ value:'Jml Masalah', angle:-90, position:'insideLeft', fill:'#64748b', fontSize:9, offset: -5 }} />
+                      <YAxis yAxisId="left" tick={{ fill:'#64748b', fontSize:10 }} axisLine={false} tickLine={false} label={{ value:'Skor', angle:-90, position:'insideLeft', fill:'#64748b', fontSize:9, offset: -5 }} />
                       <YAxis yAxisId="right" orientation="right" domain={[0,100]} tick={{ fill:'#64748b', fontSize:10 }} axisLine={false} tickLine={false} label={{ value:'Kumulatif %', angle:90, position:'insideRight', fill:'#64748b', fontSize:9, offset: -5 }} />
-                      <Tooltip 
+                      <Tooltip
                         contentStyle={{ backgroundColor:'rgba(15, 23, 42, 0.95)', borderColor:'#4f46e5', borderRadius:12, backdropFilter: 'blur(8px)', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)' }}
-                        formatter={(val:any, name:any) => [name==='cumulative' ? `${val}%` : val, name==='cumulative' ? 'Kumulatif' : 'Identifikasi Masalah']} 
+                        formatter={(val:any, name:any) => [name==='cumulative' ? `${val}%` : val, name==='cumulative' ? 'Kumulatif' : 'Skor']}
                       />
                       <Bar yAxisId="left" dataKey="value" fill="url(#paretoBarGrad)" stroke="#6366f1" strokeWidth={1} radius={[4,4,0,0]} animationDuration={1200} />
                       <Line yAxisId="right" type="monotone" dataKey="cumulative" stroke="#ec4899" strokeWidth={3} dot={{ r:4, fill:'#ec4899', strokeWidth: 2, stroke: '#0f172a' }} activeDot={{ r: 6 }} animationDuration={1500} />
@@ -516,14 +600,14 @@ export default function AnalyzePage() {
                   </ResponsiveContainer>
                 </div>
                 <div className="lg:col-span-4 space-y-4">
-                  {paretoData.slice(0,2).length > 0 && (
+                  {paretoData.length >= 2 && (
                     <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 space-y-2">
                       <div className="flex items-center gap-1 text-xs font-bold text-indigo-400">
-                        <AlertCircle className="h-4 w-4" /> Prioritas Utama
+                        <AlertCircle className="h-4 w-4" /> Prioritas Utama (80/20)
                       </div>
                       <p className="text-xs text-slate-400 leading-normal">
-                        Sebagian besar identifikasi masalah/akar masalah bersumber pada analisis <span className="text-indigo-400 font-semibold">{top2Labels}</span> yang mencakup{' '}
-                        <span className="text-indigo-400 font-bold">{paretoData[1]?.cumulative || paretoData[0]?.cumulative}%</span> dari total identifikasi masalah.
+                        Fokus perbaikan pada masalah <span className="text-indigo-400 font-semibold">{top2Labels}</span> yang menyumbang{' '}
+                        <span className="text-indigo-400 font-bold">{paretoData[1]?.cumulative || paretoData[0]?.cumulative}%</span> dari total skor permasalahan.
                       </p>
                     </div>
                   )}
@@ -532,7 +616,7 @@ export default function AnalyzePage() {
                       <div key={idx} className="flex justify-between items-center bg-slate-950/60 border border-slate-850 px-3.5 py-2 rounded-xl text-xs">
                         <span className="font-semibold text-slate-350 truncate">{item.name}</span>
                         <div className="flex items-center gap-3 ml-2 shrink-0">
-                          <span className="text-slate-500">Jumlah: <span className="text-slate-300">{item.value} item</span></span>
+                          <span className="text-slate-500">Skor: <span className="text-slate-300">{item.value}</span></span>
                           <span className="font-bold text-indigo-400">{item.cumulative}%</span>
                         </div>
                       </div>
