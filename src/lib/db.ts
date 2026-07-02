@@ -144,7 +144,7 @@ export async function getProjectCharter(projectId: string): Promise<ProjectChart
   try {
     const sb = getSupabase()
     if (!sb) throw new Error('No Supabase client')
-    const { data, error } = await sb.from('project_charters').select('*').eq('project_id', projectId).single()
+    const { data, error } = await sb.from('project_charters').select('*').eq('project_id', projectId).maybeSingle()
     if (error) handleDbError(error)
     return data
   } catch (err) {
