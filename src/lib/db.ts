@@ -44,7 +44,10 @@ export async function createProject(project: Omit<Project, 'id' | 'project_code'
   try {
     const sb = getSupabase()
     if (!sb) throw new Error('No Supabase client')
+    const newProjectCode = `BK-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`
+
     const { data, error } = await sb.from('bimkon_projects').insert({
+      project_code: newProjectCode,
       title: project.title, description: project.description,
       company_id: project.company_id, consultant_id: project.consultant_id,
       status: project.status, start_date: project.start_date,
