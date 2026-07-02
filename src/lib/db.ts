@@ -852,12 +852,12 @@ export async function getMeasureProblems(projectId: string): Promise<MeasureProb
       source: d.source || 'manual',
       pqcdsm_dimension: d.pqcdsm_dimension,
       recommended_methods: d.recommended_methods || [],
-      dimension_reason: d.dimension_reason || d.notes || '',
+      dimension_reason: d.notes || '',   // notes kolom dipakai simpan dimension_reason
       impact: d.impact,
       priority_rank: d.priority_rank,
-      notes: d.notes,
-      // Data yang sudah tersimpan di Supabase selalu dianggap valid (sudah dianalisis)
-      ai_analyzed: true,
+      // Flag apakah data ini sudah dari Gemini AI (bukan keyword matching lama)
+      // Ditandai dari notes field yang berisi dimension_reason (AI selalu isi ini)
+      ai_analyzed: !!(d.notes && d.notes.length > 0),
     })) as MeasureProblem[]
   } catch (err) {
     console.warn('[getMeasureProblems] fallback to localStorage:', err)
@@ -880,7 +880,7 @@ export async function saveMeasureProblems(projectId: string, problems: MeasurePr
   const { error: delErr } = await sb.from('measure_problems').delete().eq('project_id', projectId)
   if (delErr) {
     console.error('[saveMeasureProblems] Delete error:', delErr)
-    // tetap lanjut insert agar data baru bisa masuk
+    if (typeof window !== 'undefined') alert('Gagal menghapus data lama: ' + delErr.message)
   }
   if (problems.length > 0) {
     const rows = problems.map((p) => ({
@@ -888,15 +888,16 @@ export async function saveMeasureProblems(projectId: string, problems: MeasurePr
       problem_text: p.problem_text,
       source: p.source,
       pqcdsm_dimension: p.pqcdsm_dimension,
-      dimension_reason: (p as any).dimension_reason || null,
       recommended_methods: p.recommended_methods,
       impact: p.impact || null,
       priority_rank: p.priority_rank,
-      notes: p.notes || null,
+      // Kembalikan penyimpanan dimension_reason ke notes agar tidak error missing column
+      notes: (p as any).dimension_reason || p.notes || null,
     }))
     const { error } = await sb.from('measure_problems').insert(rows)
     if (error) {
       console.error('[saveMeasureProblems] Insert error:', error)
+      if (typeof window !== 'undefined') alert('Gagal menyimpan ke database: ' + error.message)
       throw error  // propagate ke pemanggil agar user tahu gagal
     }
   }
