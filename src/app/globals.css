@@ -239,6 +239,7 @@ input {
    =================================================== */
 
 /* Indigo buttons → Gold */
+.bg-indigo-650,
 .bg-indigo-600,
 .bg-indigo-500 {
   background: linear-gradient(
@@ -251,8 +252,10 @@ input {
   font-weight: 700;
   box-shadow: 0 4px 16px rgba(212, 175, 55, 0.25) !important;
 }
+.bg-indigo-650:hover,
 .bg-indigo-600:hover,
 .bg-indigo-500:hover,
+.hover\:bg-indigo-650:hover,
 .hover\:bg-indigo-500:hover,
 .hover\:bg-indigo-600:hover {
   background: linear-gradient(
