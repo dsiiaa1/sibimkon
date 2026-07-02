@@ -852,12 +852,12 @@ export async function getMeasureProblems(projectId: string): Promise<MeasureProb
       source: d.source || 'manual',
       pqcdsm_dimension: d.pqcdsm_dimension,
       recommended_methods: d.recommended_methods || [],
-      dimension_reason: d.notes || '',   // notes kolom dipakai simpan dimension_reason
+      dimension_reason: d.dimension_reason || d.notes || '',
       impact: d.impact,
       priority_rank: d.priority_rank,
-      // Flag apakah data ini sudah dari Gemini AI (bukan keyword matching lama)
-      // Ditandai dari notes field yang berisi dimension_reason (AI selalu isi ini)
-      ai_analyzed: !!(d.notes && d.notes.length > 0),
+      notes: d.notes,
+      // Data yang sudah tersimpan di Supabase selalu dianggap valid (sudah dianalisis)
+      ai_analyzed: true,
     })) as MeasureProblem[]
   } catch (err) {
     console.warn('[getMeasureProblems] fallback to localStorage:', err)
