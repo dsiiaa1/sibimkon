@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import {
   getProjects, getAssessments, getActionPlans, saveActionPlans,
   getFishbones, saveFishbones, getFiveWhys, saveFiveWhys,
-  updateProjectPhase, getMeasureProblems, getAnalyzeNeeds, saveAnalyzeNeeds,
+  updateProjectPhase, getMeasureProblems, getAnalyzeNeeds, saveAnalyzeNeeds, getProjectCharter
 } from '@/lib/db'
 import {
   Project, FishboneNode, WhyNode, ActionPlan, Assessment,
