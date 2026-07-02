@@ -142,13 +142,38 @@ CREATE TABLE IF NOT EXISTS public.improve_actions (
     description TEXT,
     methodology TEXT,
     dimension TEXT,
-    pic TEXT,
+    kpi_name TEXT,
+    kpi_baseline NUMERIC,
+    kpi_target NUMERIC,
+    kpi_unit TEXT,
+    kpi_actual NUMERIC,
+    verified_kpi_actual NUMERIC,
+    verified_by TEXT,
+    verified_at TIMESTAMP WITH TIME ZONE,
+    cost_saving_manual NUMERIC,
+    investment_manual NUMERIC,
+    pic_name TEXT,
     start_date DATE,
     end_date DATE,
     status TEXT,
     progress_percentage INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Memastikan kolom-kolom baru ditambahkan jika tabel sudah pernah dibuat sebelumnya
+DO $$ 
+BEGIN
+    BEGIN ALTER TABLE public.improve_actions ADD COLUMN kpi_name TEXT; EXCEPTION WHEN duplicate_column THEN END;
+    BEGIN ALTER TABLE public.improve_actions ADD COLUMN kpi_baseline NUMERIC; EXCEPTION WHEN duplicate_column THEN END;
+    BEGIN ALTER TABLE public.improve_actions ADD COLUMN kpi_target NUMERIC; EXCEPTION WHEN duplicate_column THEN END;
+    BEGIN ALTER TABLE public.improve_actions ADD COLUMN kpi_unit TEXT; EXCEPTION WHEN duplicate_column THEN END;
+    BEGIN ALTER TABLE public.improve_actions ADD COLUMN kpi_actual NUMERIC; EXCEPTION WHEN duplicate_column THEN END;
+    BEGIN ALTER TABLE public.improve_actions ADD COLUMN verified_kpi_actual NUMERIC; EXCEPTION WHEN duplicate_column THEN END;
+    BEGIN ALTER TABLE public.improve_actions ADD COLUMN verified_by TEXT; EXCEPTION WHEN duplicate_column THEN END;
+    BEGIN ALTER TABLE public.improve_actions ADD COLUMN verified_at TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN END;
+    BEGIN ALTER TABLE public.improve_actions ADD COLUMN cost_saving_manual NUMERIC; EXCEPTION WHEN duplicate_column THEN END;
+    BEGIN ALTER TABLE public.improve_actions ADD COLUMN investment_manual NUMERIC; EXCEPTION WHEN duplicate_column THEN END;
+END $$;
 
 -- Tabel Action Evidence (Improve/Control)
 CREATE TABLE IF NOT EXISTS public.action_evidence (
@@ -211,6 +236,17 @@ CREATE TABLE IF NOT EXISTS public.pareto_data (
     score INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- 3. STORAGE BUCKETS (Untuk file bukti implementasi)
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('evidence-files', 'evidence-files', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+-- Buka RLS untuk storage (Development mode)
+CREATE POLICY "Allow all public access to evidence-files" 
+ON storage.objects FOR ALL 
+USING (bucket_id = 'evidence-files')
+WITH CHECK (bucket_id = 'evidence-files');
 
 -- Memastikan PostgREST me-reload schema
 NOTIFY pgrst, 'reload schema';
