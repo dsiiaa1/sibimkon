@@ -61,46 +61,13 @@ const C_MUTED: [number, number, number] = [130, 130, 140]
 const C_ROW_ALT: [number, number, number] = [245, 247, 252]
 
 // ============================================================
-// Font Embedding — Noto Sans untuk dukungan karakter Indonesia
+// Font Embedding Dinonaktifkan (Menggunakan Helvetica bawaan)
 // ============================================================
-let _notoSansRegularB64: string | null = null
-let _notoSansBoldB64: string | null = null
 
-async function fetchFontAsBase64(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(url)
-    if (!res.ok) return null
-    const buffer = await res.arrayBuffer()
-    const bytes = new Uint8Array(buffer)
-    let binary = ''
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i])
-    }
-    return btoa(binary)
-  } catch {
-    return null
-  }
-}
-
-async function embedNotoSans(doc: jsPDF): Promise<boolean> {
-  const REGULAR_TTF =
-    'https://fonts.gstatic.com/s/notosans/v36/o-0IIpQlx3QUlC5A4PNr5TRASf6M7bE.ttf'
-  const BOLD_TTF =
-    'https://fonts.gstatic.com/s/notosans/v36/o-0NIpQlx3QUlC5A4PNjXhFVadyBx2pqPA.ttf'
-  try {
-    if (!_notoSansRegularB64) _notoSansRegularB64 = await fetchFontAsBase64(REGULAR_TTF)
-    if (!_notoSansBoldB64)    _notoSansBoldB64    = await fetchFontAsBase64(BOLD_TTF)
-    if (!_notoSansRegularB64) return false
-    doc.addFileToVFS('NotoSans-Regular.ttf', _notoSansRegularB64)
-    doc.addFont('NotoSans-Regular.ttf', 'NotoSans', 'normal')
-    if (_notoSansBoldB64) {
-      doc.addFileToVFS('NotoSans-Bold.ttf', _notoSansBoldB64)
-      doc.addFont('NotoSans-Bold.ttf', 'NotoSans', 'bold')
-    }
-    return true
-  } catch {
-    return false
-  }
+async function embedNotoSans(_doc: jsPDF): Promise<boolean> {
+  // Menonaktifkan custom font untuk menghindari bug encoding &K&P&I& di jsPDF
+  // jsPDF akan otomatis menggunakan 'helvetica' yang 100% stabil.
+  return false
 }
 
 // ============================================================
@@ -433,12 +400,12 @@ export async function generateFinalReport(
   drawChapterHeader('BAB 3 - ACTION PLAN & IMPLEMENTASI', 'Rencana dan Hasil Perbaikan per Dimensi')
 
   if (actionPlans.length > 0) {
-    // Columns: No | Program | Dimensi | KPI (Baseline → Target → Aktual) | Status | Progress
+    // Columns: No | Program | Dimensi | KPI (Baseline -> Target -> Aktual) | Status | Progress
     const apData = actionPlans.map((ap, idx) => [
       String(idx + 1),
-      ap.title.length > 32 ? ap.title.substring(0, 30) + '…' : ap.title,
+      ap.title,
       getDimLabel(ap.dimension),
-      `${ap.kpi_name}\n${ap.kpi_baseline} → ${ap.kpi_target}${ap.kpi_actual !== undefined ? ` → ${ap.kpi_actual}` : ''} ${ap.kpi_unit}`,
+      `${ap.kpi_name}\n${ap.kpi_baseline} -> ${ap.kpi_target}${ap.kpi_actual !== undefined ? ` -> ${ap.kpi_actual}` : ''} ${ap.kpi_unit}`,
       ap.pic_name || '-',
       getStatusLabel(ap.status),
       `${ap.progress_percentage}%`,
@@ -446,7 +413,7 @@ export async function generateFinalReport(
 
     autoTable(doc, {
       startY: y,
-      head: [['#', 'Program Perbaikan', 'Dimensi', 'KPI (Baseline→Target→Aktual)', 'PIC', 'Status', 'Progress']],
+      head: [['#', 'Program Perbaikan', 'Dimensi', 'KPI (Baseline->Target->Aktual)', 'PIC', 'Status', 'Progress']],
       body: apData,
       margin: { left: margin, right: margin },
       tableWidth: contentW,
@@ -470,12 +437,12 @@ export async function generateFinalReport(
       alternateRowStyles: { fillColor: C_ROW_ALT },
       columnStyles: {
         0: { cellWidth: 8,  halign: 'center' },
-        1: { cellWidth: 42 },
-        2: { cellWidth: 28 },
-        3: { cellWidth: 50 },
-        4: { cellWidth: 22 },
-        5: { cellWidth: 26 },
-        6: { cellWidth: 16, halign: 'center' },
+        1: { cellWidth: 35 },
+        2: { cellWidth: 22 },
+        3: { cellWidth: 45 },
+        4: { cellWidth: 20 },
+        5: { cellWidth: 24 },
+        6: { cellWidth: 20, halign: 'center' },
       },
       didParseCell(data) {
         if (data.section === 'body' && data.column.index === 5) {

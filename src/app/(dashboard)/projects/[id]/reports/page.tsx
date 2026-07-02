@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { getProjects, getAssessments, getActionPlans, updateProjectScore } from '@/lib/db'
 import { Project, ActionPlan, Assessment } from '@/lib/mockData'
 import { generateFinalReport, generateCertificate } from '@/lib/pdf-generator'
-import { FileText, Award, ShieldCheck, Download, Edit3, CheckCircle2, Loader2 } from 'lucide-react'
+import { FileText, Award, ShieldCheck, Download, Edit3, CheckCircle2, Loader2, X } from 'lucide-react'
 import { useUserRole } from '@/hooks/useUserRole'
 
 interface SignatureRecord {
@@ -313,19 +313,24 @@ export default function ReportsPage() {
           {sig.signed ? (
             <>
               <span className="text-xs font-semibold text-slate-300 mt-1 block">{sig.signerName}</span>
-              <span className="text-[10px] text-slate-500 block mt-0.5">✅ TTD pada {sig.signedAt}</span>
+              <span className="text-[10px] text-slate-500 flex items-center mt-0.5"><CheckCircle2 className="w-3 h-3 text-emerald-500 mr-1" /> TTD pada {sig.signedAt}</span>
             </>
           ) : (
             <span className="text-xs font-semibold text-slate-500 mt-1 block italic">{orgLabel}</span>
           )}
         </div>
         {sig.signed ? (
-          <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400 shrink-0">
+          <button
+            onClick={() => { setSigRole(role); setShowSigModal(true); }}
+            disabled={isSaving}
+            className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors shrink-0 cursor-pointer disabled:opacity-60"
+            title="Klik untuk mengulang tanda tangan"
+          >
             {isSaving
               ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Menyimpan...</>
-              : <><CheckCircle2 className="h-4 w-4" /> Terverifikasi</>
+              : <><CheckCircle2 className="h-4 w-4" /> Terverifikasi (Ubah)</>
             }
-          </span>
+          </button>
         ) : (
           <button
             onClick={() => { setSigRole(role); setShowSigModal(true); }}
@@ -441,7 +446,7 @@ export default function ReportsPage() {
         <div className="w-full max-w-md bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
           <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-200">Tanda Tangan Digital — {roleLabel}</h3>
-            <button onClick={() => { setShowSigModal(false); setSigRole(null); }} className="text-slate-500 hover:text-slate-300">✕</button>
+            <button onClick={() => { setShowSigModal(false); setSigRole(null); }} className="text-slate-500 hover:text-slate-300"><X className="w-4 h-4" /></button>
           </div>
           <div className="p-6 space-y-4">
             <p className="text-xs text-slate-400 leading-normal">

@@ -6,7 +6,7 @@ import { Project, ActionPlan, EvidenceItem, MeasureProblem, AnalyzeNeed } from '
 import {
   Plus, CheckCircle2, Calendar, User, DollarSign, ArrowUpRight,
   Trash, Upload, FileText, ArrowRight, Lock, ShieldCheck,
-  Clock, XCircle, Eye, Save, Sparkles, Lightbulb,
+  Clock, XCircle, Eye, Save, Sparkles, Lightbulb, X,
 } from 'lucide-react'
 import { ACTION_STATUS_LABELS, sanitizeText } from '@/lib/utils'
 import {
@@ -651,7 +651,7 @@ export default function ImprovePage() {
           <div className="w-full max-w-lg bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
             <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-200">Tambah Rencana Perbaikan</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-500 hover:text-slate-300 cursor-pointer">✕</button>
+              <button onClick={() => setShowAddModal(false)} className="text-slate-500 hover:text-slate-300 cursor-pointer"><X className="w-4 h-4" /></button>
             </div>
             <form onSubmit={handleCreateAction} className="p-6 space-y-4">
               <div>
@@ -727,7 +727,7 @@ export default function ImprovePage() {
           <div className="w-full max-w-md bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
             <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
               <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2"><Upload className="h-4 w-4 text-blue-400" /> Upload Bukti Implementasi</h3>
-              <button onClick={() => setUploadAction(null)} className="text-slate-500 hover:text-slate-300 cursor-pointer">✕</button>
+              <button onClick={() => setUploadAction(null)} className="text-slate-500 hover:text-slate-300 cursor-pointer"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-6 space-y-4">
               <div className="bg-slate-900 border border-slate-850 p-4 rounded-2xl">
@@ -785,7 +785,7 @@ export default function ImprovePage() {
           <div className="w-full max-w-md bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
             <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
               <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-indigo-400" /> Verifikasi Bukti Implementasi</h3>
-              <button onClick={() => setVerifyTarget(null)} className="text-slate-500 hover:text-slate-300 cursor-pointer">✕</button>
+              <button onClick={() => setVerifyTarget(null)} className="text-slate-500 hover:text-slate-300 cursor-pointer"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-6 space-y-4">
 

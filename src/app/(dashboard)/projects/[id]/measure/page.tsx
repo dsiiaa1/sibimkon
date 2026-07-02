@@ -10,7 +10,7 @@ import { Project, ProjectCharter, MeasureProblem, MethodRecommendation } from '@
 import {
   ArrowRight, Sparkles, AlertCircle, CheckCircle2,
   Lightbulb, ChevronDown, ChevronUp, Plus, Trash2, RefreshCw, Loader2,
-  Settings, DollarSign, Truck, ShieldAlert, Users, BadgeCheck
+  Settings, DollarSign, Truck, ShieldAlert, Users, BadgeCheck, ClipboardList, Edit3
 } from 'lucide-react'
 import { useUserRole } from '@/hooks/useUserRole'
 
@@ -165,11 +165,11 @@ export default function MeasurePage() {
 
       // Simpan ke Supabase
       await saveMeasureProblems(projectId, aiProblems)
-      showToast('✨ Analisis selesai!')
+      showToast('Analisis selesai!')
 
     } catch (err: any) {
       console.error('[measure-analyze]', err)
-      setSaveMsg(`❌ Analisis gagal: ${err.message}. Pastikan koneksi internet aktif.`)
+      setSaveMsg(`Gagal: ${err.message}. Pastikan koneksi internet aktif.`)
     } finally {
       setAnalyzing(false)
     }
@@ -404,8 +404,8 @@ export default function MeasurePage() {
 
                     {/* Badge sumber + dampak */}
                     <div className="flex flex-wrap gap-2 text-[10px]">
-                      <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-500 font-semibold">
-                        {prob.source === 'charter' ? '📋 Dari Charter' : '✍️ Input Manual'}
+                      <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400 font-semibold flex items-center">
+                        {prob.source === 'charter' ? <><ClipboardList className="w-3.5 h-3.5 mr-1" /> Dari Charter</> : <><Edit3 className="w-3.5 h-3.5 mr-1" /> Input Manual</>}
                       </span>
                       {prob.impact && (
                         <span className="px-2 py-0.5 rounded bg-amber-900/20 border border-amber-800/30 text-amber-400">

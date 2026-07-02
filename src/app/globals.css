@@ -396,7 +396,9 @@ main .glass-card,
 main [class*="bg-slate-900"],
 main [class*="bg-slate-950"],
 main [class*="bg-slate-800"],
-main [class*="bg-slate-850"] {
+main [class*="bg-slate-850"],
+main [class*="bg-slate-700"],
+main [class*="hover:bg-slate-"]:hover {
   background-color: #ffffff !important;
   background: #ffffff !important;
   border-color: var(--border-base) !important;
@@ -463,10 +465,10 @@ main .text-white {
   color: var(--text-primary) !important;
 }
 
-/* Exception: text-white inside buttons with explicit backgrounds stays as-is */
+/* Exception: text-white inside buttons with explicit backgrounds stays white for contrast */
 main button.text-white,
 main a.text-white {
-  color: var(--text-primary) !important;
+  color: #ffffff !important;
 }
 
 main .text-indigo-400,

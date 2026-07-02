@@ -333,13 +333,13 @@ export default function DefinePage() {
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Target Produktivitas</label>
-                <input type="text" value={charterTarget} onChange={(e) => setCharterTarget(e.target.value)}
+                <textarea value={charterTarget} onChange={(e) => setCharterTarget(e.target.value)} rows={3}
                   placeholder="Misal: Kenaikan OPH 15%, Penurunan reject rate ke <2%"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm" />
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Ruang Lingkup (Scope)</label>
-                <input type="text" value={charterScope} onChange={(e) => setCharterScope(e.target.value)}
+                <textarea value={charterScope} onChange={(e) => setCharterScope(e.target.value)} rows={3}
                   placeholder="Batasan perbaikan..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm" />
               </div>

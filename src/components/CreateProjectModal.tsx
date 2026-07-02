@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createProject } from '@/lib/db'
 import { Company, Project } from '@/lib/mockData'
+import { X } from 'lucide-react'
 
 interface Props {
   companies: Company[]
@@ -117,7 +118,7 @@ export default function CreateProjectModal({
             onClick={onClose}
             className="text-lg font-light transition-colors text-slate-400 hover:text-slate-200"
           >
-            ✕
+            <X className="w-5 h-5" />
           </button>
         </div>
 

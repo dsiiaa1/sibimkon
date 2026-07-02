@@ -447,13 +447,13 @@ export default function DashboardShell({
                 onClick={() => setLocale('id')}
                 className={`px-2 py-1 text-[11px] font-bold rounded-lg transition-all ${locale === 'id' ? 'bg-[rgba(255,255,255,0.12)] text-[var(--gold-400)]' : 'text-[var(--text-muted)] hover:text-white'}`}
               >
-                🇮🇩 ID
+                ID
               </button>
               <button
                 onClick={() => setLocale('en')}
                 className={`px-2 py-1 text-[11px] font-bold rounded-lg transition-all ${locale === 'en' ? 'bg-[rgba(255,255,255,0.12)] text-[var(--gold-400)]' : 'text-[var(--text-muted)] hover:text-white'}`}
               >
-                🇬🇧 EN
+                EN
               </button>
             </div>
 
