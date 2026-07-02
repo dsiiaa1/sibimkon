@@ -64,6 +64,7 @@ export default function AnalyzePage() {
   const [needResponsible, setNeedResponsible] = useState('')
   const [needNotes,       setNeedNotes]       = useState('')
   const [needAvailable,   setNeedAvailable]   = useState(false)
+  const [projectCharter,  setProjectCharter]  = useState<any>(null)
 
   /* ── load ── */
   useEffect(() => {
@@ -73,18 +74,20 @@ export default function AnalyzePage() {
       if (!proj) { router.push('/dashboard'); return }
       setProject(proj)
 
-      const [existingAssessments, fishbones, fiveWhys, mProblems, aNeeds] = await Promise.all([
+      const [existingAssessments, fishbones, fiveWhys, mProblems, aNeeds, charter] = await Promise.all([
         getAssessments(projectId),
         getFishbones(projectId),
         getFiveWhys(projectId),
         getMeasureProblems(projectId),
         getAnalyzeNeeds(projectId),
+        getProjectCharter(projectId),
       ])
       setAssessments(existingAssessments)
       setFishboneItems(fishbones)
       setWhys(fiveWhys)
       setMeasureProblems(mProblems)
       setAnalyzeNeeds(aNeeds)
+      setProjectCharter(charter)
 
       if (mProblems.length > 0 && mProblems[0].recommended_methods?.length > 0) {
         setNeedMethod(mProblems[0].recommended_methods[0].method)
@@ -96,16 +99,22 @@ export default function AnalyzePage() {
 
   /* ── pareto (computed) ── */
   const paretoData = (() => {
-    if (assessments.length === 0) return []
-    const sorted = [...assessments].sort((a, b) => a.percentage_score - b.percentage_score)
-    const totalGap = sorted.reduce((acc, a) => acc + (100 - a.percentage_score), 0) || 1
+    const data = [
+      { name: '📄 Project Charter', value: projectCharter?.problem_statement ? 1 : 0 },
+      { name: '📊 Measure (VOM)', value: measureProblems.length },
+      { name: '🐟 Ishikawa Fishbone', value: fishboneItems.length },
+      { name: '❓ 5-Why Analysis', value: whys.reduce((acc, w) => acc + (w.whys?.filter(x => x.trim()).length || 0), 0) }
+    ].filter(d => d.value > 0)
+
+    if (data.length === 0) return []
+
+    const sorted = data.sort((a, b) => b.value - a.value)
+    const total = sorted.reduce((acc, a) => acc + a.value, 0) || 1
     let cumulative = 0
     return sorted.map((a) => {
-      const gap  = 100 - a.percentage_score
-      const pct  = Math.round((gap / totalGap) * 100)
+      const pct = Math.round((a.value / total) * 100)
       cumulative += pct
-      const info = PQCDSM_LABELS[a.dimension] || { label: a.dimension, icon: '' }
-      return { name: `${info.icon} ${info.label}`, value: gap, skor: a.percentage_score, percentage: pct, cumulative: Math.min(cumulative, 100) }
+      return { name: a.name, value: a.value, percentage: pct, cumulative: Math.min(cumulative, 100) }
     })
   })()
   const top2Labels = paretoData.slice(0, 2).map((d) => d.name).join(' dan ')
@@ -477,11 +486,11 @@ export default function AnalyzePage() {
           <div className="space-y-6">
             <div className="border-b border-slate-850 pb-4">
               <h2 className="text-lg font-bold text-slate-200">Analisis Pareto (80/20 Rule)</h2>
-              <p className="text-xs text-slate-500">Dihitung otomatis dari gap skor PQCDSM — dimensi dengan skor terendah = masalah terbesar</p>
+              <p className="text-xs text-slate-500">Dihitung otomatis berdasarkan jumlah identifikasi masalah pada setiap tahap analisis</p>
             </div>
             {paretoData.length === 0 ? (
               <div className="text-center py-12 border border-dashed border-slate-800 rounded-2xl text-slate-500 text-sm">
-                Belum ada data assessment. Selesaikan fase MEASURE terlebih dahulu untuk melihat Pareto.
+                Belum ada masalah yang diidentifikasi. Isi Project Charter, Measure (VOM), Fishbone, atau 5-Why terlebih dahulu.
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
@@ -495,11 +504,11 @@ export default function AnalyzePage() {
                         </linearGradient>
                       </defs>
                       <XAxis dataKey="name" tick={{ fill:'#94a3b8', fontSize:10 }} axisLine={false} tickLine={false} />
-                      <YAxis yAxisId="left" tick={{ fill:'#64748b', fontSize:10 }} axisLine={false} tickLine={false} label={{ value:'Gap Skor', angle:-90, position:'insideLeft', fill:'#64748b', fontSize:9, offset: -5 }} />
+                      <YAxis yAxisId="left" tick={{ fill:'#64748b', fontSize:10 }} axisLine={false} tickLine={false} label={{ value:'Jml Masalah', angle:-90, position:'insideLeft', fill:'#64748b', fontSize:9, offset: -5 }} />
                       <YAxis yAxisId="right" orientation="right" domain={[0,100]} tick={{ fill:'#64748b', fontSize:10 }} axisLine={false} tickLine={false} label={{ value:'Kumulatif %', angle:90, position:'insideRight', fill:'#64748b', fontSize:9, offset: -5 }} />
                       <Tooltip 
                         contentStyle={{ backgroundColor:'rgba(15, 23, 42, 0.95)', borderColor:'#4f46e5', borderRadius:12, backdropFilter: 'blur(8px)', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)' }}
-                        formatter={(val:any, name:any) => [name==='cumulative' ? `${val}%` : val, name==='cumulative' ? 'Kumulatif' : 'Gap Skor']} 
+                        formatter={(val:any, name:any) => [name==='cumulative' ? `${val}%` : val, name==='cumulative' ? 'Kumulatif' : 'Identifikasi Masalah']} 
                       />
                       <Bar yAxisId="left" dataKey="value" fill="url(#paretoBarGrad)" stroke="#6366f1" strokeWidth={1} radius={[4,4,0,0]} animationDuration={1200} />
                       <Line yAxisId="right" type="monotone" dataKey="cumulative" stroke="#ec4899" strokeWidth={3} dot={{ r:4, fill:'#ec4899', strokeWidth: 2, stroke: '#0f172a' }} activeDot={{ r: 6 }} animationDuration={1500} />
@@ -513,8 +522,8 @@ export default function AnalyzePage() {
                         <AlertCircle className="h-4 w-4" /> Prioritas Utama
                       </div>
                       <p className="text-xs text-slate-400 leading-normal">
-                        Fokus perbaikan pada dimensi <span className="text-indigo-400 font-semibold">{top2Labels}</span> untuk menyelesaikan{' '}
-                        <span className="text-indigo-400 font-bold">{paretoData[1]?.cumulative || paretoData[0]?.cumulative}%</span> dari total gap produktivitas.
+                        Sebagian besar identifikasi masalah/akar masalah bersumber pada analisis <span className="text-indigo-400 font-semibold">{top2Labels}</span> yang mencakup{' '}
+                        <span className="text-indigo-400 font-bold">{paretoData[1]?.cumulative || paretoData[0]?.cumulative}%</span> dari total identifikasi masalah.
                       </p>
                     </div>
                   )}
@@ -523,7 +532,7 @@ export default function AnalyzePage() {
                       <div key={idx} className="flex justify-between items-center bg-slate-950/60 border border-slate-850 px-3.5 py-2 rounded-xl text-xs">
                         <span className="font-semibold text-slate-350 truncate">{item.name}</span>
                         <div className="flex items-center gap-3 ml-2 shrink-0">
-                          <span className="text-slate-500">Skor: <span className="text-slate-300">{item.skor}%</span></span>
+                          <span className="text-slate-500">Jumlah: <span className="text-slate-300">{item.value} item</span></span>
                           <span className="font-bold text-indigo-400">{item.cumulative}%</span>
                         </div>
                       </div>
