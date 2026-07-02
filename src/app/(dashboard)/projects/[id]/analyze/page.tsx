@@ -103,7 +103,7 @@ export default function AnalyzePage() {
       { name: '📄 Project Charter', value: projectCharter?.problem_statement ? 1 : 0 },
       { name: '📊 Measure (VOM)', value: measureProblems.length },
       { name: '🐟 Ishikawa Fishbone', value: fishboneItems.length },
-      { name: '❓ 5-Why Analysis', value: whys.reduce((acc, w) => acc + (w.whys?.filter(x => x.trim()).length || 0), 0) }
+      { name: '❓ 5-Why Analysis', value: whys.length }
     ].filter(d => d.value > 0)
 
     if (data.length === 0) return []
