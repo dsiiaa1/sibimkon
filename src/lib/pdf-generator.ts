@@ -466,16 +466,36 @@ export async function generateFinalReport(
   const currScore = project.current_score  || 0
   const improvement = currScore - baseScore
 
-  const costSaving = actionPlans.reduce((acc, act) => {
-    if (act.kpi_actual === undefined) return acc
-    const achieved =
-      act.kpi_target > act.kpi_baseline
-        ? Math.max(0, (act.kpi_actual as number) - act.kpi_baseline)
-        : Math.max(0, act.kpi_baseline - (act.kpi_actual as number))
-    return acc + achieved * 500000
-  }, 0)
-  const investment = actionPlans.filter(a => a.status !== 'belum_mulai').length * 2500000
-  const roi = investment > 0 ? (costSaving / investment).toFixed(1) : '0'
+  const totalManualSaving = actionPlans.reduce((acc, a) => acc + (a.cost_saving_manual ?? 0), 0)
+  const totalManualInvestment = actionPlans.reduce((acc, a) => acc + (a.investment_manual ?? 0), 0)
+  const hasManualData = totalManualSaving > 0 || totalManualInvestment > 0
+
+  let costSaving = 0
+  let investment = 0
+  let roi = '0'
+  let noteStr = ''
+
+  if (hasManualData) {
+    costSaving = totalManualSaving
+    investment = totalManualInvestment
+    roi = investment > 0 ? (costSaving / investment).toFixed(1) : '0'
+    noteStr = 'Catatan: Angka cost saving dan investasi merupakan nilai riil/estimasi yang telah diinput dan divalidasi oleh konsultan.'
+  } else {
+    costSaving = actionPlans.reduce((acc, act) => {
+      const kpiActual = act.verified_kpi_actual ?? act.kpi_actual
+      if (kpiActual === undefined) return acc
+      const achieved =
+        act.kpi_target > act.kpi_baseline
+          ? Math.max(0, (kpiActual as number) - act.kpi_baseline)
+          : Math.max(0, act.kpi_baseline - (kpiActual as number))
+      return acc + achieved * 500000
+    }, 0)
+    investment = actionPlans.filter(a => a.status !== 'belum_mulai').length * 2500000
+    roi = investment > 0 ? (costSaving / investment).toFixed(1) : '0'
+    noteStr = 'Catatan: Estimasi cost saving dihitung berdasarkan selisih KPI aktual terhadap baseline, ' +
+      'dikalikan nilai unit perbaikan Rp 500.000 per unit. Investasi program dihitung sebesar ' +
+      'Rp 2.500.000 per action plan yang sudah berjalan. Angka merupakan estimasi indikatif.'
+  }
 
   autoTable(doc, {
     startY: y,
@@ -525,11 +545,7 @@ export async function generateFinalReport(
   })
   y = (doc as any).lastAutoTable.finalY + 12
 
-  drawText(
-    'Catatan: Estimasi cost saving dihitung berdasarkan selisih KPI aktual terhadap baseline, ' +
-    'dikalikan nilai unit perbaikan Rp 500.000 per unit. Investasi program dihitung sebesar ' +
-    'Rp 2.500.000 per action plan yang sudah berjalan. Angka merupakan estimasi indikatif.'
-  )
+  drawText(noteStr)
 
   // ----------------------------------------------------------
   // BAB 5 — Lembar Pengesahan
