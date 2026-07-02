@@ -870,32 +870,35 @@ export async function getMeasureProblems(projectId: string): Promise<MeasureProb
 }
 
 export async function saveMeasureProblems(projectId: string, problems: MeasureProblem[]): Promise<void> {
-  // localStorage dulu sebagai fallback
+  // localStorage sebagai backup cepat
   if (typeof window !== 'undefined') {
     localStorage.setItem(`sibimkon_measure_problems_${projectId}`, JSON.stringify(problems))
   }
-  try {
-    const sb = getSupabase()
-    if (!sb) return
-    // Delete semua lalu re-insert (sederhana, cocok untuk jumlah masalah yang kecil)
-    await sb.from('measure_problems').delete().eq('project_id', projectId)
-    if (problems.length > 0) {
-      const rows = problems.map((p) => ({
-        project_id: projectId,
-        problem_text: p.problem_text,
-        source: p.source,
-        pqcdsm_dimension: p.pqcdsm_dimension,
-        recommended_methods: p.recommended_methods,
-        impact: p.impact || null,
-        priority_rank: p.priority_rank,
-        // Simpan dimension_reason di kolom notes sebagai penanda data dari AI
-        notes: (p as any).dimension_reason || p.notes || null,
-      }))
-      const { error } = await sb.from('measure_problems').insert(rows)
-      if (error) throw error
+  const sb = getSupabase()
+  if (!sb) return
+  // Delete semua lalu re-insert (sederhana, cocok untuk jumlah masalah yang kecil)
+  const { error: delErr } = await sb.from('measure_problems').delete().eq('project_id', projectId)
+  if (delErr) {
+    console.error('[saveMeasureProblems] Delete error:', delErr)
+    // tetap lanjut insert agar data baru bisa masuk
+  }
+  if (problems.length > 0) {
+    const rows = problems.map((p) => ({
+      project_id: projectId,
+      problem_text: p.problem_text,
+      source: p.source,
+      pqcdsm_dimension: p.pqcdsm_dimension,
+      dimension_reason: (p as any).dimension_reason || null,
+      recommended_methods: p.recommended_methods,
+      impact: p.impact || null,
+      priority_rank: p.priority_rank,
+      notes: p.notes || null,
+    }))
+    const { error } = await sb.from('measure_problems').insert(rows)
+    if (error) {
+      console.error('[saveMeasureProblems] Insert error:', error)
+      throw error  // propagate ke pemanggil agar user tahu gagal
     }
-  } catch (err) {
-    console.warn('[saveMeasureProblems] Supabase failed, localStorage only:', err)
   }
 }
 
