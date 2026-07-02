@@ -115,9 +115,11 @@ function formatDate(dateStr?: string): string {
 // ============================================================
 // Generate Final Productivity Report PDF
 // ============================================================
+import { MeasureProblem } from './mockData'
+
 export async function generateFinalReport(
   project: ProjectData,
-  assessments: PQCDSMScore[],
+  measureProblems: MeasureProblem[],
   actionPlans: ActionPlanData[],
   signatures?: SignatureData
 ) {
@@ -329,27 +331,31 @@ export async function generateFinalReport(
   })
 
   // ----------------------------------------------------------
-  // BAB 2 — Hasil Assessment PQCDSM
+  // BAB 2 — Identifikasi Masalah & Pengelompokkan (PQCDSM)
   // ----------------------------------------------------------
   ensureSpace(80)
   if (y > 200) { doc.addPage(); y = 25 }
-  drawChapterHeader('BAB 2 - HASIL ASSESSMENT PQCDSM', 'Skor Baseline Produktivitas per Dimensi')
+  drawChapterHeader('BAB 2 - ANALISIS AKAR MASALAH (PQCDSM)', 'Identifikasi Masalah Berdasarkan Dimensi PQCDSM')
 
-  if (assessments.length > 0) {
-    // Color-coded score column: BAIK=green, CUKUP=orange, PERLU PERBAIKAN=red
-    const tableData = assessments.map(a => {
-      const cat = getCategoryLabel(a.percentage_score)
-      return [getDimLabel(a.dimension), `${a.percentage_score}%`, cat]
+  if (measureProblems && measureProblems.length > 0) {
+    const tableData = measureProblems.map((mp, idx) => {
+      const recs = mp.recommended_methods?.map(rm => rm.method).join(', ') || '-'
+      return [
+        String(idx + 1),
+        mp.problem_text,
+        getDimLabel(mp.pqcdsm_dimension),
+        recs
+      ]
     })
 
     autoTable(doc, {
       startY: y,
-      head: [['Dimensi PQCDSM', 'Skor Baseline', 'Kategori']],
+      head: [['No', 'Deskripsi Masalah', 'Dimensi PQCDSM', 'Rekomendasi Metode / Kebutuhan']],
       body: tableData,
       margin: { left: margin, right: margin },
       tableWidth: contentW,
       styles: {
-        fontSize: 9,
+        fontSize: 8.5,
         cellPadding: { top: 4, bottom: 4, left: 5, right: 5 },
         font: FN,
         textColor: C_TEXT,
@@ -366,31 +372,22 @@ export async function generateFinalReport(
       },
       alternateRowStyles: { fillColor: C_ROW_ALT },
       columnStyles: {
-        0: { cellWidth: 80 },
-        1: { cellWidth: 45, halign: 'center' },
-        2: { cellWidth: contentW - 80 - 45, halign: 'center' },
-      },
-      didParseCell(data) {
-        if (data.section === 'body' && data.column.index === 2) {
-          const val = String(data.cell.raw)
-          if (val === 'BAIK')              data.cell.styles.textColor = [34, 139, 34]
-          else if (val === 'CUKUP')        data.cell.styles.textColor = [200, 130, 20]
-          else                             data.cell.styles.textColor = [180, 40, 40]
-          data.cell.styles.fontStyle = 'bold'
-        }
+        0: { cellWidth: 10, halign: 'center' },
+        1: { cellWidth: 70 },
+        2: { cellWidth: 35 },
+        3: { cellWidth: contentW - 115 },
       },
     })
     y = (doc as any).lastAutoTable.finalY + 10
 
     // Summary note
-    const totalAvg = Math.round(assessments.reduce((s, a) => s + a.percentage_score, 0) / assessments.length)
     drawText(
-      `Rata-rata skor PQCDSM baseline: ${totalAvg}% (${getCategoryLabel(totalAvg)}). ` +
-      'Dimensi yang memerlukan perhatian utama menjadi prioritas dalam rancangan action plan.',
+      `Terdapat ${measureProblems.length} masalah utama yang telah berhasil diidentifikasi dan dikelompokkan ` +
+      'ke dalam dimensi PQCDSM. Rekomendasi metode yang dihasilkan menjadi acuan dasar dalam penyusunan action plan.',
       contentW, 0
     )
   } else {
-    drawText('Data assessment PQCDSM belum tersedia.')
+    drawText('Data analisis akar masalah belum tersedia.')
   }
 
   // ----------------------------------------------------------
@@ -820,25 +817,26 @@ export async function generateCertificate(
   if (consultantSigned && signatures?.consultant.signerName) {
     if (signatures.consultant.signatureImg) {
       try {
-        doc.addImage(signatures.consultant.signatureImg, 'PNG', 42, 156, 35, 14)
+        // Tanda tangan dinaikkan dan disesuaikan sedikit ukurannya agar tidak menutupi nama
+        doc.addImage(signatures.consultant.signatureImg, 'PNG', 28, 158, 35, 14)
       } catch (e) {
         console.warn('Failed to add cert signature image:', e)
       }
     }
     doc.setTextColor(...C_GOLD as [number,number,number]); setB(8)
-    doc.text(signatures.consultant.signerName, 28, 165)
+    doc.text(signatures.consultant.signerName, 28, 175)
     doc.setTextColor(135, 140, 152); setN(7)
-    doc.text(`TTD: ${signatures.consultant.signedAt}`, 28, 171)
+    doc.text(`TTD: ${signatures.consultant.signedAt}`, 28, 180)
   }
 
-  // Garis TTD
+  // Garis TTD diposisikan di bawah TTD name
   doc.setDrawColor(100, 108, 125); doc.setLineWidth(0.4)
-  doc.line(28, 178, 115, 178)
+  doc.line(28, 183, 115, 183)
 
   doc.setTextColor(135, 140, 152); setN(7.5)
-  doc.text('Direktur Program SIBIMKON', 28, 184)
+  doc.text('Direktur Program SIBIMKON', 28, 189)
   doc.setTextColor(...C_GOLD as [number,number,number]); setB(8)
-  doc.text('Link Productive', 28, 191)
+  doc.text('Link Productive', 28, 194)
 
   // ── QR CODE KANAN  (28×28 mm, Y = 150–178) ─────────────────
   const qrX = pageW - 30 - 28   // right-aligned dengan margin 30mm

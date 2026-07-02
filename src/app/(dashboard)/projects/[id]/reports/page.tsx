@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { getProjects, getAssessments, getActionPlans, updateProjectScore } from '@/lib/db'
-import { Project, ActionPlan, Assessment } from '@/lib/mockData'
+import { getProjects, getAssessments, getActionPlans, getMeasureProblems, updateProjectScore } from '@/lib/db'
+import { Project, ActionPlan, Assessment, MeasureProblem } from '@/lib/mockData'
 import { generateFinalReport, generateCertificate } from '@/lib/pdf-generator'
 import { FileText, Award, ShieldCheck, Download, Edit3, CheckCircle2, Loader2, X } from 'lucide-react'
 import { useUserRole } from '@/hooks/useUserRole'
@@ -55,6 +55,7 @@ export default function ReportsPage() {
   const [project, setProject] = useState<Project | null>(null)
   const [actionPlans, setActionPlans] = useState<ActionPlan[]>([])
   const [assessments, setAssessments] = useState<Assessment[]>([])
+  const [measureProblems, setMeasureProblems] = useState<MeasureProblem[]>([])
   const [consultantName, setConsultantName] = useState('Konsultan SIBIMKON')
 
   // Role diverifikasi dari server — tidak bisa dimanipulasi via DevTools
@@ -130,13 +131,15 @@ export default function ReportsPage() {
       if (!proj) { router.push('/dashboard'); return }
       setProject(proj)
 
-      const [plans, assess] = await Promise.all([
+      const [plans, assess, mProblems] = await Promise.all([
         getActionPlans(projectId),
         getAssessments(projectId),
+        getMeasureProblems(projectId),
         loadSignatures(),
       ])
       setActionPlans(plans)
       setAssessments(assess)
+      setMeasureProblems(mProblems)
 
       // Sync current_score ke Supabase/mockDB dari KPI aktual yang sudah ada
       // Ini memastikan field DB tetap up-to-date meski user tidak buka Improve lagi
@@ -266,7 +269,12 @@ export default function ReportsPage() {
     if (!project) return
     setPdfLoading(true)
     try {
-      const doc = await generateFinalReport(project, assessments, actionPlans, {
+      // Pastikan afterScore dipassing ke pdf-generator dengan inject ke project
+      const payloadProject = {
+        ...project,
+        current_score: afterScore,
+      }
+      const doc = await generateFinalReport(payloadProject, measureProblems, actionPlans, {
         consultant: consultantSig,
         company: companySig,
       })
@@ -359,9 +367,8 @@ export default function ReportsPage() {
       const ctx = canvas.getContext('2d')
       if (!ctx) return
       
-      // Clear canvas with white background
-      ctx.fillStyle = '#FFFFFF'
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      // Bersihkan canvas agar transparan
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
     }, [])
 
     const getCoordinates = (e: React.MouseEvent | React.TouchEvent) => {
@@ -396,7 +403,7 @@ export default function ReportsPage() {
       ctx.moveTo(x, y)
       ctx.lineWidth = 2.5
       ctx.lineCap = 'round'
-      ctx.strokeStyle = '#0F172A' // Dark navy/black signature for white PDF background
+      ctx.strokeStyle = '#FFFFFF' // Tinta putih agar kontras di canvas dark mode (serta di background PDF)
       setIsDrawing(true)
     }
 
@@ -422,8 +429,7 @@ export default function ReportsPage() {
       if (!canvas) return
       const ctx = canvas.getContext('2d')
       if (!ctx) return
-      ctx.fillStyle = '#FFFFFF'
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
     }
 
     const saveSignature = () => {
@@ -456,9 +462,8 @@ export default function ReportsPage() {
             <div className="border border-slate-850 rounded-2xl overflow-hidden bg-white">
               <canvas
                 ref={canvasRef}
-                width={400}
-                height={180}
-                className="w-full h-44 cursor-crosshair touch-none bg-white"
+                width={300} height={120}
+                className="bg-slate-900 border border-slate-700 w-full touch-none rounded-xl cursor-crosshair shadow-inner"
                 onMouseDown={startDrawing}
                 onMouseMove={draw}
                 onMouseUp={stopDrawing}
