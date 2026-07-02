@@ -567,6 +567,41 @@ export async function generateFinalReport(
   const sigH   = 52
   const sigGap = 10
 
+// ── Helper: tint transparent white signature to dark navy for reports ──
+async function processSignatureForReport(base64: string): Promise<string> {
+  return new Promise((resolve) => {
+    if (typeof document === 'undefined') return resolve(base64)
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.width
+      canvas.height = img.height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return resolve(base64)
+      ctx.drawImage(img, 0, 0)
+      
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      const data = imgData.data
+      let transparentPixels = 0
+      
+      for (let i = 3; i < data.length; i += 4) {
+        if (data[i] < 255) transparentPixels++
+      }
+      
+      // Jika sebagian besar pixel transparan, berarti ini TTD baru (tinta putih transparan).
+      // Ubah tintanya menjadi dark navy untuk laporan.
+      if (transparentPixels > (canvas.width * canvas.height) * 0.5) {
+        ctx.globalCompositeOperation = 'source-in'
+        ctx.fillStyle = '#0F172A'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+      }
+      resolve(canvas.toDataURL('image/png'))
+    }
+    img.onerror = () => resolve(base64)
+    img.src = base64
+  })
+}
+
   const signatories = [
     { role: 'Konsultan Pendamping',  org: 'SIBIMKON — Link Productive' },
     { role: 'PIC Perusahaan Klien',  org: project.company_name },
@@ -574,7 +609,9 @@ export async function generateFinalReport(
 
   ensureSpace(sigH + 10)
 
-  signatories.forEach((sig, i) => {
+  // Karena processSignatureForReport adalah async, kita pakai for loop biasa
+  for (let i = 0; i < signatories.length; i++) {
+    const sig = signatories[i]
     const sx = margin + i * (sigW + sigGap)
     const sigKey = i === 0 ? 'consultant' : 'company'
     const sigRecord = signatures?.[sigKey]
@@ -602,7 +639,8 @@ export async function generateFinalReport(
     if (sigRecord?.signed) {
       if (sigRecord.signatureImg) {
         try {
-          doc.addImage(sigRecord.signatureImg, 'PNG', sx + (sigW - 40) / 2, y + 19, 40, 16)
+          const processedImg = await processSignatureForReport(sigRecord.signatureImg)
+          doc.addImage(processedImg, 'PNG', sx + (sigW - 40) / 2, y + 19, 40, 16)
         } catch (e) {
           console.warn('Failed to add signature image:', e)
         }
