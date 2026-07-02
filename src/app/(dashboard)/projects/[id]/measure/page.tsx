@@ -240,13 +240,12 @@ export default function MeasurePage() {
         problem_text:       formText.trim(),
         source:             'manual',
         pqcdsm_dimension:   p?.pqcdsm_dimension ?? 'productivity',
-        dimension_reason:   p?.dimension_reason ?? 'Input manual',
+        dimension_reason:   p?.dimension_reason ?? '',
         recommended_methods: (p?.recommended_methods ?? []).map((m: any, ri: number) => ({
           method: m.method, reason: m.reason, priority: ri + 1,
         })),
         impact:       formImpact.trim() || undefined,
         priority_rank: problems.length + 1,
-        ai_analyzed: true,   // ← PENTING: tandai agar tidak dihapus saat reload
       }
       const updated = [...problems, newProb]
       setProblems(updated)
