@@ -57,12 +57,16 @@ export default function ImprovePage() {
   const [newEndDate,     setNewEndDate]     = useState(() => {
     const d = new Date(); d.setMonth(d.getMonth() + 2); return d.toISOString().split('T')[0]
   })
+  const [newCostSaving,  setNewCostSaving]  = useState<number>(0)
+  const [newInvestment,  setNewInvestment]  = useState<number>(0)
 
   /* ── upload bukti modal (perusahaan) ── */
   const [uploadAction,   setUploadAction]   = useState<ActionPlan | null>(null)
   const [evidenceName,   setEvidenceName]   = useState('')
   const [selectedFile,   setSelectedFile]   = useState<File | null>(null)
   const [kpiSubmitted,   setKpiSubmitted]   = useState<number>(0)
+  const [costSavingInput, setCostSavingInput] = useState<number>(0)
+  const [investmentInput, setInvestmentInput] = useState<number>(0)
   const [uploading,      setUploading]      = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -173,6 +177,8 @@ export default function ImprovePage() {
     setNewKpiTarget(100)
     setNewKpiUnit('%')
     setNewPicName('Supervisor')
+    setNewCostSaving(0)
+    setNewInvestment(rec.needs.reduce((acc, n) => acc + (parseInt(n.match(/Est. Rp ([\d.]+)/)?.[1]?.replace(/\./g, '') || '0') || 0), 0))
     setShowAddModal(true)
   }
 
@@ -197,12 +203,13 @@ export default function ImprovePage() {
       methodology: newMethodology, dimension: newDimension,
       kpi_name: sanitizeText(newKpiName), kpi_baseline: Number(newKpiBaseline),
       kpi_target: Number(newKpiTarget), kpi_unit: sanitizeText(newKpiUnit),
+      cost_saving_manual: Number(newCostSaving), investment_manual: Number(newInvestment),
       pic_name: sanitizeText(newPicName), start_date: newStartDate, end_date: newEndDate,
       status: 'belum_mulai', progress_percentage: 0,
     }
     await persistActionPlans([...actionPlans, newAction])
     setShowAddModal(false)
-    setNewTitle(''); setNewDesc(''); setNewKpiName(''); setNewKpiBaseline(0); setNewKpiTarget(0); setNewKpiUnit(''); setNewPicName('')
+    setNewTitle(''); setNewDesc(''); setNewKpiName(''); setNewKpiBaseline(0); setNewKpiTarget(0); setNewKpiUnit(''); setNewPicName(''); setNewCostSaving(0); setNewInvestment(0)
   }
 
   /* ── update status / progress ── */
@@ -297,6 +304,14 @@ export default function ImprovePage() {
     /* update evidence map */
     setEvidenceMap(prev => ({ ...prev, [uploadAction.id]: [newEv, ...(prev[uploadAction.id] ?? [])] }))
 
+    /* update cost saving dan investment jika diinput */
+    if (costSavingInput > 0 || investmentInput > 0) {
+      const updated = actionPlans.map(act =>
+        act.id === uploadAction.id ? { ...act, cost_saving_manual: costSavingInput || act.cost_saving_manual, investment_manual: investmentInput || act.investment_manual } : act
+      )
+      await persistActionPlans(updated)
+    }
+
     /* notifikasi early-warning jika perlu */
     const isSlip = uploadAction.kpi_target > uploadAction.kpi_baseline
       ? Number(kpiSubmitted) < uploadAction.kpi_baseline
@@ -307,7 +322,7 @@ export default function ImprovePage() {
 
     setUploading(false)
     setUploadAction(null)
-    setEvidenceName(''); setSelectedFile(null); setKpiSubmitted(0)
+    setEvidenceName(''); setSelectedFile(null); setKpiSubmitted(0); setCostSavingInput(0); setInvestmentInput(0)
   }
 
   /* ── KONSULTAN: verifikasi bukti + input nilai aktual ── */
@@ -546,7 +561,7 @@ export default function ImprovePage() {
                     {/* perusahaan: upload bukti */}
                     {!isKonsultan && (
                       <button
-                        onClick={() => { setUploadAction(act); setKpiSubmitted(act.kpi_actual ?? act.kpi_baseline) }}
+                        onClick={() => { setUploadAction(act); setKpiSubmitted(act.kpi_actual ?? act.kpi_baseline); setCostSavingInput(act.cost_saving_manual ?? 0); setInvestmentInput(act.investment_manual ?? 0) }}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-bold rounded-xl text-blue-400 hover:text-white transition-all cursor-pointer"
                       >
                         <Upload className="h-3.5 w-3.5" /> Upload Bukti
@@ -704,6 +719,16 @@ export default function ImprovePage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Estimasi Cost Saving (Rp)</label>
+                  <input type="number" value={newCostSaving} onChange={(e) => setNewCostSaving(Number(e.target.value))} className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-250" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Estimasi Investasi (Rp)</label>
+                  <input type="number" value={newInvestment} onChange={(e) => setNewInvestment(Number(e.target.value))} className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-250" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Tanggal Mulai</label>
                   <input type="date" value={newStartDate} onChange={(e) => setNewStartDate(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-250" />
                 </div>
@@ -748,6 +773,19 @@ export default function ImprovePage() {
                 <input type="number" value={kpiSubmitted} onChange={(e) => setKpiSubmitted(Number(e.target.value))}
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-250 focus:outline-none" />
                 <p className="text-[10px] text-slate-500 mt-1">Ini adalah nilai yang Anda klaim. Konsultan akan memverifikasi berdasarkan bukti yang diupload.</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Realisasi Cost Saving (Rp)</label>
+                  <input type="number" value={costSavingInput} onChange={(e) => setCostSavingInput(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-250 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Realisasi Investasi (Rp)</label>
+                  <input type="number" value={investmentInput} onChange={(e) => setInvestmentInput(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-250 focus:outline-none" />
+                </div>
               </div>
 
               <div>
