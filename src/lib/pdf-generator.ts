@@ -659,7 +659,7 @@ async function processSignatureForReport(base64: string): Promise<string> {
     const today = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
     setC(C_TEXT); setN(7)
     doc.text(today, sx + sigW / 2, y + 50, { align: 'center' })
-  })
+  }
 
   y += sigH + 14
 
