@@ -36,12 +36,15 @@ interface ActionPlanData {
   kpi_baseline: number
   kpi_target: number
   kpi_actual?: number
+  verified_kpi_actual?: number
   kpi_unit: string
   pic_name: string
   start_date: string
   end_date: string
   status: string
   progress_percentage: number
+  cost_saving_manual?: number
+  investment_manual?: number
 }
 
 interface PQCDSMScore {
