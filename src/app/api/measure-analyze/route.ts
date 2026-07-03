@@ -215,8 +215,8 @@ export async function POST(req: Request) {
     }))
 
     return NextResponse.json({ 
-      estimated_baseline_score: parsed.estimated_baseline_score || 50,
-      baseline_reasoning: parsed.baseline_reasoning || 'Tingkat keparahan masalah memengaruhi estimasi baseline awal produktivitas perusahaan.',
+      estimated_baseline_score: Number(parsed.estimated_baseline_score) || 50,
+      baseline_reasoning: String(parsed.baseline_reasoning || 'Tingkat keparahan masalah memengaruhi estimasi baseline awal produktivitas perusahaan.'),
       problems: normalized 
     })
 
