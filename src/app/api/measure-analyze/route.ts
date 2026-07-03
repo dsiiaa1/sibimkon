@@ -59,6 +59,7 @@ Baca seluruh teks di atas dengan seksama. Kemudian:
 4. Tulis semua dalam Bahasa Indonesia.
 
 5. Estimasikan Baseline Produktivitas (0-100%). Berikan nilai "estimated_baseline_score" berdasarkan tingkat keparahan masalah di atas. Jika masalah sangat parah, berikan skor rendah (misal 30-50). Jika masalah menengah, berikan skor sedang (50-70). Ini akan menjadi titik awal (Baseline) perusahaan sebelum program perbaikan.
+Juga berikan "baseline_reasoning" berupa 1-2 kalimat kesimpulan mengapa Anda memberikan skor baseline tersebut.
 
 CONTOH yang BENAR — jika masalahnya tentang "penjualan door-to-door yang tidak efisien dan kurangnya digital marketing":
 ✅ Benar: Digital Marketing Strategy, Social Media Marketing, CRM System, Sales Funnel Optimization
@@ -68,7 +69,7 @@ CONTOH yang BENAR — jika masalahnya tentang "penjualan door-to-door yang tidak
 
 Kembalikan HANYA JSON berikut, tanpa teks lain, tanpa markdown, tanpa backtick:
 
-{"estimated_baseline_score": 65, "problems":[{"problem_text":"Deskripsi masalah spesifik","pqcdsm_dimension":"productivity","dimension_reason":"Alasan dimensi ini tepat","recommended_methods":[{"priority":1,"method":"Nama metode","reason":"Mengapa metode ini tepat untuk masalah ini secara spesifik"},{"priority":2,"method":"Nama metode 2","reason":"Alasan spesifik"},{"priority":3,"method":"Nama metode 3","reason":"Alasan spesifik"}]}]}`
+{"estimated_baseline_score": 65, "baseline_reasoning": "Penjelasan mengapa skor 65 diberikan...", "problems":[{"problem_text":"Deskripsi masalah spesifik","pqcdsm_dimension":"productivity","dimension_reason":"Alasan dimensi ini tepat","recommended_methods":[{"priority":1,"method":"Nama metode","reason":"Mengapa metode ini tepat untuk masalah ini secara spesifik"},{"priority":2,"method":"Nama metode 2","reason":"Alasan spesifik"},{"priority":3,"method":"Nama metode 3","reason":"Alasan spesifik"}]}]}`
 }
 
 // Groq Cloud — LPU inference super cepat, OpenAI-compatible API
@@ -214,7 +215,8 @@ export async function POST(req: Request) {
     }))
 
     return NextResponse.json({ 
-      estimated_baseline_score: parsed.estimated_baseline_score || 50, 
+      estimated_baseline_score: parsed.estimated_baseline_score || 50,
+      baseline_reasoning: parsed.baseline_reasoning || 'Tingkat keparahan masalah memengaruhi estimasi baseline awal produktivitas perusahaan.',
       problems: normalized 
     })
 

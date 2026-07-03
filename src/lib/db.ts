@@ -219,12 +219,13 @@ export async function saveAssessments(projectId: string, assessments: Assessment
   if (updErr) handleDbError(updErr)
 }
 
-export async function updateProjectBaseline(projectId: string, baselineScore: number): Promise<void> {
+export async function updateProjectBaseline(projectId: string, baselineScore: number, baselineReasoning: string): Promise<void> {
   const sb = getSupabase()
   if (!sb) return
   
   const { error: updErr } = await sb.from('bimkon_projects').update({
     baseline_productivity_index: baselineScore,
+    baseline_reasoning: baselineReasoning,
     updated_at: new Date().toISOString()
   }).eq('id', projectId)
   

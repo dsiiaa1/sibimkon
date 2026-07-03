@@ -43,6 +43,7 @@ export interface Project {
   start_date: string
   target_end_date: string
   baseline_score?: number
+  baseline_reasoning?: string
   current_score?: number
 }
 

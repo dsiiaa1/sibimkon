@@ -175,6 +175,11 @@ BEGIN
     BEGIN ALTER TABLE public.improve_actions ADD COLUMN investment_manual NUMERIC; EXCEPTION WHEN duplicate_column THEN END;
 END $$;
 
+DO $$
+BEGIN
+    BEGIN ALTER TABLE public.bimkon_projects ADD COLUMN baseline_reasoning TEXT; EXCEPTION WHEN duplicate_column THEN END;
+END $$;
+
 -- Tabel Action Evidence (Improve/Control)
 CREATE TABLE IF NOT EXISTS public.action_evidence (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

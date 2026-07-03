@@ -166,10 +166,11 @@ export default function MeasurePage() {
       // Simpan ke Supabase
       await saveMeasureProblems(projectId, aiProblems)
       if (typeof data.estimated_baseline_score === 'number') {
-        await updateProjectBaseline(projectId, data.estimated_baseline_score)
+        const reasoning = data.baseline_reasoning || 'Tingkat keparahan masalah memengaruhi estimasi baseline awal produktivitas perusahaan.'
+        await updateProjectBaseline(projectId, data.estimated_baseline_score, reasoning)
         // Update state lokal
         if (project) {
-          setProject({ ...project, baseline_score: data.estimated_baseline_score })
+          setProject({ ...project, baseline_score: data.estimated_baseline_score, baseline_reasoning: reasoning })
         }
       }
       showToast('Analisis selesai!')
@@ -339,6 +340,17 @@ export default function MeasurePage() {
             <p className="text-xs text-slate-500 border-t border-amber-800/20 pt-2">
               <span className="font-bold text-amber-500/70">Tujuan:</span> {charter.objectives}
             </p>
+          )}
+          {typeof project.baseline_score === 'number' && (
+            <div className="text-xs text-slate-500 border-t border-amber-800/20 pt-2 flex flex-col gap-1">
+              <p>
+                <span className="font-bold text-emerald-500/80">Estimasi Baseline Awal:</span>{' '}
+                <span className="text-slate-300 font-semibold">{project.baseline_score}%</span>
+              </p>
+              {project.baseline_reasoning && (
+                <p className="italic text-[11px] text-slate-400">"{project.baseline_reasoning}"</p>
+              )}
+            </div>
           )}
         </div>
       )}
