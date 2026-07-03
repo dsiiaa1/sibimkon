@@ -234,36 +234,39 @@ export default function ReportsPage() {
     return { costSaving, investment, roi, isManual: false }
   })()
 
-  const beforeScore = project?.baseline_score || project?.current_score || 0
+  // === BASELINE & AKTUAL berbasis KPI Action Plan ===
+  // Baseline  : rata-rata kpi_baseline dari semua action plan
+  // Aktual    : rata-rata pencapaian KPI aktual vs target (0-100%)
+  // Peningkatan: Aktual − Baseline
 
-  // Hitung afterScore langsung dari kpi_actual action plans
-  // TIDAK bergantung pada project.current_score / current_productivity_index di DB
-  // karena field itu hanya diupdate dari Measure, bukan dari Improve.
-  //
-  // Formula: sama dengan updateProjectScore di db.ts
-  //   achievement% per plan = clamp((actual - baseline) / |target - baseline| * 100, 0, 100)
-  //   afterScore = baseline + (100 - baseline) * avg_achievement / 100
-  const afterScore = (() => {
-    const plansWithActual = actionPlans.filter(
-      a => a.kpi_actual !== undefined && a.kpi_target !== a.kpi_baseline
-    )
-    if (plansWithActual.length === 0) {
-      // Belum ada KPI aktual — tampilkan angka dari DB (nilai Measure)
-      return project?.current_score || beforeScore
-    }
+  const plansWithData = actionPlans.filter(
+    a => a.kpi_target !== a.kpi_baseline
+  )
+
+
+
+  // Aktual: rata-rata % pencapaian KPI aktual terhadap target
+  const plansWithActual = actionPlans.filter(
+    a => a.kpi_actual !== undefined && a.kpi_target !== a.kpi_baseline
+  )
+
+  const afterPct = (() => {
+    if (plansWithActual.length === 0) return null
     const avgAchievement = plansWithActual.reduce((acc, a) => {
       const range = Math.abs(a.kpi_target - a.kpi_baseline)
       const improvement = a.kpi_target > a.kpi_baseline
-        ? (a.kpi_actual! - a.kpi_baseline)        // higher is better
-        : (a.kpi_baseline - a.kpi_actual!)         // lower is better
+        ? (a.kpi_actual! - a.kpi_baseline)
+        : (a.kpi_baseline - a.kpi_actual!)
       const pct = range > 0 ? Math.min(100, Math.max(0, (improvement / range) * 100)) : 0
       return acc + pct
     }, 0) / plansWithActual.length
-
-    return Math.min(100, Math.round(beforeScore + (100 - beforeScore) * (avgAchievement / 100)))
+    return Math.round(avgAchievement)
   })()
 
-  const improvement = afterScore - beforeScore
+  // Untuk keperluan internal (PDF) — gunakan nilai lama jika perlu
+  const beforeScore = 0
+  const afterScore = afterPct ?? 0
+  const improvement = afterPct !== null ? afterPct - 0 : null
 
   const handleDownloadPDF = async () => {
     if (!project) return
@@ -547,19 +550,47 @@ export default function ReportsPage() {
               Auto-generate dokumen laporan BIMKON lengkap sesuai format standar SIBIMKON.
             </p>
             <div className="grid grid-cols-3 gap-2 bg-slate-950 border border-slate-850 p-4 rounded-2xl">
+              {/* BASELINE — titik awal KPI sebelum perbaikan */}
               <div className="text-center">
                 <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Baseline</span>
-                <span className="text-lg font-bold text-slate-400">{beforeScore}%</span>
+                {plansWithData.length > 0 ? (
+                  <div className="mt-1 space-y-0.5">
+                    {plansWithData.slice(0, 2).map((a, i) => (
+                      <p key={i} className="text-[10px] text-slate-400 truncate" title={a.title}>
+                        {a.title.substring(0, 14)}: <span className="font-bold text-slate-300">{a.kpi_baseline} {a.kpi_unit}</span>
+                      </p>
+                    ))}
+                    {plansWithData.length > 2 && (
+                      <p className="text-[9px] text-slate-600">+{plansWithData.length - 2} lainnya</p>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-lg font-bold text-slate-600">—</span>
+                )}
               </div>
+
+              {/* AKTUAL — rata-rata % pencapaian KPI aktual */}
               <div className="text-center border-x border-slate-850">
                 <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Aktual</span>
-                <span className="text-lg font-bold text-indigo-400">{afterScore}%</span>
+                {afterPct !== null ? (
+                  <span className="text-lg font-bold text-indigo-400">{afterPct}%</span>
+                ) : (
+                  <span className="text-lg font-bold text-slate-600">—</span>
+                )}
+                <span className="text-[9px] text-slate-600 block">pencapaian target</span>
               </div>
+
+              {/* PENINGKATAN */}
               <div className="text-center">
                 <span className="text-[10px] text-slate-500 uppercase tracking-wider block">Peningkatan</span>
-                <span className={`text-lg font-bold ${improvement >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {improvement >= 0 ? '+' : ''}{improvement}%
-                </span>
+                {improvement !== null ? (
+                  <span className={`text-lg font-bold ${improvement >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {improvement >= 0 ? '+' : ''}{improvement}%
+                  </span>
+                ) : (
+                  <span className="text-lg font-bold text-slate-600">—</span>
+                )}
+                <span className="text-[9px] text-slate-600 block">vs baseline KPI</span>
               </div>
             </div>
             <button onClick={handleDownloadPDF} disabled={pdfLoading}
