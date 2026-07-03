@@ -205,12 +205,12 @@ export default function DashboardPage() {
 
         <div className="relative z-10 p-6 md:p-8">
           {/* Top row: context label + CTA */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 min-w-0">
+            <div className="flex items-center gap-3 min-w-0 w-full">
               <div className="h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-[rgba(128,128,128,0.15)] shadow-inner">
                 <BarChart3 className="h-4 w-4 text-[#F5B942]" />
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400">DMAIC Dashboard</p>
                 <p className="text-sm font-semibold text-white truncate">
                   {currentUser?.role === 'perusahaan'
@@ -235,8 +235,9 @@ export default function DashboardPage() {
           </div>
 
           {/* ── DMAIC 5-Stage Signature Graphic ── */}
-          <div className="flex items-center justify-center gap-0 py-4">
-            {DMAIC_STAGES.map((stage, idx) => {
+          <div className="w-full max-w-full overflow-x-auto no-scrollbar">
+            <div className="flex items-center justify-center gap-0 py-4 min-w-[min-content]">
+              {DMAIC_STAGES.map((stage, idx) => {
               const state = getDmaicStepState(idx, avgPhaseIdx)
               const count = dmaicDistribution[idx].count
               return (
@@ -261,6 +262,7 @@ export default function DashboardPage() {
                 </div>
               )
             })}
+            </div>
           </div>
 
           {/* Subtitle */}

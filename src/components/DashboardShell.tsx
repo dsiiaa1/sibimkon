@@ -429,7 +429,7 @@ export default function DashboardShell({
       </aside>
 
       {/* Main content wrapper */}
-      <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out ${isCollapsed ? 'md:pl-20' : 'md:pl-72'}`} style={{background: 'var(--color-bg-base)'}}>
+      <div className={`flex-1 flex flex-col w-full min-w-0 min-h-screen transition-all duration-300 ease-in-out ${isCollapsed ? 'md:pl-20' : 'md:pl-72'}`} style={{background: 'var(--color-bg-base)'}}>
         {/* Header bar */}
         <header className="sticky top-0 z-40 flex h-16 items-center justify-between px-6 backdrop-blur-md" style={{borderBottom: '1px solid var(--border-base)', background: 'var(--navy-950)', boxShadow: '0 1px 20px rgba(0,0,0,0.30)'}}>
           {/* Menu button */}
