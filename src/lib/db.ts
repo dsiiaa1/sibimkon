@@ -32,6 +32,7 @@ export async function getProjects(): Promise<Project[]> {
       company_name: p.companies?.name || 'Unknown', consultant_id: p.consultant_id,
       status: p.status, start_date: p.start_date, target_end_date: p.target_end_date,
       baseline_score: Number(p.baseline_productivity_index || 0),
+      baseline_reasoning: p.baseline_reasoning,
       current_score: Number(p.current_productivity_index || 0)
     }))
   } catch (err) {
