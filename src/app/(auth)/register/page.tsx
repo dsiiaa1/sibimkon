@@ -133,6 +133,24 @@ export default function RegisterPage() {
           console.warn('Profile insert failed (trigger may handle it):', profileErr)
         }
 
+        // Also create an entry in the companies table
+        try {
+          const { error: companyErr } = await supabase.from('companies').insert({
+            name: companyName,
+            business_field: businessField,
+            pic_name: name,
+            pic_position: picPosition,
+            pic_phone: phone,
+            pic_email: email,
+          })
+
+          if (companyErr) {
+            console.warn('Company insert warning:', companyErr)
+          }
+        } catch (companyErr) {
+          console.warn('Company insert failed (non-critical):', companyErr)
+        }
+
       }
 
       setSuccess(
