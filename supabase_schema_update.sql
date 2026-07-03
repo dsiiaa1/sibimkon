@@ -212,9 +212,21 @@ CREATE TABLE IF NOT EXISTS public.sustainability_assessments (
     system_score NUMERIC,
     result_score NUMERIC,
     overall_score NUMERIC,
+    people_notes TEXT,
+    process_notes TEXT,
+    system_notes TEXT,
+    result_notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+DO $$ 
+BEGIN
+    BEGIN ALTER TABLE public.sustainability_assessments ADD COLUMN people_notes TEXT; EXCEPTION WHEN duplicate_column THEN END;
+    BEGIN ALTER TABLE public.sustainability_assessments ADD COLUMN process_notes TEXT; EXCEPTION WHEN duplicate_column THEN END;
+    BEGIN ALTER TABLE public.sustainability_assessments ADD COLUMN system_notes TEXT; EXCEPTION WHEN duplicate_column THEN END;
+    BEGIN ALTER TABLE public.sustainability_assessments ADD COLUMN result_notes TEXT; EXCEPTION WHEN duplicate_column THEN END;
+END $$;
 
 -- Tabel Consultant Notes
 CREATE TABLE IF NOT EXISTS public.consultant_control_notes (

@@ -438,15 +438,18 @@ export async function saveControlAudit(projectId: string, items: any[]): Promise
 
 // ── CONTROL: PSI ──────────────────────────────────────────────────────────────
 
-export async function getControlPsi(projectId: string): Promise<{ people: number; process: number; system: number; result: number } | null> {
+export async function getControlPsi(projectId: string): Promise<{ people: number; process: number; system: number; result: number, people_notes?: string, process_notes?: string, system_notes?: string, result_notes?: string } | null> {
   try {
     const sb = getSupabase()
     if (!sb) throw new Error('No Supabase client')
     const { data, error } = await sb.from('sustainability_assessments')
-      .select('people_score, process_score, system_score, result_score').eq('project_id', projectId).maybeSingle()
+      .select('people_score, process_score, system_score, result_score, people_notes, process_notes, system_notes, result_notes').eq('project_id', projectId).maybeSingle()
     if (error) handleDbError(error)
     if (data) {
-      return { people: Number(data.people_score || 70), process: Number(data.process_score || 65), system: Number(data.system_score || 60), result: Number(data.result_score || 75) }
+      return { 
+        people: Number(data.people_score || 70), process: Number(data.process_score || 65), system: Number(data.system_score || 60), result: Number(data.result_score || 75),
+        people_notes: data.people_notes || '', process_notes: data.process_notes || '', system_notes: data.system_notes || '', result_notes: data.result_notes || ''
+      }
     }
     const saved = typeof window !== 'undefined' ? localStorage.getItem(`sibimkon_psi_${projectId}`) : null
     return saved ? JSON.parse(saved) : null
@@ -457,7 +460,7 @@ export async function getControlPsi(projectId: string): Promise<{ people: number
   }
 }
 
-export async function saveControlPsi(projectId: string, psi: { people: number; process: number; system: number; result: number }): Promise<void> {
+export async function saveControlPsi(projectId: string, psi: { people: number; process: number; system: number; result: number, people_notes?: string, process_notes?: string, system_notes?: string, result_notes?: string }): Promise<void> {
   if (typeof window !== 'undefined') localStorage.setItem(`sibimkon_psi_${projectId}`, JSON.stringify(psi))
   const sb = getSupabase()
   if (!sb) return
@@ -465,6 +468,8 @@ export async function saveControlPsi(projectId: string, psi: { people: number; p
   const { error } = await sb.from('sustainability_assessments').upsert({
     project_id: projectId, people_score: psi.people, process_score: psi.process,
     system_score: psi.system, result_score: psi.result, psi_total: psiTotal,
+    people_notes: psi.people_notes, process_notes: psi.process_notes,
+    system_notes: psi.system_notes, result_notes: psi.result_notes,
     updated_at: new Date().toISOString()
   }, { onConflict: 'project_id' })
   if (error) {

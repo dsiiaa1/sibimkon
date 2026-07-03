@@ -57,6 +57,11 @@ export default function ControlPage() {
   const [systemScore,  setSystemScore]  = useState(60)
   const [resultScore,  setResultScore]  = useState(75)
 
+  const [peopleNotes, setPeopleNotes] = useState('')
+  const [processNotes, setProcessNotes] = useState('')
+  const [systemNotes, setSystemNotes] = useState('')
+  const [resultNotes, setResultNotes] = useState('')
+
   /* ── load ── */
   useEffect(() => {
     async function loadData() {
@@ -110,6 +115,8 @@ export default function ControlPage() {
       if (psi) {
         setPeopleScore(psi.people); setProcessScore(psi.process)
         setSystemScore(psi.system); setResultScore(psi.result)
+        setPeopleNotes(psi.people_notes || ''); setProcessNotes(psi.process_notes || '')
+        setSystemNotes(psi.system_notes || ''); setResultNotes(psi.result_notes || '')
       }
 
       /* catatan konsultan */
@@ -147,7 +154,10 @@ export default function ControlPage() {
   /* ── PSI handler — hanya konsultan ── */
   const handleSavePSI = async () => {
     if (!isKonsultan) return
-    const psiObj = { people: peopleScore, process: processScore, system: systemScore, result: resultScore }
+    const psiObj = { 
+      people: peopleScore, process: processScore, system: systemScore, result: resultScore,
+      people_notes: peopleNotes, process_notes: processNotes, system_notes: systemNotes, result_notes: resultNotes
+    }
     await saveControlPsi(projectId, psiObj)
     showSave('Productivity Sustainability Index (PSI) berhasil direkam!')
   }
@@ -202,6 +212,19 @@ export default function ControlPage() {
   if (!project) return null
 
   const psiTotal = Math.round((peopleScore + processScore + systemScore + resultScore) / 4)
+
+  const getPsiCategory = (score: number) => {
+    if (score <= 10) return 'Sangat Kritis (0-10)'
+    if (score <= 20) return 'Kritis (11-20)'
+    if (score <= 30) return 'Sangat Kurang (21-30)'
+    if (score <= 40) return 'Kurang (31-40)'
+    if (score <= 50) return 'Butuh Perbaikan (41-50)'
+    if (score <= 60) return 'Cukup (51-60)'
+    if (score <= 70) return 'Memuaskan (61-70)'
+    if (score <= 80) return 'Baik (71-80)'
+    if (score <= 90) return 'Sangat Baik (81-90)'
+    return 'Unggul (91-100)'
+  }
 
   const kpiData = actionPlans.map(act => ({
     name:    act.title.substring(0, 15) + '...',
@@ -634,7 +657,10 @@ export default function ControlPage() {
                 )}
                 <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-right">
                   <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-bold">Total PSI Score</span>
-                  <span className="text-xl font-bold text-indigo-400">{psiTotal}%</span>
+                  <div className="flex flex-col items-end mt-1">
+                    <span className="text-xl font-bold text-indigo-400 leading-none mb-1">{psiTotal}%</span>
+                    <span className="text-[9px] text-slate-400 font-semibold">{getPsiCategory(psiTotal)}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -642,23 +668,44 @@ export default function ControlPage() {
             {/* dimensi PSI */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {[
-                { label: 'People — Keterlibatan SDM & Organisasi',    val: peopleScore,  set: setPeopleScore },
-                { label: 'Process — Kematangan SOP & Kontrol Lini',   val: processScore, set: setProcessScore },
-                { label: 'System — Ketersediaan Platform & Dokumentasi', val: systemScore,  set: setSystemScore },
-                { label: 'Result — Dampak Finansial & Output Aktual',  val: resultScore,  set: setResultScore },
+                { label: 'People — Keterlibatan SDM & Organisasi',    val: peopleScore,  set: setPeopleScore, notes: peopleNotes, setNotes: setPeopleNotes, placeholder: 'Keterangan terkait kesiapan SDM, pelatihan, atau organisasi...' },
+                { label: 'Process — Kematangan SOP & Kontrol Lini',   val: processScore, set: setProcessScore, notes: processNotes, setNotes: setProcessNotes, placeholder: 'Keterangan terkait kematangan SOP dan operasional...' },
+                { label: 'System — Ketersediaan Platform & Dokumentasi', val: systemScore,  set: setSystemScore, notes: systemNotes, setNotes: setSystemNotes, placeholder: 'Keterangan terkait infrastruktur, sistem IT, atau dokumentasi...' },
+                { label: 'Result — Dampak Finansial & Output Aktual',  val: resultScore,  set: setResultScore, notes: resultNotes, setNotes: setResultNotes, placeholder: 'Keterangan terkait pencapaian aktual finansial dan output...' },
               ].map((dim, idx) => (
                 <div key={idx} className="p-5 bg-slate-950/60 border border-slate-850 rounded-2xl space-y-3">
                   <div className="flex justify-between items-center text-xs font-bold text-slate-300">
                     <span>{dim.label}</span>
-                    <span className="text-indigo-400">{dim.val}%</span>
+                    <div className="text-right">
+                      <div className="text-indigo-400">{dim.val}%</div>
+                      <div className="text-[9px] text-slate-500 font-normal">{getPsiCategory(dim.val)}</div>
+                    </div>
                   </div>
                   {isKonsultan ? (
-                    <input type="range" min="0" max="100" value={dim.val} onChange={(e) => dim.set(Number(e.target.value))}
-                      className="w-full h-1.5 bg-slate-900 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
+                    <div className="space-y-3">
+                      <input type="range" min="0" max="100" value={dim.val} onChange={(e) => dim.set(Number(e.target.value))}
+                        className="w-full h-1.5 bg-slate-900 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
+                      <textarea
+                        value={dim.notes}
+                        onChange={(e) => dim.setNotes(e.target.value)}
+                        placeholder={dim.placeholder}
+                        rows={2}
+                        className="w-full bg-slate-900/50 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none resize-none"
+                      />
+                    </div>
                   ) : (
                     /* perusahaan: progress bar static */
-                    <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
-                      <div className="bg-indigo-500 h-full transition-all" style={{ width:`${dim.val}%` }} />
+                    <div className="space-y-3">
+                      <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                        <div className="bg-indigo-500 h-full transition-all" style={{ width:`${dim.val}%` }} />
+                      </div>
+                      {dim.notes ? (
+                        <div className="p-3 bg-slate-900/40 rounded-xl border border-slate-800/50 text-xs text-slate-300 italic">
+                          "{dim.notes}"
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-slate-600 italic">Belum ada keterangan dari konsultan.</div>
+                      )}
                     </div>
                   )}
                 </div>
