@@ -206,8 +206,8 @@ export default function CompaniesPage() {
       {/* Add Company Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background: 'rgba(2,6,15,0.80)', backdropFilter: 'blur(8px)'}}>
-          <div className="w-full max-w-lg rounded-3xl overflow-hidden" style={{background: 'var(--navy-900)', border: '1px solid var(--border-base)', boxShadow: '0 30px 80px rgba(0,0,0,0.60)'}}>
-            <div className="px-6 py-4 flex items-center justify-between" style={{borderBottom: '1px solid var(--border-base)', background: 'var(--navy-950)'}}>
+          <div className="w-full max-w-lg rounded-3xl overflow-hidden" style={{background: 'var(--color-bg-surface)', border: '1px solid var(--border-base)', boxShadow: '0 30px 80px rgba(0,0,0,0.60)'}}>
+            <div className="px-6 py-4 flex items-center justify-between" style={{borderBottom: '1px solid var(--border-base)', background: 'var(--color-bg-base)'}}>
               <h3 className="text-lg font-bold" style={{color: 'var(--text-primary)'}}>Daftarkan Perusahaan Klien Baru</h3>
               <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-200">✕</button>
             </div>

@@ -20,6 +20,7 @@ import {
   FileText
 } from 'lucide-react'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
+import { ThemeToggle } from '@/components/ThemeToggle'
 
 function getRelativeTime(dateStr: string): string {
   try {
@@ -420,7 +421,7 @@ export default function DashboardShell({
       </aside>
 
       {/* Main content wrapper */}
-      <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out ${isCollapsed ? 'md:pl-20' : 'md:pl-72'}`}>
+      <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out ${isCollapsed ? 'md:pl-20' : 'md:pl-72'}`} style={{background: 'var(--color-bg-base)'}}>
         {/* Header bar */}
         <header className="sticky top-0 z-40 flex h-16 items-center justify-between px-6 backdrop-blur-md" style={{borderBottom: '1px solid var(--border-base)', background: 'var(--navy-950)', boxShadow: '0 1px 20px rgba(0,0,0,0.30)'}}>
           {/* Menu button */}
@@ -441,20 +442,23 @@ export default function DashboardShell({
 
           {/* Right Header Navigation */}
           <div className="flex items-center gap-4 ml-auto">
-            {/* Language Toggle */}
-            <div className="flex items-center gap-1 rounded-xl p-1" style={{ border: '1px solid var(--border-base)', background: 'rgba(255,255,255,0.06)' }}>
-              <button
-                onClick={() => setLocale('id')}
-                className={`px-2 py-1 text-[11px] font-bold rounded-lg transition-all ${locale === 'id' ? 'bg-[rgba(255,255,255,0.12)] text-[var(--gold-400)]' : 'text-[var(--text-muted)] hover:text-white'}`}
-              >
-                ID
-              </button>
-              <button
-                onClick={() => setLocale('en')}
-                className={`px-2 py-1 text-[11px] font-bold rounded-lg transition-all ${locale === 'en' ? 'bg-[rgba(255,255,255,0.12)] text-[var(--gold-400)]' : 'text-[var(--text-muted)] hover:text-white'}`}
-              >
-                EN
-              </button>
+            {/* Language & Theme Toggles */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 rounded-xl p-1" style={{ border: '1px solid var(--border-base)', background: 'rgba(255,255,255,0.06)' }}>
+                <button
+                  onClick={() => setLocale('id')}
+                  className={`px-2 py-1 text-[11px] font-bold rounded-lg transition-all ${locale === 'id' ? 'bg-[rgba(255,255,255,0.12)] text-[var(--gold-400)]' : 'text-[var(--text-muted)] hover:text-white'}`}
+                >
+                  ID
+                </button>
+                <button
+                  onClick={() => setLocale('en')}
+                  className={`px-2 py-1 text-[11px] font-bold rounded-lg transition-all ${locale === 'en' ? 'bg-[rgba(255,255,255,0.12)] text-[var(--gold-400)]' : 'text-[var(--text-muted)] hover:text-white'}`}
+                >
+                  EN
+                </button>
+              </div>
+              <ThemeToggle />
             </div>
 
             {/* Notification button with dropdown */}

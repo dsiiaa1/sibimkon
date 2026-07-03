@@ -507,7 +507,7 @@ export default function ImprovePage() {
                       <span className="text-slate-500 font-bold">Progress Implementasi:</span>
                       <span className="font-bold text-indigo-400">{act.progress_percentage}%</span>
                     </div>
-                    {isKonsultan
+                    {isKonsultan || (act.verified_kpi_actual === undefined && verifiedEv.length === 0)
                       ? <input type="range" min="0" max="100" value={act.progress_percentage} onChange={(e) => handleUpdateProgress(act.id, Number(e.target.value))} className="w-full h-1.5 bg-slate-900 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
                       : <div className="w-full h-1.5 bg-slate-900 rounded-lg overflow-hidden"><div className="h-full rounded-lg bg-indigo-500 transition-all" style={{ width:`${act.progress_percentage}%` }} /></div>
                     }

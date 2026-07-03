@@ -1,24 +1,40 @@
 @import "tailwindcss";
 
 /* ===================================================
-   SIBIMKON — Design System: Navy · Black · Gold
+   SIBIMKON — Design System: Navy · Black · Gold · Teal
+   PRD Design Tokens (Section 9)
    =================================================== */
 
 :root {
-  /* Core palette */
-  --navy-950: #050e1a;
-  --navy-900: #0a192f;
-  --navy-800: #172a45;
+  /* Core palette — PRD exact values */
+  --color-bg-base: #0B1220;
+  --color-bg-surface: #141C2E;
+  --navy-950: #0B1220; /* PRD: color.bg.base */
+  --navy-900: #141C2E; /* PRD: color.bg.surface */
+  --navy-800: #1a2740;
   --navy-700: #304a6e;
   --navy-600: #4b6e9c;
   --navy-500: #6b94c7;
 
-  --gold-400: #d4af37; /* Luxury Gold */
-  --gold-500: #c19a2d;
-  --gold-600: #aa821c;
-  --gold-300: #e5c058;
-  --gold-200: #f3d98e;
+  /* PRD: color.accent.primary — Gold */
+  --gold-400: #F5B942; /* PRD exact */
+  --gold-500: #d4a017;
+  --gold-600: #b8860b;
+  --gold-300: #f7cb6a;
+  --gold-200: #fae0a0;
   --gold-100: #fff9e6;
+
+  /* PRD: color.accent.secondary — Teal for positive indicators */
+  --teal-accent: #3DD9B0;
+  --teal-600: #2bb394;
+  --teal-500: #34c9a4;
+  --teal-400: #3DD9B0;
+  --teal-300: #6ae4c6;
+  --teal-100: #e6faf4;
+
+  /* PRD: color.accent.warning — Muted red/orange */
+  --warning-muted: #e07a5f;
+  --warning-dark: #c4563a;
 
   --black-pure: #000000;
   --dark-900: #050505;
@@ -27,22 +43,148 @@
   --dark-600: #1c1c1c;
 
   /* Text hierarchy */
-  --text-primary: #0a192f; /* Primary Navy */
-  --text-secondary: #4a5568; /* Slate Gray */
-  --text-muted: #8a99ad; /* Muted Slate */
-  --text-gold: #d4af37;
+  --text-primary: #ffffff;
+  --text-secondary: #e2e8f0;
+  --text-muted: #94a3b8;
+  --text-gold: #F5B942;
 
   /* Borders */
-  --border-base: rgba(212, 175, 55, 0.15);
-  --border-hover: rgba(212, 175, 55, 0.35);
-  --border-active: rgba(212, 175, 55, 0.6);
+  --border-base: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.15);
+  --border-active: var(--gold-400);
 
   /* Background */
-  --background: #ffffff; /* Putih */
+  --background: var(--color-bg-base);
   --foreground: var(--text-primary);
+
+  /* Typography — PRD 8.4 */
+  --font-display: var(--font-display, 'Space Grotesk', system-ui, sans-serif);
 
   /* Sidebar */
   --sidebar-width: 280px;
+}
+
+/* Light Theme Overrides */
+.light {
+  --color-bg-base: #f8fafc;
+  --color-bg-surface: #ffffff;
+  --background: var(--color-bg-base);
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --border-base: #e2e8f0;
+  --border-hover: #cbd5e1;
+}
+
+.light main .glass-card,
+.light main [class*="bg-slate-9"],
+.light main [class*="bg-slate-8"] {
+  background-color: #ffffff !important;
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.06) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Hero banner: subtle warm gradient in light mode */
+.light main .hero-banner {
+  background: linear-gradient(135deg, #f0f4ff 0%, #fef9f0 50%, #f0fdf4 100%) !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Hero metric card: subtle teal-tinted card in light mode */
+.light main .hero-metric-card {
+  background: linear-gradient(135deg, #f0fdfa 0%, #f0f9ff 100%) !important;
+  border-color: rgba(61, 217, 176, 0.25) !important;
+  box-shadow: 0 4px 20px -2px rgba(61, 217, 176, 0.08) !important;
+}
+.light main .hero-metric-card::before {
+  background: linear-gradient(90deg, transparent, rgba(61, 217, 176, 0.3), transparent) !important;
+}
+.light main .hero-metric-card::after {
+  background: rgba(61, 217, 176, 0.05) !important;
+}
+
+/* DMAIC connectors & dots in light mode */
+.light .dmaic-connector.inactive {
+  background: #e2e8f0 !important;
+}
+.light .dmaic-step-dot.inactive {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #94a3b8 !important;
+}
+.light .dmaic-mini-connector.inactive {
+  background: #e2e8f0 !important;
+}
+.light .dmaic-mini-dot.inactive {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #94a3b8 !important;
+}
+
+/* Text colors */
+.light main .text-white,
+.light main .text-slate-100,
+.light main .text-slate-200 {
+  color: #0f172a !important;
+}
+.light main .text-slate-300,
+.light main .text-slate-400,
+.light main .text-slate-500,
+.light main .text-slate-600 {
+  color: #475569 !important;
+}
+
+/* Table */
+.light main thead tr {
+  background-color: #f1f5f9 !important;
+  background: #f1f5f9 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+.light main tr:hover td {
+  background-color: #f8fafc !important;
+  background: #f8fafc !important;
+}
+.light main td,
+.light main th {
+  border-color: #e2e8f0 !important;
+}
+.light main [class*="border-slate-"] {
+  border-color: #e2e8f0 !important;
+}
+
+/* Fix tabs text color in light mode */
+.light main button.border-indigo-500.text-indigo-400 {
+  color: var(--gold-600) !important;
+  background-color: rgba(212, 160, 23, 0.1) !important;
+}
+.light main [class*="bg-indigo-500"] .text-indigo-400,
+.light main [class*="bg-indigo-500"] .text-white {
+  color: var(--gold-600) !important;
+}
+
+/* Exception: text-white inside buttons/links with gold/teal backgrounds stays white */
+.light main button.text-white,
+.light main a.text-white {
+  color: #ffffff !important;
+}
+
+/* Baseline pill in light mode */
+.light main .baseline-pill {
+  background: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* Search input in light mode */
+.light main input[type="text"] {
+  background-color: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+  color: var(--text-primary) !important;
+}
+.light main input[type="text"]::placeholder {
+  color: var(--text-muted) !important;
 }
 
 /* Local scoping for dark components (Sidebar, Header & Dark Sections) to preserve text readability */
@@ -350,146 +492,7 @@ input {
   background-color: var(--gold-400) !important;
 }
 
-/* ===================================================
-   FORM INPUTS — clean light theme
-   =================================================== */
-input,
-textarea,
-select {
-  background-color: #ffffff;
-  color: var(--text-primary);
-  border-color: #cbd5e1;
-}
-input::placeholder,
-textarea::placeholder {
-  color: var(--text-muted) !important;
-}
-input:focus,
-textarea:focus,
-select:focus {
-  border-color: var(--gold-400) !important;
-  box-shadow: 0 0 0 3px rgba(212, 160, 23, 0.12) !important;
-  outline: none !important;
-}
-select option {
-  background-color: #ffffff !important;
-  color: var(--navy-950) !important;
-}
 
-/* Ensure inputs inside main content are always light-themed */
-main input,
-main textarea,
-main select {
-  background-color: #ffffff !important;
-  color: var(--navy-950) !important;
-  border-color: #cbd5e1 !important;
-}
-main input:focus,
-main textarea:focus,
-main select:focus {
-  border-color: var(--gold-400) !important;
-  box-shadow: 0 0 0 3px rgba(212, 160, 23, 0.12) !important;
-}
-
-/* Default card backgrounds and borders inside main content (Light Theme) */
-main .glass-card,
-main [class*="bg-slate-900"],
-main [class*="bg-slate-950"],
-main [class*="bg-slate-800"],
-main [class*="bg-slate-850"],
-main [class*="bg-slate-700"],
-main [class*="hover:bg-slate-"]:hover {
-  background-color: #ffffff !important;
-  background: #ffffff !important;
-  border-color: var(--border-base) !important;
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 10px -1px rgba(0, 0, 0, 0.03) !important;
-}
-
-/* Visual Hierarchy for Nested Cards inside cards */
-main [class*="bg-slate-900"] [class*="bg-slate-9"],
-main [class*="bg-slate-950"] [class*="bg-slate-9"],
-main [class*="bg-slate-900"] [class*="bg-slate-8"],
-main [class*="bg-slate-950"] [class*="bg-slate-8"],
-main .glass-card [class*="bg-slate-9"],
-main .glass-card [class*="bg-slate-8"] {
-  background-color: #f8fafc !important;
-  background: #f8fafc !important;
-  border-color: #cbd5e1 !important;
-}
-
-/* Table headers & rows in light theme */
-main thead tr,
-main tr.bg-slate-950\/60,
-main tr[class*="bg-slate-"] {
-  background-color: #f8fafc !important;
-  background: #f8fafc !important;
-  border-bottom: 1px solid #cbd5e1 !important;
-}
-main tr:hover td,
-main tr[class*="hover:bg-slate"]:hover td {
-  background-color: #f1f5f9 !important;
-  background: #f1f5f9 !important;
-}
-main td,
-main th {
-  border-color: #cbd5e1 !important;
-}
-
-/* Border slate classes inside main content */
-main .border-slate-800,
-main .border-slate-700,
-main .border-slate-850,
-main [class*="border-slate-"],
-main .divide-slate-800 > * + *,
-main [class*="divide-slate-"] > * + * {
-  border-color: #cbd5e1 !important;
-}
-
-/* Text color mapping inside main content */
-main .text-slate-50,
-main .text-slate-100,
-main .text-slate-200,
-main .text-slate-350,
-main .text-slate-300 {
-  color: var(--text-primary) !important; /* Navy */
-}
-
-main .text-slate-400,
-main .text-slate-250,
-main .text-slate-500 {
-  color: var(--text-secondary) !important; /* Slate Gray */
-}
-
-/* text-white inside main should map to primary navy (light theme) */
-main .text-white {
-  color: var(--text-primary) !important;
-}
-
-/* Exception: text-white inside buttons with explicit backgrounds stays white for contrast */
-main button.text-white,
-main a.text-white {
-  color: #ffffff !important;
-}
-
-main .text-indigo-400,
-main .text-indigo-300,
-main [class*="text-indigo-"] {
-  color: var(--gold-600) !important; /* Dark Gold for contrast */
-}
-
-/* Fix light colored text with opacities in light mode (e.g., text-amber-400/70) */
-main [class*="text-amber-"] {
-  color: #b45309 !important; /* amber-700 */
-}
-main [class*="text-emerald-"] {
-  color: #059669 !important; /* emerald-600 */
-}
-main [class*="text-red-"] {
-  color: #dc2626 !important; /* red-600 */
-}
-main [class*="text-blue-"] {
-  color: #2563eb !important; /* blue-600 */
-}
 
 /* ===================================================
    TABLE — consistent
@@ -589,6 +592,12 @@ tr:hover td {
   .floaty {
     animation: none !important;
   }
+  .count-up-animate {
+    animation: none !important;
+  }
+  .dmaic-step {
+    transition: none !important;
+  }
 }
 
 @keyframes goldPulse {
@@ -602,6 +611,169 @@ tr:hover td {
 }
 .gold-pulse {
   animation: goldPulse 2s ease-in-out infinite;
+}
+
+/* ===================================================
+   PRD 8.4: DISPLAY FONT & TABULAR NUMS
+   =================================================== */
+.font-display {
+  font-family: var(--font-display);
+}
+
+.stat-number {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+/* ===================================================
+   PRD 8.2: DMAIC SIGNATURE VISUAL
+   =================================================== */
+.dmaic-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.dmaic-step-dot {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 13px;
+  font-family: var(--font-display);
+  transition: all 0.25s ease;
+  border: 2px solid transparent;
+}
+
+.dmaic-step-dot.active {
+  background: linear-gradient(135deg, var(--gold-600), var(--gold-400));
+  color: var(--navy-950);
+  box-shadow: 0 4px 16px rgba(245, 185, 66, 0.35);
+  border-color: rgba(245, 185, 66, 0.5);
+}
+
+.dmaic-step-dot.completed {
+  background: rgba(61, 217, 176, 0.15);
+  color: var(--teal-accent);
+  border-color: rgba(61, 217, 176, 0.35);
+}
+
+.dmaic-step-dot.inactive {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.dmaic-connector {
+  height: 2px;
+  flex: 1;
+  min-width: 20px;
+  border-radius: 1px;
+}
+
+.dmaic-connector.completed {
+  background: linear-gradient(90deg, var(--teal-accent), rgba(61, 217, 176, 0.3));
+}
+.dmaic-connector.active {
+  background: linear-gradient(90deg, var(--gold-400), rgba(245, 185, 66, 0.2));
+}
+.dmaic-connector.inactive {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* ===================================================
+   PRD 8.3: HERO METRIC CARD
+   =================================================== */
+.hero-metric-card {
+  background: linear-gradient(135deg, #0d1a2a 0%, #0f2035 50%, #0B1220 100%);
+  border: 1px solid rgba(61, 217, 176, 0.18);
+  border-radius: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-metric-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(61, 217, 176, 0.5), transparent);
+}
+
+.hero-metric-card::after {
+  content: '';
+  position: absolute;
+  right: -30px;
+  top: -30px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: rgba(61, 217, 176, 0.04);
+  filter: blur(40px);
+}
+
+/* ===================================================
+   PRD 8.5: DMAIC MINI STEP INDICATOR (table row)
+   =================================================== */
+.dmaic-mini-steps {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.dmaic-mini-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 800;
+  font-family: var(--font-display);
+  transition: all 0.2s ease;
+}
+
+.dmaic-mini-dot.completed {
+  background: rgba(61, 217, 176, 0.12);
+  color: #2bb394;
+  border: 1px solid rgba(61, 217, 176, 0.25);
+}
+.dmaic-mini-dot.active {
+  background: rgba(245, 185, 66, 0.12);
+  color: #b8860b;
+  border: 1px solid rgba(245, 185, 66, 0.3);
+  box-shadow: 0 0 8px rgba(245, 185, 66, 0.15);
+}
+.dmaic-mini-dot.inactive {
+  background: #f1f5f9;
+  color: #94a3b8;
+  border: 1px solid #e2e8f0;
+}
+
+.dmaic-mini-connector {
+  width: 6px;
+  height: 2px;
+  border-radius: 1px;
+}
+.dmaic-mini-connector.completed {
+  background: rgba(61, 217, 176, 0.35);
+}
+.dmaic-mini-connector.active {
+  background: rgba(245, 185, 66, 0.35);
+}
+.dmaic-mini-connector.inactive {
+  background: #e2e8f0;
 }
 
 /* ===================================================
@@ -634,75 +806,7 @@ nav::-webkit-scrollbar-thumb {
   color: #ffffff !important;
 }
 
-/* ===================================================
-   LIGHT TABLE OVERRIDE FOR DARK SECTIONS
-   =================================================== */
-.dark-section .light-table {
-  background-color: #ffffff !important;
-  background: #ffffff !important;
-  color: #0a192f !important;
-}
 
-.dark-section .light-table table {
-  background-color: #ffffff !important;
-}
-
-.dark-section .light-table thead tr {
-  background-color: #f8fafc !important;
-  background: #f8fafc !important;
-  border-bottom: 1px solid #e2e8f0 !important;
-}
-
-.dark-section .light-table th {
-  color: #4a5568 !important;
-  font-weight: 700 !important;
-  border-color: #e2e8f0 !important;
-}
-
-.dark-section .light-table tbody tr {
-  background-color: #ffffff !important;
-  border-bottom: 1px solid #f1f5f9 !important;
-}
-
-.dark-section .light-table tbody tr:hover {
-  background-color: #f8fafc !important;
-  background: #f8fafc !important;
-}
-
-.dark-section .light-table td {
-  color: #4a5568 !important;
-  border-color: #f1f5f9 !important;
-}
-
-.dark-section .light-table td h4,
-.dark-section .light-table td span:not(.project-code):not(.text-white),
-.dark-section .light-table td font-semibold {
-  color: #0a192f !important;
-}
-
-.dark-section .light-table td .project-code {
-  color: #aa821c !important;
-}
-
-.dark-section .light-table td a {
-  color: #aa821c !important;
-}
-.dark-section .light-table td a:hover {
-  color: #d4af37 !important;
-}
-
-.dark-section .light-table .baseline-pill {
-  background-color: #f1f5f9 !important;
-  border-color: #cbd5e1 !important;
-  color: #4a5568 !important;
-}
-.dark-section .light-table .baseline-pill span {
-  color: #4a5568 !important;
-}
-.dark-section .light-table .baseline-pill .text-emerald-400,
-.dark-section .light-table .baseline-pill .text-emerald-600 {
-  color: #059669 !important; /* High-contrast green */
-}
 
 /* ===================================================
    PHASE ADVANCE BANNER STYLE
@@ -760,30 +864,4 @@ main .phase-banner button[class*="text-"]:active {
 
 
 
-/* ===================================================
-   TAB ACTIVE STATE — navy text on gold-tinted bg
-   Tab aktif pakai text-indigo-400 + bg-indigo-500/5,
-   keduanya di-remap ke gold → teks tidak terlihat.
-   Override khusus agar tab aktif tetap kontras.
-   =================================================== */
-main button.border-indigo-500.text-indigo-400 {
-  color: var(--navy-900) !important;
-  background-color: rgba(212, 160, 23, 0.12) !important;
-  font-weight: 800 !important;
-}
 
-/* text-indigo-* dan text-white di dalam bg-indigo-500/5 cards
-   Background sudah di-remap ke gold tint → teks perlu navy untuk kontras */
-main [class*="bg-indigo-500\/5"] .text-indigo-400,
-main [class*="bg-indigo-500\/5"] .text-indigo-300,
-main [class*="bg-indigo-500\/5"] .text-white,
-main [class*="bg-indigo-500\/5"] h3,
-main [class*="bg-indigo-500\/5"] h4,
-main [class*="bg-indigo-500\/5"] p {
-  color: var(--navy-900) !important;
-}
-
-main [class*="bg-indigo-500\/10"] .text-indigo-400,
-main [class*="bg-indigo-500\/10"] .text-indigo-300 {
-  color: var(--navy-900) !important;
-}
