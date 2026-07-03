@@ -250,6 +250,14 @@ export default function DashboardShell({
 
   return (
     <div className="flex min-h-screen" style={{background: 'var(--background)', color: 'var(--text-primary)'}}>
+      {/* Mobile Sidebar Overlay */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden animate-fade-in"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar for desktop */}
       <aside className={`fixed inset-y-0 left-0 z-50 flex flex-col backdrop-blur-xl transition-all duration-300 ease-in-out md:translate-x-0 ${isCollapsed ? 'md:w-20 w-72' : 'w-72'} ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`} style={{background: 'var(--navy-900)', borderRight: '1px solid var(--border-base)'}}>
         {/* Sidebar brand header */}
@@ -441,9 +449,9 @@ export default function DashboardShell({
           </div>
 
           {/* Right Header Navigation */}
-          <div className="flex items-center gap-4 ml-auto">
+          <div className="flex items-center gap-2 md:gap-4 ml-auto">
             {/* Language & Theme Toggles */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 md:gap-2">
               <div className="flex items-center gap-1 rounded-xl p-1" style={{ border: '1px solid var(--border-base)', background: 'rgba(255,255,255,0.06)' }}>
                 <button
                   onClick={() => setLocale('id')}
@@ -509,7 +517,7 @@ export default function DashboardShell({
             </div>
 
             {/* Profile widget */}
-            <div className="flex items-center gap-2 pl-4" style={{borderLeft: '1px solid var(--border-base)'}}>
+            <div className="flex items-center gap-2 pl-2 md:pl-4" style={{borderLeft: '1px solid var(--border-base)'}}>
               <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-semibold" style={{background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'var(--gold-400)'}}>
                 <User className="h-4 w-4" />
               </div>
