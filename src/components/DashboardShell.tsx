@@ -249,7 +249,7 @@ export default function DashboardShell({
   const unreadCount = notifications.filter(n => n.unread).length
 
   return (
-    <div className="flex min-h-screen" style={{background: 'var(--background)', color: 'var(--text-primary)'}}>
+    <div className="flex min-h-screen w-full max-w-[100vw] overflow-x-hidden" style={{background: 'var(--background)', color: 'var(--text-primary)'}}>
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && (
         <div 
