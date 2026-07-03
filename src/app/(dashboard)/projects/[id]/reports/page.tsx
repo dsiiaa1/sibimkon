@@ -234,7 +234,7 @@ export default function ReportsPage() {
     return { costSaving, investment, roi, isManual: false }
   })()
 
-  const beforeScore = project?.baseline_score || 0
+  const beforeScore = project?.baseline_score || project?.current_score || 0
 
   // Hitung afterScore langsung dari kpi_actual action plans
   // TIDAK bergantung pada project.current_score / current_productivity_index di DB
@@ -314,6 +314,13 @@ export default function ReportsPage() {
     title: string; orgLabel: string; sig: SignatureRecord; role: 'consultant' | 'company'
   }) => {
     const isSaving = sigSaving === role
+
+    // Role perusahaan hanya boleh tanda tangan di bagian 'company', dan sebaliknya
+    const userRoleRaw: string = (userInfo?.role ?? '').toLowerCase()
+    const canSign =
+      (role === 'consultant' && userRoleRaw !== 'perusahaan') ||
+      (role === 'company' && userRoleRaw === 'perusahaan')
+
     return (
       <div className="p-4 bg-slate-950/40 border border-slate-850 rounded-2xl flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
@@ -327,29 +334,41 @@ export default function ReportsPage() {
             <span className="text-xs font-semibold text-slate-500 mt-1 block italic">{orgLabel}</span>
           )}
         </div>
-        {sig.signed ? (
-          <button
-            onClick={() => { setSigRole(role); setShowSigModal(true); }}
-            disabled={isSaving}
-            className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors shrink-0 cursor-pointer disabled:opacity-60"
-            title="Klik untuk mengulang tanda tangan"
-          >
-            {isSaving
-              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Menyimpan...</>
-              : <><CheckCircle2 className="h-4 w-4" /> Terverifikasi (Ubah)</>
-            }
-          </button>
+        {/* Tombol hanya tampil jika role sesuai */}
+        {canSign ? (
+          sig.signed ? (
+            <button
+              onClick={() => { setSigRole(role); setShowSigModal(true); }}
+              disabled={isSaving}
+              className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors shrink-0 cursor-pointer disabled:opacity-60"
+              title="Klik untuk mengulang tanda tangan"
+            >
+              {isSaving
+                ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Menyimpan...</>
+                : <><CheckCircle2 className="h-4 w-4" /> Terverifikasi (Ubah)</>
+              }
+            </button>
+          ) : (
+            <button
+              onClick={() => { setSigRole(role); setShowSigModal(true); }}
+              disabled={isSaving}
+              className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-550 text-xs font-bold rounded-lg text-white cursor-pointer shrink-0 disabled:opacity-60"
+            >
+              {isSaving
+                ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Menyimpan...</>
+                : <><Edit3 className="h-3.5 w-3.5" /> Tanda Tangan</>
+              }
+            </button>
+          )
+        ) : sig.signed ? (
+          /* role lain hanya bisa melihat status, tidak bisa klik */
+          <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400 shrink-0">
+            <CheckCircle2 className="h-4 w-4" /> Terverifikasi
+          </span>
         ) : (
-          <button
-            onClick={() => { setSigRole(role); setShowSigModal(true); }}
-            disabled={isSaving}
-            className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-550 text-xs font-bold rounded-lg text-white cursor-pointer shrink-0 disabled:opacity-60"
-          >
-            {isSaving
-              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Menyimpan...</>
-              : <><Edit3 className="h-3.5 w-3.5" /> Tanda Tangan</>
-            }
-          </button>
+          <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-800 text-xs font-bold rounded-lg text-slate-500 shrink-0 cursor-not-allowed opacity-60">
+            <Edit3 className="h-3.5 w-3.5" /> Tanda Tangan
+          </span>
         )}
       </div>
     )
