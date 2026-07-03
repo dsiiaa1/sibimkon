@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import {
   getProjects, getProjectCharter, getCompanies,
-  getMeasureProblems, saveMeasureProblems, updateProjectPhase,
+  getMeasureProblems, saveMeasureProblems, updateProjectPhase, updateProjectBaseline
 } from '@/lib/db'
 import { Project, ProjectCharter, MeasureProblem, MethodRecommendation } from '@/lib/mockData'
 import {
@@ -165,6 +165,13 @@ export default function MeasurePage() {
 
       // Simpan ke Supabase
       await saveMeasureProblems(projectId, aiProblems)
+      if (typeof data.estimated_baseline_score === 'number') {
+        await updateProjectBaseline(projectId, data.estimated_baseline_score)
+        // Update state lokal
+        if (project) {
+          setProject({ ...project, baseline_score: data.estimated_baseline_score })
+        }
+      }
       showToast('Analisis selesai!')
 
     } catch (err: any) {

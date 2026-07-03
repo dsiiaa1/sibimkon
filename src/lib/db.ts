@@ -219,6 +219,18 @@ export async function saveAssessments(projectId: string, assessments: Assessment
   if (updErr) handleDbError(updErr)
 }
 
+export async function updateProjectBaseline(projectId: string, baselineScore: number): Promise<void> {
+  const sb = getSupabase()
+  if (!sb) return
+  
+  const { error: updErr } = await sb.from('bimkon_projects').update({
+    baseline_productivity_index: baselineScore,
+    updated_at: new Date().toISOString()
+  }).eq('id', projectId)
+  
+  if (updErr) handleDbError(updErr)
+}
+
 // ── MEASURE: VOM ──────────────────────────────────────────────────────────────
 
 export async function getVom(projectId: string): Promise<any[]> {
