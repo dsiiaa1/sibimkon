@@ -132,9 +132,13 @@ export default function AnalyzePage() {
     setParetoItems(paretoItems.filter((_, i) => i !== index))
   }
   const handleSavePareto = async () => {
-    await saveParetoData(projectId, paretoItems)
-    setParetoSaveMsg('Data Pareto berhasil disimpan!')
-    setTimeout(() => setParetoSaveMsg(null), 3000)
+    try {
+      await saveParetoData(projectId, paretoItems)
+      setParetoSaveMsg('Data Pareto berhasil disimpan!')
+      setTimeout(() => setParetoSaveMsg(null), 3000)
+    } catch (err) {
+      console.error(err)
+    }
   }
 
   /* ── computed for needs tab ── */

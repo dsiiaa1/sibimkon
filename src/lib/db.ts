@@ -1255,26 +1255,27 @@ export async function getParetoData(projectId: string): Promise<ParetoItem[]> {
 }
 
 export async function saveParetoData(projectId: string, items: ParetoItem[]): Promise<void> {
-  // localStorage
+  // localStorage fallback
   const key = `sibimkon_pareto_${projectId}`
   if (typeof window !== 'undefined') localStorage.setItem(key, JSON.stringify(items))
 
-  try {
-    const sb = getSupabase()
-    if (sb) {
-      // Hapus data lama lalu insert semua baris baru (upsert sederhana)
-      await sb.from('pareto_data').delete().eq('project_id', projectId)
-      if (items.length > 0) {
-        const rows = items.map((item) => ({
-          project_id: projectId,
-          problem_name: item.problem_name,
-          score: item.score,
-        }))
-        const { error } = await sb.from('pareto_data').insert(rows)
-        if (error) console.error('[saveParetoData] insert error:', error.message)
-      }
+  const sb = getSupabase()
+  if (!sb) return
+
+  const { error: delErr } = await sb.from('pareto_data').delete().eq('project_id', projectId)
+  if (delErr) {
+    handleDbError(delErr)
+  }
+
+  if (items.length > 0) {
+    const rows = items.map((item) => ({
+      project_id: projectId,
+      problem_name: item.problem_name,
+      score: item.score,
+    }))
+    const { error: insErr } = await sb.from('pareto_data').insert(rows)
+    if (insErr) {
+      handleDbError(insErr)
     }
-  } catch (err) {
-    console.warn('[saveParetoData] Supabase failed, localStorage only:', err)
   }
 }
