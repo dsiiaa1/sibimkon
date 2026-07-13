@@ -73,7 +73,7 @@ Kembalikan HANYA JSON berikut, tanpa teks lain, tanpa markdown, tanpa backtick:
 }
 
 // Groq Cloud — LPU inference super cepat, OpenAI-compatible API
-const GROQ_MODEL  = 'llama-3.3-70b-versatile'
+const GROQ_MODEL  = 'llama-3.1-8b-instant'
 const MAX_RETRIES = 4
 
 async function sleep(ms: number) {
@@ -114,6 +114,10 @@ async function callAI(prompt: string, apiKey: string): Promise<string> {
       const backoffMs = retryAfterSec > 0
         ? retryAfterSec * 1000
         : Math.min(1000 * 2 ** attempt, 16000) // 1s, 2s, 4s, 8s
+
+      if (backoffMs > 10000) {
+        throw new Error(`Server AI sedang sibuk (Rate Limit). Silakan coba lagi nanti.`)
+      }
 
       console.warn(`[measure-analyze] 429 rate limit, retry ${attempt + 1}/${MAX_RETRIES} dalam ${backoffMs}ms`)
       lastError = new Error(`Rate limit — retry ${attempt + 1}/${MAX_RETRIES}`)

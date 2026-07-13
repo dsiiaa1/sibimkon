@@ -1,7 +1,7 @@
 'use client'
 
 import { createClient } from './supabase/client'
-import { getMockDB, updateMockDB, Project, Company, ProjectCharter, Assessment, FishboneNode, WhyNode, ActionPlan, MeasureProblem, AnalyzeNeed, EvidenceItem, ConsultantControlNote, ParetoItem } from './mockData'
+import { getMockDB, updateMockDB, Project, Company, ProjectCharter, Assessment, FishboneNode, WhyNode, ActionPlan, MeasureProblem, AnalyzeNeed, EvidenceItem, ConsultantControlNote, ParetoItem, MeasureDataRequirement, AnalyzeResult } from './mockData'
 
 function handleDbError(error: any): never {
   console.error('[DB Error]', error)
@@ -165,7 +165,8 @@ export async function saveProjectCharter(charter: ProjectCharter): Promise<void>
   const { error } = await sb.from('project_charters').upsert({
     project_id: charter.project_id, problem_statement: charter.problem_statement,
     objectives: charter.objectives, productivity_target: charter.productivity_target,
-    scope: charter.scope, team_members: charter.team_members
+    scope: charter.scope, team_members: charter.team_members,
+    measure_summary: charter.measure_summary ?? null
   }, { onConflict: 'project_id' })
   if (error) handleDbError(error)
 }
@@ -231,6 +232,99 @@ export async function updateProjectBaseline(projectId: string, baselineScore: nu
   }).eq('id', projectId)
   
   if (updErr) handleDbError(updErr)
+}
+
+// ── MEASURE: Data Requirements (NEW) ──────────────────────────────────────────
+
+/** Helper: cek apakah string adalah UUID v4 valid (untuk filter mockup ID) */
+function isValidUUID(str: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)
+}
+
+export async function getMeasureDataRequirements(projectId: string): Promise<MeasureDataRequirement[]> {
+  // Skip Supabase query entirely for mockup project IDs (not valid UUID)
+  if (!isValidUUID(projectId)) {
+    return getMockDB().measureDataReqs[projectId] || []
+  }
+
+  try {
+    const sb = getSupabase()
+    if (!sb) throw new Error('No Supabase client')
+    const { data, error } = await sb.from('measure_data_requirements').select('*').eq('project_id', projectId).order('created_at', { ascending: true })
+    if (error) throw error
+    // Map DB column data_group → group in TypeScript
+    return (data || []).map((row: any) => ({
+      ...row,
+      group: row.data_group ?? row.group ?? 'context',
+    })) as MeasureDataRequirement[]
+  } catch (err) {
+    console.warn('[getMeasureDataRequirements] fallback to mockDB:', err)
+    return getMockDB().measureDataReqs[projectId] || []
+  }
+}
+
+export async function saveMeasureDataRequirements(projectId: string, reqs: MeasureDataRequirement[]): Promise<MeasureDataRequirement[]> {
+  const db = getMockDB()
+  db.measureDataReqs[projectId] = reqs
+  updateMockDB('measureDataReqs', db.measureDataReqs)
+
+  // Skip Supabase entirely for mockup project IDs
+  if (!isValidUUID(projectId)) return reqs
+
+  const sb = getSupabase()
+  if (!sb) return reqs
+
+  try {
+    // 1. Delete all existing rows for this project
+    await sb.from('measure_data_requirements').delete().eq('project_id', projectId)
+
+    if (reqs.length === 0) return reqs
+
+    // 2. Insert fresh rows (let Supabase generate UUIDs for non-UUID IDs)
+    const rows = reqs.map(r => ({
+      ...(isValidUUID(r.id) ? { id: r.id } : {}),
+      project_id: projectId,
+      name: r.name,
+      description: r.description,
+      reason: r.reason,
+      expected_format: r.expected_format,
+      example_columns: r.example_columns,
+      status: r.status,
+      parsed_summary: r.parsed_summary ?? null,
+      recommended_methods: r.recommended_methods ?? null,
+      source: r.source,
+      file_url: r.file_url ?? null,
+      data_group: r.group ?? 'context',
+      role_note: r.role_note ?? null,
+    }))
+
+    const { data: inserted, error } = await sb
+      .from('measure_data_requirements')
+      .insert(rows)
+      .select()
+
+    if (error) {
+      console.warn('[saveMeasureDataRequirements] insert error:', error)
+      return reqs
+    }
+
+    // 3. Merge Supabase-generated UUIDs back into local data
+    if (inserted && inserted.length === reqs.length) {
+      const synced = reqs.map((r, i) => ({
+        ...r,
+        id: inserted[i].id,
+        project_id: inserted[i].project_id,
+      }))
+      // Update localStorage with synced IDs
+      db.measureDataReqs[projectId] = synced
+      updateMockDB('measureDataReqs', db.measureDataReqs)
+      return synced
+    }
+    return reqs
+  } catch (err: any) {
+    console.warn('[saveMeasureDataRequirements] Supabase error (data tetap tersimpan di localStorage):', err)
+    return reqs
+  }
 }
 
 // ── MEASURE: VOM ──────────────────────────────────────────────────────────────
@@ -1298,3 +1392,53 @@ export async function saveParetoData(projectId: string, items: ParetoItem[]): Pr
     }
   }
 }
+
+// ── ANALYZE: AI Analysis Results ─────────────────────────────────────────────
+
+export async function getAnalyzeResult(projectId: string): Promise<AnalyzeResult | null> {
+  try {
+    const sb = getSupabase()
+    if (!sb) throw new Error('No Supabase client')
+    const { data, error } = await sb.from('analyze_results').select('*').eq('project_id', projectId).maybeSingle()
+    if (error) {
+      console.warn('[getAnalyzeResult] Supabase query failed, falling back to mockDB:', error)
+      throw error
+    }
+    return data as AnalyzeResult | null
+  } catch (err) {
+    console.warn('[getAnalyzeResult] fallback to mockDB/localStorage')
+    const db = getMockDB()
+    return db.analyzeResults?.[projectId] || null
+  }
+}
+
+export async function saveAnalyzeResult(projectId: string, result: AnalyzeResult): Promise<void> {
+  const db = getMockDB()
+  if (!db.analyzeResults) db.analyzeResults = {}
+  db.analyzeResults[projectId] = result
+  updateMockDB('analyzeResults', db.analyzeResults)
+
+  const sb = getSupabase()
+  if (!sb) return
+
+  try {
+    const { error } = await sb.from('analyze_results').upsert({
+      project_id: projectId,
+      recommended_method: result.recommended_method,
+      selected_method: result.selected_method,
+      reasoning: result.reasoning,
+      summary: result.summary,
+      key_findings: result.key_findings,
+      suggested_root_causes: result.suggested_root_causes,
+      status: result.status,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'project_id' })
+    if (error) {
+      console.error('[saveAnalyzeResult] Supabase upsert error:', error)
+      throw error
+    }
+  } catch (err: any) {
+    console.warn('[saveAnalyzeResult] Supabase failed, using localStorage only:', err?.message || err)
+  }
+}
+

@@ -54,6 +54,7 @@ export interface ProjectCharter {
   productivity_target: string
   scope: string
   team_members: Array<{ name: string; position: string; role: string }>
+  measure_summary?: any
 }
 
 export interface AssessmentResponse {
@@ -142,6 +143,54 @@ export interface MeasureProblem {
   notes?: string
   /** true = data sudah dihasilkan Gemini AI, false = data lama dari keyword matching */
   ai_analyzed?: boolean
+}
+
+/** Rekomendasi kebutuhan data dari AI di fase Measure */
+export interface MeasureDataRequirement {
+  id: string
+  project_id: string
+  name: string
+  description: string
+  reason: string
+  expected_format: string
+  example_columns: string[]
+  status: 'Belum diupload' | 'Sudah diupload' | 'Tervalidasi'
+  parsed_summary?: any
+  recommended_methods?: Array<{ method: string; reason: string }>
+  source: 'ai' | 'manual'
+  /** Grup klasifikasi data: primary_defect, primary_volume, primary_ctq, supporting, context */
+  group?: 'primary_defect' | 'primary_volume' | 'primary_ctq' | 'supporting' | 'context' | string
+  /** Catatan peran data ini dalam perhitungan */
+  role_note?: string
+  /** Data mentah hasil parsing (seluruh baris) — disimpan di localStorage untuk kalkulasi */
+  raw_data?: any[]
+  /** URL file yang diupload ke storage */
+  file_url?: string
+  /** Nama file asli yang diupload */
+  file_name?: string
+  /** Hasil perhitungan statistik (hardcoded, bukan AI) */
+  calculation_results?: {
+    method: string
+    metrics: Record<string, any>
+    warnings: string[]
+    ai_interpretation?: {
+      level_assessment: string
+      standard_used: string
+      interpretation: string
+      analyze_recommendation: string
+    }
+  }
+}
+
+export interface AnalyzeResult {
+  project_id: string
+  recommended_method: string
+  selected_method: string
+  reasoning: string
+  summary: string
+  key_findings: string[]
+  suggested_root_causes: string[]
+  status: 'draft' | 'saved'
 }
 
 /** Kebutuhan implementasi metode di fase Analyze */
@@ -470,6 +519,8 @@ export const getMockDB = () => {
       analyzeNeeds: {} as Record<string, AnalyzeNeed[]>,
       evidenceItems: {} as Record<string, EvidenceItem[]>,
       consultantNotes: {} as Record<string, ConsultantControlNote[]>,
+      measureDataReqs: {} as Record<string, MeasureDataRequirement[]>,
+      analyzeResults: {} as Record<string, AnalyzeResult>,
     }
   }
 
@@ -493,6 +544,8 @@ export const getMockDB = () => {
     analyzeNeeds: getOrSet('analyzeNeeds', {}),
     evidenceItems: getOrSet('evidenceItems', {}),
     consultantNotes: getOrSet('consultantNotes', {}),
+    measureDataReqs: getOrSet('measureDataReqs', {}),
+    analyzeResults: getOrSet('analyzeResults', {}),
   }
 }
 

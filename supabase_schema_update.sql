@@ -254,6 +254,20 @@ CREATE TABLE IF NOT EXISTS public.pareto_data (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Tabel AI Analyze Results
+CREATE TABLE IF NOT EXISTS public.analyze_results (
+    project_id UUID PRIMARY KEY REFERENCES public.bimkon_projects(id) ON DELETE CASCADE,
+    recommended_method TEXT NOT NULL,
+    selected_method TEXT NOT NULL,
+    reasoning TEXT,
+    summary TEXT,
+    key_findings JSONB, -- Array of strings
+    suggested_root_causes JSONB, -- Array of strings
+    status TEXT DEFAULT 'draft', -- 'draft' | 'saved'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- 3. STORAGE BUCKETS (Untuk file bukti implementasi)
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('evidence-files', 'evidence-files', true)

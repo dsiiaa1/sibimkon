@@ -3,24 +3,23 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import {
-  getProjects, getAssessments, getActionPlans, saveActionPlans,
+  getProjects,
   getFishbones, saveFishbones, getFiveWhys, saveFiveWhys,
   updateProjectPhase, getMeasureProblems, getAnalyzeNeeds, saveAnalyzeNeeds, getProjectCharter,
-  getParetoData, saveParetoData,
+  getParetoData, saveParetoData, getAnalyzeResult, saveAnalyzeResult, getMeasureDataRequirements
 } from '@/lib/db'
 import {
-  Project, FishboneNode, WhyNode, ActionPlan, Assessment,
-  MeasureProblem, AnalyzeNeed, ParetoItem,
+  Project, FishboneNode, WhyNode,
+  MeasureProblem, AnalyzeNeed, ParetoItem, AnalyzeResult, MeasureDataRequirement
 } from '@/lib/mockData'
 import {
   Sparkles, Plus, AlertCircle, ArrowRight, Trash2, Save, CheckCircle,
-  PackageCheck, CheckCircle2, Download,
+  PackageCheck, CheckCircle2, Download, Loader2, RefreshCw, ChevronRight
 } from 'lucide-react'
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, Bar, XAxis, YAxis, Tooltip,
   ComposedChart, Line,
 } from 'recharts'
-import { PQCDSM_LABELS } from '@/lib/utils'
 import { useUserRole } from '@/hooks/useUserRole'
 
 export default function AnalyzePage() {
@@ -28,15 +27,13 @@ export default function AnalyzePage() {
   const params    = useParams()
   const projectId = params.id as string
 
-  const { userInfo } = useUserRole()
-  const isKonsultan   = (userInfo?.role ?? 'perusahaan').toLowerCase() !== 'perusahaan'
+  useUserRole()
 
   /* ── tab state ── */
-  const [activeTab, setActiveTab] = useState<'fishbone' | '5why' | 'pareto' | 'needs' | 'ai'>('fishbone')
+  const [activeTab, setActiveTab] = useState<'ai_recommendation' | 'fishbone' | '5why' | 'pareto' | 'needs' | 'ai'>('ai_recommendation')
 
   /* ── core data ── */
   const [project,     setProject]     = useState<Project | null>(null)
-  const [assessments, setAssessments] = useState<Assessment[]>([])
 
   /* ── fishbone ── */
   const [fishboneItems, setFishboneItems] = useState<FishboneNode[]>([])
@@ -50,6 +47,14 @@ export default function AnalyzePage() {
   /* ── AI ── */
   const [aiLoading, setAiLoading] = useState(false)
   const [aiResult,  setAiResult]  = useState<any>(null)
+
+  /* ── AI Analyze Recommendation ── */
+  const [dataRequirements, setDataRequirements] = useState<MeasureDataRequirement[]>([])
+  const [analyzeResult, setAnalyzeResult] = useState<AnalyzeResult | null>(null)
+  const [aiError, setAiError] = useState<string | null>(null)
+  const [aiSaveMsg, setAiSaveMsg] = useState<string | null>(null)
+  const [selectedMethod, setSelectedMethod] = useState<string>('')
+  const [saving, setSaving] = useState(false)
 
   /* ── kebutuhan implementasi ── */
   const [measureProblems, setMeasureProblems] = useState<MeasureProblem[]>([])
@@ -79,22 +84,27 @@ export default function AnalyzePage() {
       if (!proj) { router.push('/dashboard'); return }
       setProject(proj)
 
-      const [existingAssessments, fishbones, fiveWhys, mProblems, aNeeds, charter, pareto] = await Promise.all([
-        getAssessments(projectId),
+      const [fishbones, fiveWhys, mProblems, aNeeds, charter, pareto, dataReqs, resultAI] = await Promise.all([
         getFishbones(projectId),
         getFiveWhys(projectId),
         getMeasureProblems(projectId),
         getAnalyzeNeeds(projectId),
         getProjectCharter(projectId),
         getParetoData(projectId),
+        getMeasureDataRequirements(projectId),
+        getAnalyzeResult(projectId),
       ])
-      setAssessments(existingAssessments)
       setFishboneItems(fishbones)
       setWhys(fiveWhys)
       setMeasureProblems(mProblems)
       setAnalyzeNeeds(aNeeds)
       setProjectCharter(charter)
       setParetoItems(pareto)
+      setDataRequirements(dataReqs)
+      if (resultAI) {
+        setAnalyzeResult(resultAI)
+        setSelectedMethod(resultAI.selected_method)
+      }
 
       if (mProblems.length > 0 && mProblems[0].recommended_methods?.length > 0) {
         setNeedMethod(mProblems[0].recommended_methods[0].method)
@@ -188,43 +198,81 @@ export default function AnalyzePage() {
     saveFiveWhys(projectId, updated).catch(console.error)
   }
 
-  /* ── AI handlers ── */
-  const handleTriggerAI = async () => {
+  /* ── AI Analyze Recommendation ── */
+  const CLOSED_METHODS = [
+    '5 Whys',
+    'Fishbone / Ishikawa Diagram',
+    'Pareto Analysis',
+    'Regression Analysis',
+    'Hypothesis Testing',
+    'FMEA (Failure Mode and Effects Analysis)'
+  ]
+
+  const isMeasureSaved = !!projectCharter?.measure_summary
+
+  const handleTriggerAnalyzeAI = async () => {
+    if (!isMeasureSaved) return
     setAiLoading(true)
+    setAiError(null)
+    setAiSaveMsg(null)
     try {
-      const scores = (await getAssessments(projectId)).reduce((acc: any, curr: any) => { acc[curr.dimension] = curr.percentage_score; return acc }, {})
-      const { getVom } = await import('@/lib/db')
-      const vomData   = await getVom(projectId)
-      const vomList   = vomData.map((v: any) => v.problem || v.problem_description || '')
-      const response  = await fetch('/api/ai-consultant', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ projectTitle: project?.title, companyName: project?.company_name, vomList, pqcdsmScores: scores, whyTree: whys, fishboneItems }) })
-      const result    = await response.json()
-      if (!response.ok) throw new Error(result?.error || `Server error (${response.status})`)
-      setAiResult(result)
+      const response = await fetch('/api/analyze-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          charter: projectCharter,
+          dataCollected: {
+            requirements: dataRequirements,
+            problems: measureProblems,
+            measure_summary: projectCharter?.measure_summary
+          }
+        })
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || `Server error (${response.status})`)
+
+      const newResult: AnalyzeResult = {
+        project_id: projectId,
+        recommended_method: result.recommendedMethod,
+        selected_method: result.recommendedMethod,
+        reasoning: result.reasoning,
+        summary: result.analysisResult.summary,
+        key_findings: result.analysisResult.keyFindings || [],
+        suggested_root_causes: result.analysisResult.suggestedRootCauses || [],
+        status: 'draft'
+      }
+
+      setAnalyzeResult(newResult)
+      setSelectedMethod(newResult.recommended_method)
     } catch (err: any) {
-      alert(`Gagal memanggil AI Consultant: ${err.message}`)
+      setAiError(err.message || 'Gagal melakukan analisis AI.')
     } finally {
       setAiLoading(false)
     }
   }
-  const handleApplyAiRecommendations = async () => {
-    if (!aiResult) return
+
+  const handleSaveAnalyzeAI = async () => {
+    if (!analyzeResult) return
+    setSaving(true)
+    setAiSaveMsg(null)
     try {
-      const current    = await getActionPlans(projectId)
-      const newActions: ActionPlan[] = aiResult.priority_recommendations.map((rec: any) => ({
-        id: 'new-' + Math.random().toString(36).substr(2,9), project_id: projectId,
-        title: rec.program, description: rec.description, methodology: rec.program,
-        dimension: 'productivity' as const, kpi_name: 'Dampak Perbaikan',
-        kpi_baseline: 0, kpi_target: 100, kpi_unit: '%', pic_name: 'Supervisor',
-        start_date: new Date().toISOString().split('T')[0],
-        end_date: new Date(Date.now() + 60*24*60*60*1000).toISOString().split('T')[0],
-        status: 'belum_mulai' as const, progress_percentage: 0,
-      }))
-      await saveActionPlans(projectId, [...current, ...newActions])
-      alert('Rekomendasi AI berhasil diterapkan ke Action Plan!')
+      const toSave: AnalyzeResult = {
+        ...analyzeResult,
+        selected_method: selectedMethod,
+        status: 'saved'
+      }
+      await saveAnalyzeResult(projectId, toSave)
+      setAnalyzeResult(toSave)
+      setAiSaveMsg('Hasil analisis berhasil disimpan!')
+      setTimeout(() => setAiSaveMsg(null), 3000)
     } catch (err: any) {
-      alert(`Gagal menerapkan rekomendasi: ${err.message}`)
+      alert(`Gagal menyimpan hasil analisis: ${err.message}`)
+    } finally {
+      setSaving(false)
     }
   }
+
+
 
   /* ── needs handlers ── */
   const showNeedToast = (msg: string) => { setNeedSaveMsg(msg); setTimeout(() => setNeedSaveMsg(null), 3000) }
@@ -320,10 +368,11 @@ export default function AnalyzePage() {
   }
 
   const tabs = [
-    { id: 'fishbone', name: 'Ishikawa Fishbone' },
-    { id: '5why',     name: '5-Why Analysis' },
-    { id: 'pareto',   name: 'Pareto Chart' },
-    { id: 'needs',    name: '📦 Kebutuhan Implementasi' },
+    { id: 'ai_recommendation', name: '🤖 Rekomendasi Metode AI' },
+    { id: 'fishbone',          name: 'Ishikawa Fishbone' },
+    { id: '5why',              name: '5-Why Analysis' },
+    { id: 'pareto',            name: 'Pareto Chart' },
+    { id: 'needs',             name: '📦 Kebutuhan Implementasi' },
   ]
 
   return (
@@ -377,6 +426,245 @@ export default function AnalyzePage() {
       {/* ── Tab panels ── */}
       <div className="glass-card rounded-3xl border border-slate-800 bg-slate-950/20 p-6 md:p-8">
 
+        {/* ══ AI RECOMMENDATION ══ */}
+        {activeTab === 'ai_recommendation' && (
+          <div className="space-y-6">
+            <div className="border-b border-slate-850 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-bold text-slate-200">Rekomendasi Metode AI</h2>
+                <p className="text-xs text-slate-500">
+                  AI menganalisis data Piagam Proyek (Define) dan hasil pengukuran (Measure) untuk menyarankan metode root cause terbaik
+                </p>
+              </div>
+
+              {/* Save & Status Message */}
+              {analyzeResult && (
+                <div className="flex items-center gap-3">
+                  {aiSaveMsg && (
+                    <span className="flex items-center gap-1 text-xs text-emerald-400 font-semibold animate-pulse">
+                      <CheckCircle className="h-3.5 w-3.5" /> {aiSaveMsg}
+                    </span>
+                  )}
+                  <span className={`text-[10px] uppercase font-black px-2.5 py-1 rounded-lg border ${
+                    analyzeResult.status === 'saved'
+                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                      : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                  }`}>
+                    {analyzeResult.status}
+                  </span>
+                  <button
+                    onClick={handleSaveAnalyzeAI}
+                    disabled={saving}
+                    className="flex items-center gap-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-3.5 py-2 rounded-xl transition-all cursor-pointer"
+                  >
+                    <Save className="h-3.5 w-3.5" /> {saving ? 'Menyimpan...' : 'Simpan Analisis'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* AI Error Alert */}
+            {aiError && (
+              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-red-400">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{aiError}</span>
+                </div>
+                <button
+                  onClick={handleTriggerAnalyzeAI}
+                  className="px-3 py-1 bg-red-500/20 hover:bg-red-500/30 rounded-lg font-bold border border-red-500/30 transition-all shrink-0 cursor-pointer"
+                >
+                  Coba Lagi
+                </button>
+              </div>
+            )}
+
+            {/* AI Loading View */}
+            {aiLoading && (
+              <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+                <Loader2 className="w-10 h-10 text-indigo-400 animate-spin" />
+                <h3 className="text-sm font-bold text-slate-300">Menjalankan Analisis AI...</h3>
+                <p className="text-xs text-slate-500 max-w-sm leading-relaxed">
+                  Menghubungkan ke API, membaca Piagam Proyek (Define) dan data pengukuran (Measure) untuk merumuskan rekomendasi metode terbaik.
+                </p>
+              </div>
+            )}
+
+            {/* Empty State / Trigger View */}
+            {!analyzeResult && !aiLoading && (
+              <div className="flex flex-col items-center justify-center py-16 text-center space-y-5 bg-slate-950/40 border border-slate-850 rounded-3xl p-6">
+                <Sparkles className="w-12 h-12 text-indigo-400 opacity-60" />
+                <div className="space-y-1">
+                  <h3 className="text-base font-bold text-slate-200">Mulai Analisis Akar Masalah berbasis AI</h3>
+                  <p className="text-xs text-slate-500 max-w-lg leading-relaxed">
+                    Sistem akan mengekstrak problem statement, goal, dan metrik data pengukuran yang telah Anda kumpulkan pada tahap Measure untuk merekomendasikan metode analisis terstruktur yang paling cocok.
+                  </p>
+                </div>
+
+                {/* Tooltip & Button Container */}
+                <div className="relative group">
+                  <button
+                    onClick={handleTriggerAnalyzeAI}
+                    disabled={!isMeasureSaved}
+                    className={`inline-flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${
+                      isMeasureSaved
+                        ? 'bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer hover:shadow-lg hover:shadow-indigo-500/10'
+                        : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                    }`}
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    Rekomendasikan Metode
+                  </button>
+
+                  {/* Tooltip */}
+                  {!isMeasureSaved && (
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 hidden group-hover:block bg-slate-900 border border-slate-800 text-slate-300 text-xs px-3 py-2 rounded-xl shadow-xl w-64 z-50 text-center">
+                      Selesaikan dan simpan tahap Measure terlebih dahulu.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Result View */}
+            {analyzeResult && !aiLoading && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                {/* Left Column: Recommendations & Select Dropdown */}
+                <div className="lg:col-span-8 space-y-6">
+                  
+                  {/* Recommended Method Display */}
+                  <div className="p-6 rounded-3xl bg-indigo-500/5 border border-indigo-500/15 space-y-3">
+                    <div className="flex items-center gap-2 text-indigo-400 text-xs font-bold uppercase tracking-wider">
+                      <Sparkles className="h-4 w-4" />
+                      Rekomendasi AI
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black text-slate-100">{analyzeResult.recommended_method}</h3>
+                      <p className="text-xs text-slate-400 mt-2 leading-relaxed font-medium">
+                        {analyzeResult.reasoning}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Dropdown to accept or change manually */}
+                  <div className="p-6 rounded-3xl bg-slate-950/40 border border-slate-850 space-y-3">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">
+                      Ganti Metode Secara Manual
+                    </label>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <select
+                        value={selectedMethod}
+                        onChange={(e) => setSelectedMethod(e.target.value)}
+                        className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                      >
+                        {CLOSED_METHODS.map((m) => (
+                          <option key={m} value={m}>
+                            {m} {m === analyzeResult.recommended_method ? '(Rekomendasi AI)' : ''}
+                          </option>
+                        ))}
+                      </select>
+
+                      {/* Navigation Shortcut to the selected method */}
+                      {(() => {
+                        const getTargetTab = (methodName: string) => {
+                          const name = methodName.toLowerCase()
+                          if (name.includes('5 why') || name.includes('whys')) return '5why'
+                          if (name.includes('fishbone') || name.includes('ishikawa')) return 'fishbone'
+                          if (name.includes('pareto')) return 'pareto'
+                          return null
+                        }
+                        const targetTab = getTargetTab(selectedMethod)
+                        if (!targetTab) return null
+
+                        const tabLabel = tabs.find(t => t.id === targetTab)?.name || 'Analisis'
+                        return (
+                          <button
+                            onClick={() => setActiveTab(targetTab)}
+                            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 text-xs font-bold rounded-xl border border-indigo-500/20 transition-all cursor-pointer whitespace-nowrap"
+                          >
+                            Buka Tab {tabLabel} <ChevronRight className="h-3.5 w-3.5" />
+                          </button>
+                        )
+                      })()}
+                    </div>
+                    <p className="text-[10px] text-slate-500">
+                      Rekomendasi AI adalah panduan awal. Anda dapat mengikuti saran AI atau memilih metode lain yang dirasa lebih praktis untuk dijalankan.
+                    </p>
+                  </div>
+
+                  {/* Summary of findings */}
+                  <div className="p-6 rounded-3xl bg-slate-950/40 border border-slate-850 space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-850 pb-2">
+                      Ringkasan Temuan Analisa
+                    </h4>
+                    <p className="text-xs text-slate-350 leading-relaxed">
+                      {analyzeResult.summary}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Right Column: Key Findings & Root Causes */}
+                <div className="lg:col-span-4 space-y-6">
+                  
+                  {/* Key Findings Card */}
+                  <div className="p-6 rounded-3xl bg-slate-950/40 border border-slate-850 space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-850 pb-2">
+                      Temuan Kunci (Define/Measure)
+                    </h4>
+                    {analyzeResult.key_findings?.length === 0 ? (
+                      <p className="text-xs text-slate-600 italic">Tidak ada temuan kunci.</p>
+                    ) : (
+                      <ul className="space-y-3">
+                        {analyzeResult.key_findings.map((item, idx) => (
+                          <li key={idx} className="flex items-start gap-2.5 text-xs text-slate-300">
+                            <span className="h-5 w-5 shrink-0 rounded-full bg-indigo-500/10 text-indigo-400 font-bold flex items-center justify-center text-[10px] mt-0.5">
+                              {idx + 1}
+                            </span>
+                            <span className="leading-normal">{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  {/* Suggested Root Causes Card */}
+                  <div className="p-6 rounded-3xl bg-slate-950/40 border border-slate-850 space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-850 pb-2 text-rose-400">
+                      Kandidat Akar Masalah
+                    </h4>
+                    {analyzeResult.suggested_root_causes?.length === 0 ? (
+                      <p className="text-xs text-slate-600 italic">Tidak ada kandidat akar masalah.</p>
+                    ) : (
+                      <ul className="space-y-3">
+                        {analyzeResult.suggested_root_causes.map((item, idx) => (
+                          <li key={idx} className="flex items-start gap-2.5 text-xs text-slate-300">
+                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500 mt-2" />
+                            <span className="leading-normal">{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+
+                  {/* Re-analyze Button */}
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Analisis ulang akan menimpa rekomendasi saat ini. Lanjutkan?')) {
+                        handleTriggerAnalyzeAI()
+                      }
+                    }}
+                    className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-xs font-semibold rounded-xl text-slate-400 hover:text-slate-200 border border-slate-800 transition-all cursor-pointer"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Analisis Ulang dengan AI
+                  </button>
+
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ══ FISHBONE ══ */}
         {activeTab === 'fishbone' && (
