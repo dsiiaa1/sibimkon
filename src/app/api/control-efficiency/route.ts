@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-const GROQ_MODEL  = 'llama-3.1-8b-instant'
+const GROQ_MODEL  = 'llama-3.3-70b-versatile'
 const MAX_RETRIES = 4
 
 async function sleep(ms: number) {
@@ -63,9 +63,11 @@ function extractJson(raw: string): any {
   const trimmed = raw.trim()
   try { return JSON.parse(trimmed) } catch { /* lanjut */ }
 
-  const codeBlock = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
+  const codeBlock = trimmed.match(/```(?:json|javascript|js)?\s*([\s\S]*?)\s*```/i)
   if (codeBlock) {
-    try { return JSON.parse(codeBlock[1]) } catch { /* lanjut */ }
+    let inner = codeBlock[1].trim()
+    if (inner.startsWith('const data =')) inner = inner.replace(/^const data\s*=\s*/, '').replace(/;$/, '')
+    try { return JSON.parse(inner) } catch { /* lanjut */ }
   }
 
   const firstBrace = trimmed.indexOf('[')
@@ -95,8 +97,8 @@ export async function POST(req: Request) {
     const targetTexts = actionPlans
       .map(ap => {
         let text = ''
-        if (ap.ai_analysis && ap.ai_analysis.roi && ap.ai_analysis.roi.target_efisiensi) {
-          text = ap.ai_analysis.roi.target_efisiensi
+        if (ap.ai_analysis && ap.ai_analysis.target_efisiensi) {
+          text = ap.ai_analysis.target_efisiensi
         }
         return {
           id: ap.id,
@@ -105,6 +107,9 @@ export async function POST(req: Request) {
         }
       })
       .filter(t => t.raw_text.trim().length > 0)
+
+    console.log('[control-efficiency] received actionPlans length:', actionPlans.length);
+    console.log('[control-efficiency] targetTexts:', targetTexts);
 
     if (targetTexts.length === 0) {
        return NextResponse.json({ targets: [] })
@@ -124,7 +129,9 @@ Jika Anda merasa teks target sangat tidak spesifik atau tidak menyebutkan target
 Berikut adalah datanya:
 ${JSON.stringify(targetTexts, null, 2)}
 
-KEMBALIKAN OUTPUT HARUS BERUPA ARRAY JSON DENGAN FORMAT BERIKUT (jangan tambahkan teks lain selain JSON!):
+KEMBALIKAN OUTPUT HARUS BERUPA ARRAY JSON DENGAN FORMAT BERIKUT. 
+PENTING: DILARANG KERAS menambahkan teks seperti "Berikut adalah...", DILARANG membuat deklarasi variabel seperti "const data =". KEMBALIKAN HANYA VALID JSON ARRAY!
+
 [
   {
     "action_plan_id": "<action_plan_id_dari_input>",
@@ -143,6 +150,8 @@ KEMBALIKAN OUTPUT HARUS BERUPA ARRAY JSON DENGAN FORMAT BERIKUT (jangan tambahka
 
     const rawResponse = await callAI(prompt, apiKey)
     let extracted = extractJson(rawResponse)
+    
+    console.log('[control-efficiency] extracted:', extracted);
 
     if (!Array.isArray(extracted)) {
        extracted = [extracted]

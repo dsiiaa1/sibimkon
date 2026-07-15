@@ -54,7 +54,16 @@ export default function ImprovePage() {
   const [checklistEvidenceMap, setChecklistEvidenceMap] = useState<Record<string, ChecklistEvidenceItem[]>>({})
 
   /* ── ai analysis state ── */
-  const [generatingAiId, setGeneratingAiId] = useState<string | null>(null)
+  const [generatingAiIds, setGeneratingAiIds] = useState<Record<string, boolean>>({})
+  const [attemptedAiIds, setAttemptedAiIds] = useState<Set<string>>(new Set())
+  const [editingRoiId, setEditingRoiId] = useState<string | null>(null)
+  const [roiEditForm, setRoiEditForm] = useState({
+    estimasi_penghematan_tahunan: 0,
+    roi_persen: 0,
+    biaya_implementasi: 0,
+    target_efisiensi: '',
+    manfaat: ''
+  })
   const [expandedActionIds, setExpandedActionIds] = useState<Set<string>>(new Set())
 
   /* ── add action plan modal ── */
@@ -304,6 +313,18 @@ export default function ImprovePage() {
     loadData()
   }, [projectId, router])
 
+  // Auto-generate AI for empty AI analysis
+  useEffect(() => {
+    if (!mounted || actionPlans.length === 0) return;
+    actionPlans.forEach(act => {
+      if (!act.ai_analysis && !generatingAiIds[act.id] && !attemptedAiIds.has(act.id)) {
+        setAttemptedAiIds(prev => new Set(prev).add(act.id));
+        handleGenerateAiAnalysis(act);
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actionPlans, mounted]);
+
   /* ── save action plans helper ── */
   const derivedRecommendations = (() => {
     const list: Array<{
@@ -448,7 +469,7 @@ export default function ImprovePage() {
   }
 
   const handleGenerateAiAnalysis = async (act: ActionPlan) => {
-    setGeneratingAiId(act.id)
+    setGeneratingAiIds(prev => ({ ...prev, [act.id]: true }))
     try {
       const contextData = {
         sigma_level: 'Data tidak tersedia',
@@ -487,8 +508,40 @@ export default function ImprovePage() {
     } catch (err: any) {
       alert(`Error AI: ${err.message}`)
     } finally {
-      setGeneratingAiId(null)
+      setGeneratingAiIds(prev => ({ ...prev, [act.id]: false }))
     }
+  }
+
+  const handleSaveRoiEdit = async (actId: string) => {
+    const updated = actionPlans.map((act): ActionPlan => {
+      if (act.id === actId) {
+        return {
+          ...act,
+          ai_analysis: {
+            persiapan: act.ai_analysis?.persiapan || '',
+            sumber_daya: act.ai_analysis?.sumber_daya || { sdm: '', alat: '', anggaran_terkait: '' },
+            roi: {
+              biaya_implementasi: roiEditForm.biaya_implementasi,
+              catatan: (act.ai_analysis?.roi as any)?.catatan || '',
+              estimasi_penghematan_tahunan: roiEditForm.estimasi_penghematan_tahunan,
+              roi_persen: roiEditForm.roi_persen
+            },
+            biaya: {
+              rincian: (act.ai_analysis?.biaya as any)?.rincian || '',
+              estimasi: roiEditForm.biaya_implementasi
+            },
+            target_efisiensi: roiEditForm.target_efisiensi,
+            manfaat: {
+              kualitatif: roiEditForm.manfaat,
+              kuantitatif: (act.ai_analysis?.manfaat as any)?.kuantitatif || ''
+            }
+          }
+        }
+      }
+      return act
+    })
+    setEditingRoiId(null)
+    await persistActionPlans(updated)
   }
 
   const handleForceSyncFromAnalyze = async () => {
@@ -1073,125 +1126,103 @@ export default function ImprovePage() {
                             </div>
 
                             {/* ROI & AI Analysis Section */}
-                            <div className="pt-2 border-t border-slate-800/60 mt-2">
+                            <div className={`pt-2 border-t mt-2 ${editingRoiId === act.id ? 'border-amber-500/50' : 'border-slate-800/60'}`}>
                               <div className="flex justify-between items-center mb-3">
-                                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Analisis Dampak & ROI</h4>
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                                  Analisis Dampak & ROI
+                                  {generatingAiIds[act.id] && <span className="text-[10px] text-indigo-400 normal-case animate-pulse flex items-center gap-1"><Sparkles className="w-3 h-3"/> Sedang menganalisis (AI)...</span>}
+                                </h4>
                                 <div className="flex gap-2">
-                                  <button
-                                    onClick={() => {
-                                      setManualRoiAction(act)
-                                      setManualCostSaving(act.cost_saving_manual || 0)
-                                      setManualInvestment(act.investment_manual || 0)
-                                    }}
-                                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                                  >
-                                    Input Manual
-                                  </button>
-                                  <button
-                                    onClick={() => handleGenerateAiAnalysis(act)}
-                                    disabled={generatingAiId === act.id}
-                                    className="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
-                                  >
-                                    <Sparkles className="w-3.5 h-3.5" />
-                                    {generatingAiId === act.id ? 'Menghitung ROI...' : 'Generate ROI & Dampak (AI)'}
-                                  </button>
-                                </div>
-                              </div>
-                              {(act.ai_analysis || (act.cost_saving_manual ?? 0) > 0 || (act.investment_manual ?? 0) > 0) ? (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
-                                  {/* Blok Estimasi ROI */}
-                                  <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60 relative overflow-hidden">
-                                    {((act.cost_saving_manual ?? 0) > 0 || (act.investment_manual ?? 0) > 0) && (
-                                      <div className="absolute top-0 right-0 bg-emerald-500/20 text-emerald-400 text-[8px] font-bold px-2 py-0.5 rounded-bl-lg">MANUAL</div>
-                                    )}
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Estimasi ROI</span>
-                                    {(act.cost_saving_manual ?? 0) > 0 || (act.investment_manual ?? 0) > 0 ? (
-                                      <>
-                                        <p className="text-xs text-emerald-400 font-semibold">
-                                          {(() => {
-                                            const saving = act.cost_saving_manual || 0;
-                                            const invest = act.investment_manual || 0;
-                                            if (invest > 0) {
-                                              const pct = Math.round(((saving - invest) / invest) * 100);
-                                              return `${pct}% (Hemat Rp${saving.toLocaleString('id-ID')})`;
-                                            }
-                                            return `Hemat Rp${saving.toLocaleString('id-ID')}`;
-                                          })()}
-                                        </p>
-                                        {act.ai_analysis && (
-                                          <p className="text-[10px] text-slate-500 mt-1">
-                                            Saran AI: {typeof act.ai_analysis.roi === 'object' ? `${act.ai_analysis.roi.roi_persen}% (Hemat Rp${Number(act.ai_analysis.roi.estimasi_penghematan_tahunan || 0).toLocaleString('id-ID')})` : act.ai_analysis.roi}
-                                          </p>
-                                        )}
-                                      </>
-                                    ) : (
-                                      <p className="text-xs text-emerald-400 font-semibold">
-                                        {typeof act.ai_analysis?.roi === 'object' ? `${act.ai_analysis.roi.roi_persen}% (Hemat Rp${Number(act.ai_analysis.roi.estimasi_penghematan_tahunan || 0).toLocaleString('id-ID')})` : act.ai_analysis?.roi}
-                                      </p>
-                                    )}
-                                  </div>
-
-                                  {/* Blok Kebutuhan Biaya */}
-                                  <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60 relative overflow-hidden">
-                                    {((act.investment_manual ?? 0) > 0) && (
-                                      <div className="absolute top-0 right-0 bg-emerald-500/20 text-emerald-400 text-[8px] font-bold px-2 py-0.5 rounded-bl-lg">MANUAL</div>
-                                    )}
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Kebutuhan Biaya / Investasi</span>
-                                    {(act.investment_manual ?? 0) > 0 ? (
-                                      <>
-                                        <p className="text-xs text-rose-400 font-semibold">
-                                          Rp{Number(act.investment_manual).toLocaleString('id-ID')}
-                                        </p>
-                                        {act.ai_analysis && (
-                                          <p className="text-[10px] text-slate-500 mt-1">
-                                            Saran AI: {typeof act.ai_analysis.biaya === 'object' ? `Rp${Number(act.ai_analysis.biaya.estimasi || 0).toLocaleString('id-ID')}` : act.ai_analysis.biaya}
-                                          </p>
-                                        )}
-                                      </>
-                                    ) : (
-                                      <p className="text-xs text-rose-400 font-semibold">
-                                        {typeof act.ai_analysis?.biaya === 'object' ? `Rp${Number(act.ai_analysis.biaya.estimasi || 0).toLocaleString('id-ID')}` : act.ai_analysis?.biaya}
-                                      </p>
-                                    )}
-                                  </div>
-
-                                  {act.ai_analysis && (
+                                  {editingRoiId === act.id ? (
                                     <>
-                                      <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
-                                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Target Efisiensi</span>
-                                        <p className="text-xs text-indigo-400 font-semibold">{act.ai_analysis.target_efisiensi}</p>
-                                      </div>
-                                      <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
-                                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Manfaat</span>
-                                        <p className="text-xs text-slate-300">
-                                          {typeof act.ai_analysis.manfaat === 'object' ? `${act.ai_analysis.manfaat.kualitatif} - ${act.ai_analysis.manfaat.kuantitatif}` : act.ai_analysis.manfaat}
-                                        </p>
-                                      </div>
+                                      <button onClick={() => setEditingRoiId(null)} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-all cursor-pointer">Batal</button>
+                                      <button onClick={() => handleSaveRoiEdit(act.id)} className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-900 rounded-lg text-xs font-bold transition-all cursor-pointer">Save</button>
                                     </>
+                                  ) : (
+                                    <button onClick={() => {
+                                      setRoiEditForm({
+                                        estimasi_penghematan_tahunan: act.ai_analysis?.roi?.estimasi_penghematan_tahunan || 0,
+                                        roi_persen: act.ai_analysis?.roi?.roi_persen || 0,
+                                        biaya_implementasi: act.ai_analysis?.biaya?.estimasi || 0,
+                                        target_efisiensi: act.ai_analysis?.target_efisiensi || '',
+                                        manfaat: typeof act.ai_analysis?.manfaat === 'object' ? `${act.ai_analysis.manfaat.kualitatif} - ${act.ai_analysis.manfaat.kuantitatif}` : (act.ai_analysis?.manfaat || '')
+                                      })
+                                      setEditingRoiId(act.id)
+                                    }} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-all cursor-pointer">Edit</button>
                                   )}
                                 </div>
-                              ) : (
-                                <div className="text-xs text-slate-500 italic p-3 bg-slate-900/40 rounded-xl border border-slate-800/80 mb-2">
-                                  Belum ada analisis ROI. Klik tombol "Generate ROI" untuk saran AI, atau klik "Input Manual".
+                              </div>
+
+                              {editingRoiId === act.id ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2 p-3 bg-amber-500/5 rounded-xl border border-amber-500/20">
+                                  <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Estimasi ROI (%)</label>
+                                    <input type="number" value={roiEditForm.roi_persen} disabled className="w-full bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-1.5 text-xs text-slate-400 cursor-not-allowed" />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Penghematan Tahunan (Rp)</label>
+                                    <input type="number" value={roiEditForm.estimasi_penghematan_tahunan} onChange={e => {
+                                      const saving = Number(e.target.value);
+                                      const invest = roiEditForm.biaya_implementasi;
+                                      const roi = invest > 0 ? Math.round(((saving - invest) / invest) * 100) : 0;
+                                      setRoiEditForm({...roiEditForm, estimasi_penghematan_tahunan: saving, roi_persen: roi});
+                                    }} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200" />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Kebutuhan Biaya (Rp)</label>
+                                    <input type="number" value={roiEditForm.biaya_implementasi} onChange={e => {
+                                      const invest = Number(e.target.value);
+                                      const saving = roiEditForm.estimasi_penghematan_tahunan;
+                                      const roi = invest > 0 ? Math.round(((saving - invest) / invest) * 100) : 0;
+                                      setRoiEditForm({...roiEditForm, biaya_implementasi: invest, roi_persen: roi});
+                                    }} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200" />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Target Efisiensi</label>
+                                    <input type="text" value={roiEditForm.target_efisiensi} onChange={e => setRoiEditForm({...roiEditForm, target_efisiensi: e.target.value})} placeholder="Misal: Meningkatkan efisiensi 10% dalam 2 minggu" className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200" />
+                                  </div>
+                                  <div className="sm:col-span-2">
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Manfaat</label>
+                                    <textarea value={roiEditForm.manfaat} onChange={e => setRoiEditForm({...roiEditForm, manfaat: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 h-16 resize-none" />
+                                  </div>
                                 </div>
-                              )}
-                            </div>
-                            
-                            {/* KPI Manual Evidence (Legacy/Existing) */}
-                            <div className="pt-2 border-t border-slate-800/60 flex justify-end">
-                              {!isKonsultan ? (
-                                <button onClick={() => { setUploadAction(act); setKpiSubmitted(act.kpi_actual ?? act.kpi_baseline) }} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold text-slate-300 transition-colors cursor-pointer flex items-center gap-2 border border-slate-700">
-                                  <UploadCloud className="w-3.5 h-3.5" /> {(evidenceMap[act.id] && evidenceMap[act.id].length > 0) ? 'Upload Ulang Bukti KPI Akhir' : 'Upload Bukti KPI Akhir'}
-                                </button>
                               ) : (
-                                !(evidenceMap[act.id] && evidenceMap[act.id].length > 0) ? (
-                                  <span className="text-[10px] italic text-slate-500 mr-2 self-center">Menunggu Bukti dari Perusahaan</span>
-                                ) : null
-                              )}
-                              {isKonsultan && (evidenceMap[act.id] && evidenceMap[act.id].length > 0) && (
-                                <button onClick={() => setVerifyTarget(evidenceMap[act.id][0])} className="px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 rounded-xl text-xs font-bold text-indigo-400 border border-indigo-600/40 transition-colors cursor-pointer flex items-center gap-2">
-                                  <Eye className="w-3.5 h-3.5" /> Cek Bukti KPI Akhir
-                                </button>
+                                act.ai_analysis ? (
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
+                                    {/* Blok Estimasi ROI */}
+                                    <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60 relative overflow-hidden">
+                                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Estimasi ROI</span>
+                                      <p className="text-xs text-emerald-400 font-semibold">
+                                        {typeof act.ai_analysis.roi === 'object' ? `${act.ai_analysis.roi.roi_persen}% (Hemat Rp${Number(act.ai_analysis.roi.estimasi_penghematan_tahunan || 0).toLocaleString('id-ID')})` : act.ai_analysis.roi}
+                                      </p>
+                                    </div>
+                                    {/* Blok Kebutuhan Biaya */}
+                                    <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60 relative overflow-hidden">
+                                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Kebutuhan Biaya / Investasi</span>
+                                      <p className="text-xs text-rose-400 font-semibold">
+                                        {typeof act.ai_analysis.biaya === 'object' ? `Rp${Number(act.ai_analysis.biaya.estimasi || 0).toLocaleString('id-ID')}` : act.ai_analysis.biaya}
+                                      </p>
+                                    </div>
+                                    {/* Target Efisiensi */}
+                                    <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
+                                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Target Efisiensi</span>
+                                      <p className="text-xs text-indigo-400 font-semibold">{act.ai_analysis.target_efisiensi}</p>
+                                    </div>
+                                    {/* Manfaat */}
+                                    <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
+                                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Manfaat</span>
+                                      <p className="text-xs text-slate-300">
+                                        {typeof act.ai_analysis.manfaat === 'object' ? `${act.ai_analysis.manfaat.kualitatif} - ${act.ai_analysis.manfaat.kuantitatif}` : act.ai_analysis.manfaat}
+                                      </p>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  !generatingAiIds[act.id] && (
+                                    <div className="text-xs text-slate-500 italic p-3 bg-slate-900/40 rounded-xl border border-slate-800/80 mb-2">
+                                      Data ROI belum tersedia.
+                                    </div>
+                                  )
+                                )
                               )}
                             </div>
                           </div>

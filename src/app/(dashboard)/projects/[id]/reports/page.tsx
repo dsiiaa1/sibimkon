@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { getProjects, getAssessments, getActionPlans, getMeasureProblems, updateProjectScore } from '@/lib/db'
+import { getProjects, getAssessments, getActionPlans, getMeasureProblems, updateProjectScore, getChecklistEvidences } from '@/lib/db'
 import { Project, ActionPlan, Assessment, MeasureProblem } from '@/lib/mockData'
 import { generateFinalReport, generateCertificate } from '@/lib/pdf-generator'
 import { FileText, Award, ShieldCheck, Download, Edit3, CheckCircle2, Loader2, X } from 'lucide-react'
@@ -57,6 +57,7 @@ export default function ReportsPage() {
   const [assessments, setAssessments] = useState<Assessment[]>([])
   const [measureProblems, setMeasureProblems] = useState<MeasureProblem[]>([])
   const [consultantName, setConsultantName] = useState('Konsultan SIBIMKON')
+  const [computedKpiAkhir, setComputedKpiAkhir] = useState<number>(0)
 
   // Role diverifikasi dari server — tidak bisa dimanipulasi via DevTools
   const { userInfo, verified } = useUserRole()
@@ -140,6 +141,17 @@ export default function ReportsPage() {
       setActionPlans(plans)
       setAssessments(assess)
       setMeasureProblems(mProblems)
+
+      // Hitung otomatis KPI Akhir dari persentase poin checklist yang disetujui
+      const allStepIds = plans.flatMap(a => (a.steps || []).map(s => s.id))
+      const allChecklistEvidences = await getChecklistEvidences(allStepIds)
+      let approvedCount = 0
+      allChecklistEvidences.forEach(ev => {
+        if (ev.verification_status === 'approved') approvedCount++
+      })
+      const totalChecklistPoints = allStepIds.length
+      const kpiAkhirScore = totalChecklistPoints > 0 ? (approvedCount / totalChecklistPoints) * 100 : 0
+      setComputedKpiAkhir(kpiAkhirScore)
 
       // Sync current_score ke Supabase/mockDB dari KPI aktual yang sudah ada
       // Ini memastikan field DB tetap up-to-date meski user tidak buka Improve lagi
@@ -237,28 +249,11 @@ export default function ReportsPage() {
   // === BASELINE & AKTUAL berbasis Skor Proyek ===
   const beforeScore = project?.baseline_score || 0
 
-  // Hitung afterScore langsung dari kpi_actual action plans
-  // Formula:
-  //   achievement% per plan = clamp((actual - baseline) / |target - baseline| * 100, 0, 100)
-  //   afterScore = baseline + (100 - baseline) * avg_achievement / 100
+  // Hitung afterScore langsung dari rata-rata checklist yang disetujui (KPI Akhir)
+  // Formula: afterScore = baseline + (100 - baseline) * kpi_akhir / 100
   const afterScore = (() => {
-    const plansWithActual = actionPlans.filter(
-      a => a.kpi_actual !== undefined && a.kpi_target !== a.kpi_baseline
-    )
-    if (plansWithActual.length === 0) {
-      // Belum ada KPI aktual — tampilkan angka baseline
-      return beforeScore
-    }
-    const avgAchievement = plansWithActual.reduce((acc, a) => {
-      const range = Math.abs(a.kpi_target - a.kpi_baseline)
-      const improvement = a.kpi_target > a.kpi_baseline
-        ? (a.kpi_actual! - a.kpi_baseline)        // higher is better
-        : (a.kpi_baseline - a.kpi_actual!)         // lower is better
-      const pct = range > 0 ? Math.min(100, Math.max(0, (improvement / range) * 100)) : 0
-      return acc + pct
-    }, 0) / plansWithActual.length
-
-    return Math.min(100, Math.round(beforeScore + (100 - beforeScore) * (avgAchievement / 100)))
+    if (computedKpiAkhir === 0) return beforeScore;
+    return Math.min(100, Math.round(beforeScore + (100 - beforeScore) * (computedKpiAkhir / 100)))
   })()
 
   const improvement = afterScore - beforeScore

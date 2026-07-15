@@ -13,7 +13,6 @@ import {
   getEfficiencyTargets, saveEfficiencyTargets, saveEfficiencyActuals
 } from '@/lib/db'
 import { useUserRole } from '@/hooks/useUserRole'
-import DashboardShell from '@/components/DashboardShell'
 
 export default function ControlPage() {
   const router    = useRouter()
@@ -164,8 +163,7 @@ export default function ControlPage() {
   if (!project) return null
 
   return (
-    <DashboardShell>
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6">
         
         {/* HEADER */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/50 p-6 rounded-2xl border border-slate-800/60 shadow-lg">
@@ -353,6 +351,5 @@ export default function ControlPage() {
           </div>
         ))}
       </div>
-    </DashboardShell>
   )
 }
