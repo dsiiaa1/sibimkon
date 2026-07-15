@@ -451,7 +451,7 @@ export async function saveActionPlans(projectId: string, actions: ActionPlan[]):
   }
   if (toInsert.length > 0) {
     const rows = toInsert.map(act => ({
-      project_id: projectId, action_title: act.title, description: act.description,
+      id: act.id, project_id: projectId, action_title: act.title, description: act.description,
       methodology: act.methodology, dimension: act.dimension, kpi_name: act.kpi_name,
       kpi_baseline: act.kpi_baseline, kpi_target: act.kpi_target, kpi_unit: act.kpi_unit,
       kpi_actual: act.kpi_actual != null ? act.kpi_actual : null,

@@ -178,6 +178,11 @@ export default function ImprovePage() {
   /* ── mapping untuk detail skor & level masalah prioritas ── */
   const [problemMetaMap, setProblemMetaMap] = useState<Record<string, { score: number, level: string }>>({})
 
+  /* ── modal manual ROI ── */
+  const [manualRoiAction, setManualRoiAction] = useState<ActionPlan | null>(null)
+  const [manualCostSaving, setManualCostSaving] = useState<number>(0)
+  const [manualInvestment, setManualInvestment] = useState<number>(0)
+
   /* ── load ── */
   useEffect(() => {
     async function loadData() {
@@ -1035,16 +1040,16 @@ export default function ImprovePage() {
                                             </span>
                                           )}
                                           
-                                          {!isKonsultan ? (
+                                          {!isKonsultan || !hasEv ? (
                                             <button 
                                               onClick={() => setUploadChecklistStep({ actionId: act.id, stepId: step.id, title: step.description || step.action })}
                                               className="px-3 py-1.5 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-600/30 rounded-lg text-xs font-bold transition-colors cursor-pointer"
                                             >
                                               {hasEv ? 'Upload Ulang' : 'Upload Bukti'}
                                             </button>
-                                          ) : (
-                                            hasEv && (
-                                              <button
+                                          ) : null}
+                                          {isKonsultan && hasEv && (
+                                            <button
                                                 onClick={() => setVerifyChkTarget(latestEv)}
                                                 className="px-3 py-1.5 bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 border border-indigo-600/30 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
                                               >
@@ -1068,16 +1073,26 @@ export default function ImprovePage() {
                             <div className="pt-2 border-t border-slate-800/60 mt-2">
                               <div className="flex justify-between items-center mb-3">
                                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Analisis Dampak & ROI</h4>
-                                {!act.ai_analysis && (
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setManualRoiAction(act)
+                                      setManualCostSaving(act.cost_saving_manual || 0)
+                                      setManualInvestment(act.investment_manual || 0)
+                                    }}
+                                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                                  >
+                                    Input Manual
+                                  </button>
                                   <button
                                     onClick={() => handleGenerateAiAnalysis(act)}
                                     disabled={generatingAiId === act.id}
-                                    className="px-3 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-600/40 rounded-lg text-[10px] font-bold transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                                    className="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                                   >
                                     <Sparkles className="w-3.5 h-3.5" />
                                     {generatingAiId === act.id ? 'Menghitung ROI...' : 'Generate ROI & Dampak (AI)'}
                                   </button>
-                                )}
+                                </div>
                               </div>
                               {act.ai_analysis ? (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
@@ -1113,16 +1128,15 @@ export default function ImprovePage() {
                             
                             {/* KPI Manual Evidence (Legacy/Existing) */}
                             <div className="pt-2 border-t border-slate-800/60 flex justify-end">
-                              {!isKonsultan ? (
+                              {!isKonsultan || !(evidenceMap[act.id] && evidenceMap[act.id].length > 0) ? (
                                 <button onClick={() => { setUploadAction(act); setKpiSubmitted(act.kpi_actual ?? act.kpi_baseline) }} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold text-slate-300 transition-colors cursor-pointer flex items-center gap-2 border border-slate-700">
-                                  <UploadCloud className="w-3.5 h-3.5" /> Upload Bukti KPI Akhir
+                                  <UploadCloud className="w-3.5 h-3.5" /> {(evidenceMap[act.id] && evidenceMap[act.id].length > 0) ? 'Upload Ulang Bukti KPI Akhir' : 'Upload Bukti KPI Akhir'}
                                 </button>
-                              ) : (
-                                (evidenceMap[act.id] && evidenceMap[act.id].length > 0) && (
-                                  <button onClick={() => setVerifyTarget(evidenceMap[act.id][0])} className="px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 rounded-xl text-xs font-bold text-indigo-400 border border-indigo-600/40 transition-colors cursor-pointer flex items-center gap-2">
-                                    <Eye className="w-3.5 h-3.5" /> Cek Bukti KPI Akhir
-                                  </button>
-                                )
+                              ) : null}
+                              {isKonsultan && (evidenceMap[act.id] && evidenceMap[act.id].length > 0) && (
+                                <button onClick={() => setVerifyTarget(evidenceMap[act.id][0])} className="px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 rounded-xl text-xs font-bold text-indigo-400 border border-indigo-600/40 transition-colors cursor-pointer flex items-center gap-2">
+                                  <Eye className="w-3.5 h-3.5" /> Cek Bukti KPI Akhir
+                                </button>
                               )}
                             </div>
                           </div>
@@ -1480,6 +1494,46 @@ export default function ImprovePage() {
         document.body
       )}
 
+      {/* ══ MODAL: Input Manual ROI ══ */}
+      {mounted && manualRoiAction && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">Input Manual ROI</h3>
+              <button onClick={() => setManualRoiAction(null)} className="text-slate-500 hover:text-slate-300 cursor-pointer"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="bg-slate-900 border border-slate-850 p-4 rounded-2xl">
+                <h4 className="text-xs font-bold text-slate-300">{manualRoiAction.title}</h4>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Cost Saving Tahunan (Rp)</label>
+                <input type="number" value={manualCostSaving} onChange={(e) => setManualCostSaving(Number(e.target.value))}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-250 focus:outline-none" />
+              </div>
+              
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Biaya Implementasi / Investasi (Rp)</label>
+                <input type="number" value={manualInvestment} onChange={(e) => setManualInvestment(Number(e.target.value))}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-250 focus:outline-none" />
+              </div>
+
+              <div className="flex justify-end gap-3 border-t border-slate-800 pt-4">
+                <button onClick={() => setManualRoiAction(null)} className="px-4 py-2 text-xs text-slate-400 cursor-pointer">Batal</button>
+                <button onClick={async () => {
+                  const updated = actionPlans.map(a => 
+                    a.id === manualRoiAction.id ? { ...a, cost_saving_manual: manualCostSaving, investment_manual: manualInvestment } : a
+                  )
+                  await persistActionPlans(updated)
+                  setManualRoiAction(null)
+                }} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-xs font-bold text-white cursor-pointer shadow-md">Simpan ROI</button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
-} 
+}
