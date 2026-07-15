@@ -1067,7 +1067,7 @@ export default function ImprovePage() {
                                   className="mt-0.5 rounded border-slate-700 text-emerald-500 focus:ring-emerald-500/20 bg-slate-950 disabled:opacity-70" 
                                 />
                                 <span className={`text-xs flex-1 leading-relaxed ${stepCompleted ? 'text-slate-500 line-through' : 'text-slate-300'}`}>
-                                  {step.description}
+                                  {step.action}
                                   {isRejected && latestEv?.rejection_note && (
                                     <span className="block mt-1 text-[10px] text-red-400 bg-red-500/10 p-1.5 rounded-md border border-red-500/20">Catatan Penolakan: {latestEv.rejection_note}</span>
                                   )}
@@ -1103,7 +1103,7 @@ export default function ImprovePage() {
                                           {EVIDENCE_STATUS_BADGE[latestEv.verification_status as any]?.label || latestEv.verification_status}
                                         </span>
                                         {!isApproved && (
-                                          <button onClick={() => setUploadChecklistStep({ actionId: act.id, stepId: step.id, title: step.description })} className="p-1.5 text-slate-400 hover:text-indigo-400 bg-slate-900 border border-slate-700 hover:border-indigo-500/50 rounded-lg transition-colors" title="Upload ulang">
+                                          <button onClick={() => setUploadChecklistStep({ actionId: act.id, stepId: step.id, title: step.action })} className="p-1.5 text-slate-400 hover:text-indigo-400 bg-slate-900 border border-slate-700 hover:border-indigo-500/50 rounded-lg transition-colors" title="Upload ulang">
                                             <Upload className="w-3 h-3" />
                                           </button>
                                         )}
@@ -1112,7 +1112,7 @@ export default function ImprovePage() {
                                   </div>
                                 ) : (
                                   !isKonsultan ? (
-                                    <button onClick={() => setUploadChecklistStep({ actionId: act.id, stepId: step.id, title: step.description })} className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-800 hover:bg-indigo-600/30 border border-slate-700 hover:border-indigo-500/50 text-[10px] font-bold rounded-lg text-slate-300 hover:text-indigo-300 transition-all cursor-pointer">
+                                    <button onClick={() => setUploadChecklistStep({ actionId: act.id, stepId: step.id, title: step.action })} className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-800 hover:bg-indigo-600/30 border border-slate-700 hover:border-indigo-500/50 text-[10px] font-bold rounded-lg text-slate-300 hover:text-indigo-300 transition-all cursor-pointer">
                                       <Upload className="w-3 h-3" /> Upload Bukti
                                     </button>
                                   ) : (

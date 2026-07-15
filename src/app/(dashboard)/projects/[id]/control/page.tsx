@@ -6,7 +6,7 @@ import { Project, ActionPlan, ConsultantControlNote } from '@/lib/mockData'
 import {
   AlertTriangle, CheckCircle2, ShieldAlert, FileCheck, Save,
   Check, ArrowRight, Plus, Trash2, DollarSign, TrendingUp,
-  Edit3, MessageSquare, Send, Lock,
+  Edit3, MessageSquare, Send, Lock, ChevronDown, ChevronRight, ChevronUp,
 } from 'lucide-react'
 import {
   updateProjectPhase, getProjects, getActionPlans,
@@ -50,6 +50,7 @@ export default function ControlPage() {
   const [auditItems,      setAuditItems]      = useState<any[]>([])
   const [newAuditTask,    setNewAuditTask]     = useState('')
   const [newAuditCategory,setNewAuditCategory]= useState('Production')
+  const [expandedAuditPlans, setExpandedAuditPlans] = useState<Set<string>>(new Set())
 
   /* ── PSI ── */
   const [peopleScore,  setPeopleScore]  = useState(70)
@@ -75,29 +76,13 @@ export default function ControlPage() {
       const auditData = await getControlAudit(projectId)
       let finalAudit: any[] = []
       
-      if (actions && actions.length > 0) {
-        const generatedAudit = actions.map((act: any) => {
-          const actId = `aud-act-${act.id}`
-          const existing = auditData?.find((a: any) => a.id === actId)
-          return {
-            id: actId,
-            category: act.dimension || 'General',
-            task: `Permasalahan: ${act.title || '-'} | Metode: ${act.methodology || '-'}`,
-            completed: existing ? existing.completed : false
-          }
-        })
-        
-        const manualItems = (auditData || []).filter((a: any) => 
-          !a.id.startsWith('aud-act-') && 
-          !a.id.startsWith('aud-gen-') && 
-          !['aud-1','aud-2','aud-3','aud-4'].includes(a.id)
-        )
-        
-        finalAudit = [...generatedAudit, ...manualItems]
-        setAuditItems(finalAudit)
-        saveControlAudit(projectId, finalAudit).catch(console.error)
-      } else if (auditData && auditData.length > 0) {
-        finalAudit = auditData
+      const manualItems = (auditData || []).filter((a: any) => 
+        !a.id.startsWith('aud-act-') && 
+        !a.id.startsWith('aud-gen-')
+      )
+      
+      if (manualItems.length > 0) {
+        finalAudit = manualItems
         setAuditItems(finalAudit)
       } else {
         finalAudit = [
@@ -149,6 +134,15 @@ export default function ControlPage() {
     const updated = auditItems.filter(item => item.id !== id)
     setAuditItems(updated)
     saveControlAudit(projectId, updated).catch(console.error)
+  }
+
+  const toggleAuditPlan = (planId: string) => {
+    setExpandedAuditPlans(prev => {
+      const next = new Set(prev)
+      if (next.has(planId)) next.delete(planId)
+      else next.add(planId)
+      return next
+    })
   }
 
   /* ── PSI handler — hanya konsultan ── */
@@ -602,41 +596,108 @@ export default function ControlPage() {
               ))}
             </div>
 
-            {/* checklist items */}
-            {auditItems.length === 0 ? (
-              <div className="text-center py-8 border border-dashed border-slate-800 rounded-2xl text-slate-500 text-sm">
-                Belum ada item checklist.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {auditItems.map(item => (
-                  <div key={item.id}
-                    className={`flex items-center justify-between p-4 bg-slate-950/40 border border-slate-850 rounded-2xl transition-colors group ${isKonsultan ? 'hover:bg-slate-900/40' : ''}`}>
-                    <div
-                      className={`flex items-center gap-3 flex-1 ${isKonsultan ? 'cursor-pointer' : 'cursor-default'}`}
-                      onClick={() => isKonsultan && handleToggleAudit(item.id)}
+            {/* checklist items (grouped by Action Plan) */}
+            <div className="space-y-4">
+              {actionPlans.filter(ap => ap.steps && ap.steps.length > 0).map(ap => {
+                const isExpanded = expandedAuditPlans.has(ap.id)
+                const completedSteps = ap.steps!.filter(s => s.is_completed).length
+                const totalSteps = ap.steps!.length
+                
+                return (
+                  <div key={ap.id} className="bg-slate-950/40 border border-slate-850 rounded-2xl overflow-hidden">
+                    {/* Header Accordion */}
+                    <button 
+                      onClick={() => toggleAuditPlan(ap.id)}
+                      className="w-full flex items-center justify-between p-4 bg-slate-900/50 hover:bg-slate-900 transition-colors cursor-pointer text-left border-none"
                     >
-                      <div className={`h-5 w-5 rounded border flex items-center justify-center transition-all shrink-0 ${
-                        item.completed ? 'bg-indigo-600 border-indigo-500 text-white' : 'border-slate-700'
-                      } ${!isKonsultan ? 'opacity-70' : ''}`}>
-                        {item.completed && <Check className="h-3 w-3" />}
+                      <div className="flex-1">
+                        <h3 className="text-sm font-bold text-slate-200">{ap.title}</h3>
+                        <p className="text-[10px] text-slate-500 mt-1">
+                          {completedSteps} dari {totalSteps} langkah terverifikasi ({Math.round((completedSteps/totalSteps)*100)}%)
+                        </p>
                       </div>
-                      <div>
-                        <span className="text-[9px] font-bold uppercase tracking-wider bg-slate-900 border border-slate-850 px-2 py-0.5 rounded text-slate-400">{item.category}</span>
-                        <p className={`text-sm font-semibold mt-1 ${item.completed ? 'text-slate-500 line-through' : 'text-slate-200'}`}>{item.task}</p>
+                      <div className="flex items-center gap-3 ml-4">
+                        <div className="w-20 bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                          <div className="bg-indigo-500 h-full transition-all" style={{ width: `${(completedSteps/totalSteps)*100}%` }} />
+                        </div>
+                        {isExpanded ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
                       </div>
-                    </div>
-                    {/* hapus — konsultan only */}
-                    {isKonsultan && (
-                      <button onClick={() => handleDeleteAudit(item.id)}
-                        className="ml-3 text-slate-700 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-900/20 transition-all opacity-0 group-hover:opacity-100 cursor-pointer shrink-0">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                    </button>
+                    
+                    {/* Content Accordion */}
+                    {isExpanded && (
+                      <div className="p-4 border-t border-slate-850 space-y-2">
+                        {ap.steps!.map(step => (
+                          <div key={step.id} className="flex items-start gap-3 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+                            <div className={`h-5 w-5 mt-0.5 rounded flex items-center justify-center shrink-0 ${
+                              step.is_completed ? 'bg-indigo-600 text-white' : 'border border-slate-700 bg-slate-900'
+                            }`}>
+                              {step.is_completed && <Check className="h-3 w-3" />}
+                            </div>
+                            <div>
+                              <p className={`text-sm ${step.is_completed ? 'text-slate-400 line-through' : 'text-slate-300'}`}>
+                                {step.action}
+                              </p>
+                              <p className="text-[10px] text-slate-500 mt-1">PIC: {step.pic || '-'} · Timeline: {step.timeline || '-'}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
-                ))}
-              </div>
-            )}
+                )
+              })}
+              
+              {/* Manual Audit Items */}
+              {(auditItems.length > 0 || actionPlans.length === 0) && (
+                <div className="bg-slate-950/40 border border-slate-850 rounded-2xl overflow-hidden">
+                  <button 
+                    onClick={() => toggleAuditPlan('manual')}
+                    className="w-full flex items-center justify-between p-4 bg-slate-900/50 hover:bg-slate-900 transition-colors cursor-pointer text-left border-none"
+                  >
+                    <div className="flex-1">
+                      <h3 className="text-sm font-bold text-slate-200">Custom / General Audit</h3>
+                      <p className="text-[10px] text-slate-500 mt-1">Daftar periksa tambahan dari konsultan</p>
+                    </div>
+                    <div className="flex items-center ml-4">
+                      {expandedAuditPlans.has('manual') ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+                    </div>
+                  </button>
+                  
+                  {expandedAuditPlans.has('manual') && (
+                    <div className="p-4 border-t border-slate-850 space-y-2">
+                      {auditItems.length === 0 ? (
+                         <div className="text-center py-4 text-slate-500 text-xs">Belum ada item checklist custom.</div>
+                      ) : auditItems.map(item => (
+                        <div key={item.id}
+                          className={`flex items-center justify-between p-3 bg-slate-950/60 border border-slate-800 rounded-xl transition-colors group ${isKonsultan ? 'hover:bg-slate-900/40' : ''}`}>
+                          <div
+                            className={`flex items-center gap-3 flex-1 ${isKonsultan ? 'cursor-pointer' : 'cursor-default'}`}
+                            onClick={() => isKonsultan && handleToggleAudit(item.id)}
+                          >
+                            <div className={`h-5 w-5 rounded border flex items-center justify-center transition-all shrink-0 ${
+                              item.completed ? 'bg-indigo-600 border-indigo-500 text-white' : 'border-slate-700'
+                            } ${!isKonsultan ? 'opacity-70' : ''}`}>
+                              {item.completed && <Check className="h-3 w-3" />}
+                            </div>
+                            <div>
+                              <span className="text-[9px] font-bold uppercase tracking-wider bg-slate-900 border border-slate-850 px-2 py-0.5 rounded text-slate-400">{item.category}</span>
+                              <p className={`text-sm font-semibold mt-1 ${item.completed ? 'text-slate-500 line-through' : 'text-slate-300'}`}>{item.task}</p>
+                            </div>
+                          </div>
+                          {isKonsultan && (
+                            <button onClick={() => handleDeleteAudit(item.id)}
+                              className="ml-3 text-slate-700 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-900/20 transition-all opacity-0 group-hover:opacity-100 cursor-pointer shrink-0">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

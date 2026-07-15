@@ -126,6 +126,7 @@ export interface ActionPlan {
   cost_saving_manual?: number
   /** Estimasi biaya investasi program nyata (Rp) — diinput manual oleh konsultan */
   investment_manual?: number
+  steps?: ActionPlanStep[]
   pic_name: string
   start_date: string
   end_date: string
@@ -238,6 +239,7 @@ export interface ActionPlanStep {
   action: string
   pic: string
   timeline: string
+  is_completed?: boolean
 }
 
 export interface PriorityItem {

@@ -185,7 +185,7 @@ export default function DashboardPage() {
   )
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto animate-fade-in">
+    <div className="space-y-6 max-w-7xl mx-auto">
 
       {/* ═══════════════════════════════════════════════════
           PRD 8.2: DMAIC VISUAL SUMMARY HERO

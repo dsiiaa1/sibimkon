@@ -45,6 +45,7 @@ interface ActionPlanData {
   progress_percentage: number
   cost_saving_manual?: number
   investment_manual?: number
+  steps?: any[]
 }
 
 interface PQCDSMScore {
@@ -455,6 +456,55 @@ export async function generateFinalReport(
       },
     })
     y = (doc as any).lastAutoTable.finalY + 10
+
+    // Rincian Langkah Implementasi (Checklist)
+    actionPlans.forEach((ap) => {
+      if (ap.steps && ap.steps.length > 0) {
+        ensureSpace(20)
+        doc.setFont(FB)
+        doc.setFontSize(8.5)
+        doc.setTextColor(C_NAVY[0], C_NAVY[1], C_NAVY[2])
+        doc.text(`Rincian Langkah Implementasi: ${ap.title}`, margin, y)
+        y += 5
+
+        const stepsData = ap.steps.map((step: any, sIdx: number) => [
+          String(sIdx + 1),
+          step.action || '-',
+          step.pic || '-',
+          step.timeline || '-',
+          step.is_completed ? 'Selesai (Verif)' : 'Belum Selesai'
+        ])
+
+        autoTable(doc, {
+          startY: y,
+          head: [['No', 'Langkah/Deskripsi', 'PIC', 'Timeline', 'Status']],
+          body: stepsData,
+          margin: { left: margin, right: margin },
+          tableWidth: contentW,
+          styles: { fontSize: 7, font: FN, textColor: C_TEXT, cellPadding: 3, lineColor: [220, 225, 235], lineWidth: 0.3, overflow: 'linebreak' },
+          headStyles: { fillColor: [240, 245, 250], textColor: C_NAVY, fontStyle: 'bold', font: FB, fontSize: 7 },
+          columnStyles: {
+            0: { cellWidth: 8, halign: 'center' },
+            1: { cellWidth: contentW - 98 },
+            2: { cellWidth: 35 },
+            3: { cellWidth: 30 },
+            4: { cellWidth: 25, halign: 'center' }
+          },
+          didParseCell(data) {
+            if (data.section === 'body' && data.column.index === 4) {
+              const val = String(data.cell.raw)
+              if (val.includes('Selesai')) data.cell.styles.textColor = [34, 139, 34]
+              else data.cell.styles.textColor = [180, 40, 40]
+              data.cell.styles.fontStyle = 'bold'
+            }
+          }
+        })
+        y = (doc as any).lastAutoTable.finalY + 8
+      }
+    })
+    
+    y += 5
+
   } else {
     drawText('Belum ada action plan yang dibuat.')
   }
