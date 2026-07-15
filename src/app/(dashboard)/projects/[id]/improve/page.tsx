@@ -114,7 +114,7 @@ export default function ImprovePage() {
       const newSteps = steps.map((s: any, idx: number) => ({
         id: crypto.randomUUID?.() ?? 'step-' + Math.random().toString(36).substr(2,9),
         action_plan_id: act.id,
-        action: s.description || s.action || '',
+        description: s.description || s.action || '',
         pic: s.pic || '',
         timeline: s.timeline || '',
         is_completed: false

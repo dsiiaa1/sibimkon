@@ -473,13 +473,13 @@ export async function saveActionPlans(projectId: string, actions: ActionPlan[]):
   if (allSteps.length > 0) {
     try {
       const { error } = await sb.from('action_plan_steps').upsert(
-        allSteps.map(s => ({
+        allSteps.map((s, idx) => ({
           id: s.id,
           action_plan_id: s.action_plan_id,
-          action: s.action,
+          description: s.action || s.description || 'Langkah',
           is_completed: s.is_completed,
           pic: s.pic || null,
-          timeline: s.timeline || null
+          step_order: idx
         })),
         { onConflict: 'id' }
       )
