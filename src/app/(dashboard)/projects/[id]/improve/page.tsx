@@ -1083,7 +1083,9 @@ export default function ImprovePage() {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
                                   <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
                                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Estimasi ROI</span>
-                                    <p className="text-xs text-emerald-400 font-semibold">{act.ai_analysis.roi}</p>
+                                    <p className="text-xs text-emerald-400 font-semibold">
+                                      {typeof act.ai_analysis.roi === 'object' ? `${act.ai_analysis.roi.roi_persen}% (Hemat Rp${Number(act.ai_analysis.roi.estimasi_penghematan_tahunan || 0).toLocaleString('id-ID')})` : act.ai_analysis.roi}
+                                    </p>
                                   </div>
                                   <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
                                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Target Efisiensi</span>
@@ -1091,11 +1093,15 @@ export default function ImprovePage() {
                                   </div>
                                   <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
                                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Manfaat</span>
-                                    <p className="text-xs text-slate-300">{act.ai_analysis.manfaat}</p>
+                                    <p className="text-xs text-slate-300">
+                                      {typeof act.ai_analysis.manfaat === 'object' ? `${act.ai_analysis.manfaat.kualitatif} - ${act.ai_analysis.manfaat.kuantitatif}` : act.ai_analysis.manfaat}
+                                    </p>
                                   </div>
                                   <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
                                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Kebutuhan Biaya</span>
-                                    <p className="text-xs text-rose-400 font-semibold">{act.ai_analysis.biaya}</p>
+                                    <p className="text-xs text-rose-400 font-semibold">
+                                      {typeof act.ai_analysis.biaya === 'object' ? `Rp${Number(act.ai_analysis.biaya.estimasi || 0).toLocaleString('id-ID')}` : act.ai_analysis.biaya}
+                                    </p>
                                   </div>
                                 </div>
                               ) : (
