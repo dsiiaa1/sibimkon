@@ -84,7 +84,7 @@ function GenericAnalyzeComponent({
                 </button>
               </div>
               <ul className="space-y-2">
-                {cat.items?.map((item: any, iIdx: number) => (
+                {(cat.items || []).map((item: any, iIdx: number) => (
                   <li key={item.id || iIdx} className="flex items-center gap-2 text-xs bg-slate-950 p-2 rounded-lg border border-slate-800">
                     <input
                       type="text"
@@ -136,14 +136,14 @@ function GenericAnalyzeComponent({
             <thead className="bg-slate-950 text-slate-400 uppercase font-bold">
               <tr>
                 <th className="px-4 py-3 w-12">No</th>
-                {data.columns?.map((col: string, idx: number) => (
+                {(data.columns || []).map((col: string, idx: number) => (
                   <th key={idx} className="px-4 py-3">{col}</th>
                 ))}
                 <th className="px-4 py-3 w-12"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/50">
-              {data.items?.map((item: any, idx: number) => (
+              {(data.items || []).map((item: any, idx: number) => (
                 <tr key={item.id || idx} className="hover:bg-slate-800/20">
                   <td className="px-4 py-3 text-slate-500 font-bold">{idx + 1}</td>
                   <td className="px-4 py-3">
@@ -203,7 +203,7 @@ function GenericAnalyzeComponent({
             className="flex-1 text-sm text-indigo-400 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 rounded px-2" />
         </div>
         <div className="space-y-3 pl-4 border-l-2 border-slate-800">
-          {data.items?.map((item: any, idx: number) => (
+          {(data.items || []).map((item: any, idx: number) => (
             <div key={item.id || idx} className="relative group/why">
               <span className="absolute -left-[22px] top-1.5 w-2.5 h-2.5 rounded-full bg-indigo-500 border border-slate-900"></span>
               <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
@@ -816,7 +816,7 @@ export default function AnalyzePage() {
                 )}
 
                 <div className="space-y-6">
-                  {analyzeResult.recommendations.map((rec, idx) => (
+                  {(analyzeResult.recommendations || []).map((rec, idx) => (
                     <div key={idx} className="p-5 rounded-2xl bg-slate-950/40 border border-slate-850 flex flex-col gap-3 relative group">
                       
                       {/* Badge Source & Priority */}
@@ -918,7 +918,7 @@ export default function AnalyzePage() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-800/50">
-                            {priorityResult.map((pr, pIdx) => (
+                            {(priorityResult || []).map((pr: any, pIdx: number) => (
                               <React.Fragment key={pIdx}>
                                 <tr onClick={() => setExpandedPriority(expandedPriority === pIdx ? null : pIdx)} className="hover:bg-slate-800/30 cursor-pointer transition-colors group">
                                   <td className="px-4 py-4 text-center font-bold text-slate-500">{pr.no}</td>
@@ -941,8 +941,8 @@ export default function AnalyzePage() {
                                         <button onClick={() => addActionPlan(pIdx)} className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded font-semibold transition-colors flex items-center gap-1"><Plus className="h-3 w-3"/> Tambah Langkah</button>
                                       </div>
                                       <div className="space-y-2">
-                                        {pr.action_plan.length === 0 && <p className="text-xs text-slate-500 italic">Belum ada langkah action plan.</p>}
-                                        {pr.action_plan.map((ap, apIdx) => (
+                                        {pr.action_plan?.length === 0 && <p className="text-xs text-slate-500 italic">Belum ada langkah action plan.</p>}
+                                        {(pr.action_plan || []).map((ap: any, apIdx: number) => (
                                           <div key={ap.id || apIdx} className="flex items-center gap-3 bg-slate-900 p-2 rounded-lg border border-slate-800">
                                             <input type="text" value={ap.action} onChange={(e) => updateActionPlan(pIdx, apIdx, 'action', e.target.value)} placeholder="Langkah tindakan..." className="flex-1 bg-transparent border-none text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 rounded px-2" />
                                             <input type="text" value={ap.pic} onChange={(e) => updateActionPlan(pIdx, apIdx, 'pic', e.target.value)} placeholder="PIC / Penanggung Jawab" className="w-1/4 bg-slate-800/50 border border-slate-800 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 rounded px-2 py-1" />

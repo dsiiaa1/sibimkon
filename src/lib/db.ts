@@ -476,7 +476,7 @@ export async function saveActionPlans(projectId: string, actions: ActionPlan[]):
         allSteps.map(s => ({
           id: s.id,
           action_plan_id: s.action_plan_id,
-          description: s.description,
+          action: s.action,
           is_completed: s.is_completed,
           pic: s.pic || null,
           step_order: s.step_order || 0,
