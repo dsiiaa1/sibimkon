@@ -1040,14 +1040,18 @@ export default function ImprovePage() {
                                             </span>
                                           )}
                                           
-                                          {!isKonsultan || !hasEv ? (
+                                          {!isKonsultan ? (
                                             <button 
                                               onClick={() => setUploadChecklistStep({ actionId: act.id, stepId: step.id, title: step.description || step.action })}
                                               className="px-3 py-1.5 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-600/30 rounded-lg text-xs font-bold transition-colors cursor-pointer"
                                             >
                                               {hasEv ? 'Upload Ulang' : 'Upload Bukti'}
                                             </button>
-                                          ) : null}
+                                          ) : (
+                                            !hasEv ? (
+                                              <span className="text-[10px] italic text-slate-500">Menunggu Perusahaan</span>
+                                            ) : null
+                                          )}
                                           {isKonsultan && hasEv && (
                                             <button
                                                 onClick={() => setVerifyChkTarget(latestEv)}
@@ -1127,11 +1131,15 @@ export default function ImprovePage() {
                             
                             {/* KPI Manual Evidence (Legacy/Existing) */}
                             <div className="pt-2 border-t border-slate-800/60 flex justify-end">
-                              {!isKonsultan || !(evidenceMap[act.id] && evidenceMap[act.id].length > 0) ? (
+                              {!isKonsultan ? (
                                 <button onClick={() => { setUploadAction(act); setKpiSubmitted(act.kpi_actual ?? act.kpi_baseline) }} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold text-slate-300 transition-colors cursor-pointer flex items-center gap-2 border border-slate-700">
                                   <UploadCloud className="w-3.5 h-3.5" /> {(evidenceMap[act.id] && evidenceMap[act.id].length > 0) ? 'Upload Ulang Bukti KPI Akhir' : 'Upload Bukti KPI Akhir'}
                                 </button>
-                              ) : null}
+                              ) : (
+                                !(evidenceMap[act.id] && evidenceMap[act.id].length > 0) ? (
+                                  <span className="text-[10px] italic text-slate-500 mr-2 self-center">Menunggu Bukti dari Perusahaan</span>
+                                ) : null
+                              )}
                               {isKonsultan && (evidenceMap[act.id] && evidenceMap[act.id].length > 0) && (
                                 <button onClick={() => setVerifyTarget(evidenceMap[act.id][0])} className="px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 rounded-xl text-xs font-bold text-indigo-400 border border-indigo-600/40 transition-colors cursor-pointer flex items-center gap-2">
                                   <Eye className="w-3.5 h-3.5" /> Cek Bukti KPI Akhir
