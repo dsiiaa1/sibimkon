@@ -1055,7 +1055,6 @@ export default function ImprovePage() {
                                               >
                                                 <Eye className="w-3.5 h-3.5" /> Cek Bukti
                                               </button>
-                                            )
                                           )}
                                         </div>
                                       </div>
