@@ -1,7 +1,7 @@
 'use client'
 
 import { createClient } from './supabase/client'
-import { getMockDB, updateMockDB, Project, Company, ProjectCharter, Assessment, FishboneNode, WhyNode, ActionPlan, MeasureProblem, AnalyzeNeed, EvidenceItem, ConsultantControlNote, ParetoItem, MeasureDataRequirement, AnalyzeResult } from './mockData'
+import { getMockDB, updateMockDB, Project, Company, ProjectCharter, Assessment, ActionPlan, MeasureProblem, AnalyzeNeed, EvidenceItem, ConsultantControlNote, MeasureDataRequirement, AnalyzeResult } from './mockData'
 
 function handleDbError(error: any): never {
   console.error('[DB Error]', error)
@@ -367,65 +367,6 @@ export async function saveVom(projectId: string, vomList: any[]): Promise<void> 
   }
 }
 
-// ── ANALYZE: Fishbone ─────────────────────────────────────────────────────────
-
-export async function getFishbones(projectId: string): Promise<FishboneNode[]> {
-  try {
-    const sb = getSupabase()
-    if (!sb) throw new Error('No Supabase client')
-    const { data, error } = await sb.from('analyze_fishbone').select('nodes')
-      .eq('project_id', projectId).order('created_at', { ascending: false }).limit(1).maybeSingle()
-    if (error) handleDbError(error)
-    return (data?.nodes as FishboneNode[]) || []
-  } catch (err) {
-    console.warn('[getFishbones] fallback to mockDB:', err)
-    return getMockDB().fishbones[projectId] || []
-  }
-}
-
-export async function saveFishbones(projectId: string, items: FishboneNode[]): Promise<void> {
-  const db = getMockDB(); db.fishbones[projectId] = items; updateMockDB('fishbones', db.fishbones)
-  const sb = getSupabase()
-  if (!sb) return
-  const { data: existing } = await sb.from('analyze_fishbone').select('id').eq('project_id', projectId).limit(1).maybeSingle()
-  if (existing?.id) {
-    const { error } = await sb.from('analyze_fishbone').update({ nodes: items, updated_at: new Date().toISOString() }).eq('id', existing.id)
-    if (error) handleDbError(error)
-  } else {
-    const { error } = await sb.from('analyze_fishbone').insert({ project_id: projectId, title: 'Fishbone Diagram', nodes: items })
-    if (error) handleDbError(error)
-  }
-}
-
-// ── ANALYZE: 5-Why ────────────────────────────────────────────────────────────
-
-export async function getFiveWhys(projectId: string): Promise<WhyNode[]> {
-  try {
-    const sb = getSupabase()
-    if (!sb) throw new Error('No Supabase client')
-    const { data, error } = await sb.from('analyze_5why').select('why_tree')
-      .eq('project_id', projectId).order('created_at', { ascending: false }).limit(1).maybeSingle()
-    if (error) handleDbError(error)
-    return (data?.why_tree as WhyNode[]) || []
-  } catch (err) {
-    console.warn('[getFiveWhys] fallback to mockDB:', err)
-    return getMockDB().fiveWhys[projectId] || []
-  }
-}
-
-export async function saveFiveWhys(projectId: string, whyTree: WhyNode[]): Promise<void> {
-  const db = getMockDB(); db.fiveWhys[projectId] = whyTree; updateMockDB('fiveWhys', db.fiveWhys)
-  const sb = getSupabase()
-  if (!sb) return
-  const { data: existing } = await sb.from('analyze_5why').select('id').eq('project_id', projectId).limit(1).maybeSingle()
-  if (existing?.id) {
-    const { error } = await sb.from('analyze_5why').update({ why_tree: whyTree, updated_at: new Date().toISOString() }).eq('id', existing.id)
-    if (error) handleDbError(error)
-  } else {
-    const { error } = await sb.from('analyze_5why').insert({ project_id: projectId, problem_statement: 'Analisis 5-Why', why_tree: whyTree })
-    if (error) handleDbError(error)
-  }
-}
 
 // ── IMPROVE: Action Plans ─────────────────────────────────────────────────────
 
@@ -433,10 +374,27 @@ export async function getActionPlans(projectId: string): Promise<ActionPlan[]> {
   try {
     const sb = getSupabase()
     if (!sb) throw new Error('No Supabase client')
-    const { data, error } = await sb.from('improve_actions').select('*').eq('project_id', projectId)
-    if (error) handleDbError(error)
+
+    // Try with steps join first, fallback to without steps if table not ready
+    let data: any[] | null = null
+    let hasSteps = true
+    const { data: d1, error: e1 } = await sb.from('improve_actions')
+      .select('*, steps:action_plan_steps(*)')
+      .eq('project_id', projectId)
+    if (e1) {
+      // Fallback: query without steps join
+      hasSteps = false
+      const { data: d2, error: e2 } = await sb.from('improve_actions')
+        .select('*')
+        .eq('project_id', projectId)
+      if (e2) handleDbError(e2)
+      data = d2
+    } else {
+      data = d1
+    }
+
     return (data || []).map((d: any) => ({
-      id: d.id, project_id: d.project_id, title: d.action_title,
+      id: d.id, project_id: d.project_id, problem_title: d.problem_title, title: d.action_title,
       description: d.description, methodology: d.methodology, dimension: d.dimension,
       kpi_name: d.kpi_name, kpi_baseline: Number(d.kpi_baseline || 0),
       kpi_target: Number(d.kpi_target || 0), kpi_unit: d.kpi_unit,
@@ -446,7 +404,9 @@ export async function getActionPlans(projectId: string): Promise<ActionPlan[]> {
       cost_saving_manual: d.cost_saving_manual != null ? Number(d.cost_saving_manual) : undefined,
       investment_manual: d.investment_manual != null ? Number(d.investment_manual) : undefined,
       pic_name: d.pic_name, start_date: d.start_date,
-      end_date: d.end_date, status: d.status, progress_percentage: d.progress_percentage
+      end_date: d.end_date, status: d.status, progress_percentage: d.progress_percentage,
+      ai_analysis: typeof d.ai_analysis === 'string' ? JSON.parse(d.ai_analysis) : d.ai_analysis,
+      steps: hasSteps ? (d.steps || []) : []
     }))
   } catch (err) {
     console.warn('[getActionPlans] fallback to mockDB:', err)
@@ -482,9 +442,10 @@ export async function saveActionPlans(projectId: string, actions: ActionPlan[]):
       verified_by: act.verified_by, verified_at: act.verified_at,
       cost_saving_manual: act.cost_saving_manual != null ? act.cost_saving_manual : null,
       investment_manual: act.investment_manual != null ? act.investment_manual : null,
-      pic_name: act.pic_name,
+      pic_name: act.pic_name, problem_title: act.problem_title || null,
       start_date: act.start_date, end_date: act.end_date,
-      status: act.status, progress_percentage: act.progress_percentage
+      status: act.status, progress_percentage: act.progress_percentage,
+      ai_analysis: act.ai_analysis ? JSON.stringify(act.ai_analysis) : null
     }).eq('id', act.id)
     if (error) handleDbError(error)
   }
@@ -498,12 +459,36 @@ export async function saveActionPlans(projectId: string, actions: ActionPlan[]):
       verified_by: act.verified_by, verified_at: act.verified_at,
       cost_saving_manual: act.cost_saving_manual != null ? act.cost_saving_manual : null,
       investment_manual: act.investment_manual != null ? act.investment_manual : null,
-      pic_name: act.pic_name,
+      pic_name: act.pic_name, problem_title: act.problem_title || null,
       start_date: act.start_date, end_date: act.end_date,
-      status: act.status, progress_percentage: act.progress_percentage
+      status: act.status, progress_percentage: act.progress_percentage,
+      ai_analysis: act.ai_analysis ? JSON.stringify(act.ai_analysis) : null
     }))
     const { error } = await sb.from('improve_actions').insert(rows)
     if (error) handleDbError(error)
+  }
+
+  // Handle steps (graceful — don't block main save if table not ready)
+  const allSteps = actions.flatMap(a => (a.steps || []).map(s => ({ ...s, action_plan_id: a.id })))
+  if (allSteps.length > 0) {
+    try {
+      const { error } = await sb.from('action_plan_steps').upsert(
+        allSteps.map(s => ({
+          id: s.id,
+          action_plan_id: s.action_plan_id,
+          description: s.description,
+          is_completed: s.is_completed,
+          pic: s.pic || null,
+          step_order: s.step_order || 0,
+          completed_by: s.completed_by || null,
+          completed_at: s.completed_at || null
+        })),
+        { onConflict: 'id' }
+      )
+      if (error) console.warn('[saveActionPlans] steps upsert error (non-fatal):', error.message)
+    } catch (err: any) {
+      console.warn('[saveActionPlans] steps upsert failed (non-fatal):', err.message)
+    }
   }
 }
 
@@ -1248,6 +1233,119 @@ export async function verifyEvidence(
   }
 }
 
+// ── IMPROVE: Checklist Evidence ────────────────────────────────────────────────
+
+export interface ChecklistEvidenceItem {
+  id: string
+  step_id: string
+  file_url: string
+  file_name: string
+  file_type?: string
+  file_size?: number
+  uploaded_by?: string
+  uploaded_by_name?: string
+  uploaded_by_role?: string
+  uploaded_at: string
+  verification_status: 'pending' | 'approved' | 'rejected'
+  verified_by?: string
+  verified_at?: string
+  rejection_note?: string
+}
+
+export async function getChecklistEvidences(stepIds: string[]): Promise<ChecklistEvidenceItem[]> {
+  if (!stepIds || stepIds.length === 0) return []
+  try {
+    const sb = getSupabase()
+    if (!sb) throw new Error('No Supabase client')
+    const { data, error } = await sb
+      .from('checklist_evidence')
+      .select('*')
+      .in('step_id', stepIds)
+      .order('uploaded_at', { ascending: false })
+    if (error) throw error
+    return data as ChecklistEvidenceItem[]
+  } catch (err: any) {
+    console.warn('[getChecklistEvidences] Exception:', err?.message || err)
+    return []
+  }
+}
+
+export async function submitChecklistEvidence(
+  stepId: string,
+  record: {
+    file_name: string
+    file_url: string
+    file_type?: string
+    file_size?: number
+    uploaded_by?: string
+    uploaded_by_name?: string
+    uploaded_by_role?: string
+  }
+): Promise<ChecklistEvidenceItem> {
+  const newItem: ChecklistEvidenceItem = {
+    id: 'cev-' + Math.random().toString(36).substr(2, 9),
+    step_id: stepId,
+    file_url: record.file_url,
+    file_name: record.file_name,
+    file_type: record.file_type,
+    file_size: record.file_size,
+    uploaded_by: record.uploaded_by,
+    uploaded_by_name: record.uploaded_by_name,
+    uploaded_by_role: record.uploaded_by_role,
+    uploaded_at: new Date().toISOString(),
+    verification_status: 'pending'
+  }
+
+  try {
+    const sb = getSupabase()
+    if (!sb) throw new Error('No Supabase client')
+    const { data, error } = await sb.from('checklist_evidence').insert({
+      step_id: stepId,
+      file_url: record.file_url,
+      file_name: record.file_name,
+      file_type: record.file_type,
+      file_size: record.file_size,
+      uploaded_by: record.uploaded_by,
+      uploaded_by_name: record.uploaded_by_name,
+      uploaded_by_role: record.uploaded_by_role,
+      verification_status: 'pending'
+    }).select('*').single()
+    
+    if (error) {
+      console.error('[submitChecklistEvidence] Supabase error:', error.message)
+    } else if (data) {
+      return data as ChecklistEvidenceItem
+    }
+  } catch (err: any) {
+    console.error('[submitChecklistEvidence] Exception:', err?.message || err)
+  }
+  return newItem
+}
+
+export async function verifyChecklistEvidence(
+  evidenceId: string,
+  status: 'approved' | 'rejected',
+  note: string,
+  reviewerId: string
+): Promise<void> {
+  const now = new Date().toISOString()
+  try {
+    const sb = getSupabase()
+    if (!sb) return
+
+    const { error } = await sb.from('checklist_evidence').update({
+      verification_status: status,
+      rejection_note: note,
+      verified_by: reviewerId,
+      verified_at: now
+    }).eq('id', evidenceId)
+    
+    if (error) throw error
+  } catch (err: any) {
+    console.warn('[verifyChecklistEvidence] failed:', err)
+  }
+}
+
 // ── CONTROL: Catatan Konsultan ────────────────────────────────────────────────
 
 export async function getConsultantNotes(projectId: string): Promise<ConsultantControlNote[]> {
@@ -1337,79 +1435,29 @@ export async function deleteConsultantNote(projectId: string, noteId: string): P
   }
 }
 
-/* ═══════════════════════════════════════════════════ */
-/*  PARETO DATA (Input Manual Masalah & Skor)         */
-/* ═══════════════════════════════════════════════════ */
-
-export async function getParetoData(projectId: string): Promise<ParetoItem[]> {
-  // localStorage fallback
-  const key = `sibimkon_pareto_${projectId}`
-  const local: ParetoItem[] = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem(key) || '[]') : []
-
-  try {
-    const sb = getSupabase()
-    if (sb) {
-      const { data, error } = await sb.from('pareto_data').select('*').eq('project_id', projectId).order('score', { ascending: false })
-      if (!error && data && data.length > 0) {
-        const items: ParetoItem[] = data.map((d: any) => ({
-          id: d.id,
-          project_id: d.project_id,
-          problem_name: d.problem_name,
-          score: d.score,
-        }))
-        if (typeof window !== 'undefined') localStorage.setItem(key, JSON.stringify(items))
-        return items
-      }
-    }
-  } catch (err) {
-    console.warn('[getParetoData] Supabase failed, using localStorage:', err)
-  }
-  return local
-}
-
-export async function saveParetoData(projectId: string, items: ParetoItem[]): Promise<void> {
-  // localStorage fallback
-  const key = `sibimkon_pareto_${projectId}`
-  if (typeof window !== 'undefined') localStorage.setItem(key, JSON.stringify(items))
-
-  const sb = getSupabase()
-  if (!sb) return
-
-  const { error: delErr } = await sb.from('pareto_data').delete().eq('project_id', projectId)
-  if (delErr) {
-    handleDbError(delErr)
-  }
-
-  if (items.length > 0) {
-    const rows = items.map((item) => ({
-      project_id: projectId,
-      problem_name: item.problem_name,
-      score: item.score,
-    }))
-    const { error: insErr } = await sb.from('pareto_data').insert(rows)
-    if (insErr) {
-      handleDbError(insErr)
-    }
-  }
-}
 
 // ── ANALYZE: AI Analysis Results ─────────────────────────────────────────────
 
 export async function getAnalyzeResult(projectId: string): Promise<AnalyzeResult | null> {
+  const db = getMockDB()
+  const localResult = db.analyzeResults?.[projectId] || null
+
   try {
     const sb = getSupabase()
     if (!sb) throw new Error('No Supabase client')
-    const { data, error } = await sb.from('analyze_results').select('*').eq('project_id', projectId).maybeSingle()
-    if (error) {
-      console.warn('[getAnalyzeResult] Supabase query failed, falling back to mockDB:', error)
-      throw error
+    const { data } = await sb.from('analyze_results').select('*').eq('project_id', projectId).maybeSingle()
+    if (data && Array.isArray(data.recommendations) && data.recommendations.length > 0) {
+      const sbResult = data as AnalyzeResult
+      // Merge: if Supabase has no priority_result but localStorage does, use localStorage's
+      if (!sbResult.priority_result?.length && localResult?.priority_result?.length) {
+        sbResult.priority_result = localResult.priority_result
+      }
+      return sbResult
     }
-    return data as AnalyzeResult | null
   } catch (err) {
-    console.warn('[getAnalyzeResult] fallback to mockDB/localStorage')
-    const db = getMockDB()
-    return db.analyzeResults?.[projectId] || null
+    console.warn('[getAnalyzeResult] fallback to mockDB/localStorage:', err)
   }
+  return localResult
 }
 
 export async function saveAnalyzeResult(projectId: string, result: AnalyzeResult): Promise<void> {
@@ -1424,21 +1472,16 @@ export async function saveAnalyzeResult(projectId: string, result: AnalyzeResult
   try {
     const { error } = await sb.from('analyze_results').upsert({
       project_id: projectId,
-      recommended_method: result.recommended_method,
-      selected_method: result.selected_method,
-      reasoning: result.reasoning,
-      summary: result.summary,
-      key_findings: result.key_findings,
-      suggested_root_causes: result.suggested_root_causes,
+      recommendations: result.recommendations,
+      priority_result: result.priority_result || [],
       status: result.status,
       updated_at: new Date().toISOString()
     }, { onConflict: 'project_id' })
     if (error) {
-      console.error('[saveAnalyzeResult] Supabase upsert error:', error)
+      console.warn('[saveAnalyzeResult] Supabase upsert error:', error)
       throw error
     }
   } catch (err: any) {
     console.warn('[saveAnalyzeResult] Supabase failed, using localStorage only:', err?.message || err)
   }
 }
-

@@ -125,31 +125,89 @@ ${problemsStr || 'Tidak ada masalah teridentifikasi'}
 
 TUGAS ANDA:
 Berdasarkan konteks Project Charter (Define) dan data hasil pengukuran (Measure) di atas, rekomendasikan metode analisis yang paling tepat untuk mendalami akar masalah (Root Cause Analysis).
+SELAIN ITU, Anda juga harus langsung melakukan simulasi analisis dan menghasilkan data terstruktur Root Cause HANYA BERDASARKAN MASALAH YANG ADA DI PROJECT CHARTER DAN MEASURE TERSEBUT.
+
+PERINGATAN KERAS (CRITICAL WARNING): 
+JANGAN MENGGUNAKAN DATA CONTOH ATAU KARANGAN SENDIRI! Anda wajib menyesuaikan isi RCA dengan bidang industri/konteks yang tertulis di Project Charter. Jika Charter tidak diisi, hasilkan data abstrak seperti "Proses Sistem A bermasalah", "Error pada modul B". JANGAN PERNAH MENGHASILKAN DATA TENTANG PABRIK ATAU PRODUKSI JIKA KONTEKSNYA BUKAN PABRIK! PAHAMI KONTEKS CHARTER TERLEBIH DAHULU SEBELUM MENGHASILKAN DATA RCA!
 
 Anda harus memilih metode rekomendasi HANYA dari daftar tertutup berikut:
 - 5 Whys
-- Fishbone / Ishikawa Diagram
+- Fishbone Diagram
 - Pareto Analysis
-- Regression Analysis
-- Hypothesis Testing
 - FMEA (Failure Mode and Effects Analysis)
 
-Kembalikan respon HANYA dalam format JSON berikut (tanpa backticks, tanpa teks pengantar, pastikan format JSON valid):
-{
-  "recommendedMethod": "Pilih salah satu dari daftar tertutup di atas",
-  "reasoning": "Alasan singkat dan tajam mengapa metode ini paling sesuai untuk tipe data dan masalah ini",
-  "analysisResult": {
-    "summary": "Ringkasan analisis temuan dari data Define dan Measure yang dikirimkan",
-    "keyFindings": [
-      "Temuan kunci 1 berdasarkan data",
-      "Temuan kunci 2 berdasarkan data"
-    ],
-    "suggestedRootCauses": [
-      "Kandidat akar masalah 1 yang perlu diselidiki",
-      "Kandidat akar masalah 2 yang perlu diselidiki"
-    ]
+PENTING: CONTOH DI BAWAH INI HANYA UNTUK MENUNJUKKAN FORMAT STRUKTUR JSON. ANDA DILARANG KERAS MENYALIN ISI DATA (SEPERTI "JAHITAN", "OPERATOR", DLL) DARI CONTOH INI. ANDA HARUS MENGHASILKAN DATA (KATEGORI, ITEM, PROBLEM, SCORE, DLL) BERDASARKAN KONTEKS PROJECT CHARTER DAN MEASURE YANG DIBERIKAN DI ATAS!
+
+Kembalikan respon HANYA dalam format JSON array of objects berikut (tanpa backticks, tanpa teks pengantar, valid JSON):
+[
+  {
+    "method": "Fishbone Diagram",
+    "reasoning": "Jelaskan alasan berdasarkan charter dan problem di atas.",
+    "priority": 1,
+    "source": "ai",
+    "structure_type": "category_list",
+    "data": {
+      "categories": [
+        {
+          "name": "[Kategori Contoh 1]",
+          "items": [
+            { "id": "fb-1", "text": "[Isi penyebab spesifik dari kategori 1 berdasarkan masalah yang ada]" }
+          ]
+        },
+        {
+          "name": "[Kategori Contoh 2]",
+          "items": [
+            { "id": "fb-2", "text": "[Isi penyebab spesifik dari kategori 2]" }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "method": "Pareto Analysis",
+    "reasoning": "Jelaskan mengapa Pareto cocok untuk masalah ini.",
+    "priority": 2,
+    "source": "ai",
+    "structure_type": "ranked_list",
+    "data": {
+      "columns": ["Problem", "Score"],
+      "items": [
+        { "id": "p-1", "name": "[Nama masalah/defect dominan 1]", "score": 150 },
+        { "id": "p-2", "name": "[Nama masalah/defect dominan 2]", "score": 85 }
+      ]
+    }
+  },
+  {
+    "method": "5 Whys",
+    "reasoning": "Jelaskan mengapa 5 Whys cocok untuk menggali akar masalah ini.",
+    "priority": 3,
+    "source": "ai",
+    "structure_type": "nested_list",
+    "data": {
+      "problem": "[Sebutkan masalah spesifik yang ingin dicari akar penyebabnya]",
+      "items": [
+        {
+          "id": "w-1",
+          "level": 1,
+          "question": "Mengapa [masalah] terjadi?",
+          "answer": "[Penyebab level 1]"
+        },
+        {
+          "id": "w-2",
+          "level": 2,
+          "question": "Mengapa [penyebab level 1] terjadi?",
+          "answer": "[Penyebab level 2, dan seterusnya hingga akar masalah terdalam]"
+        }
+      ]
+    }
   }
-}
+]
+
+ATURAN STRUKTUR DATA:
+1. Jika metode membutuhkan kategorisasi (seperti Fishbone), gunakan structure_type "category_list".
+2. Jika metode membutuhkan ranking/skoring (seperti Pareto), gunakan structure_type "ranked_list".
+3. Jika metode membutuhkan kedalaman/urutan logis beruntun (seperti 5 Whys), gunakan "nested_list".
+4. Pastikan ID unik untuk setiap item (cth: fb-1, w-1, p-1).
 `
 }
 
@@ -181,10 +239,14 @@ export async function POST(req: Request) {
 
   try {
     const rawText = await callAI(prompt, apiKey)
-    const parsed = extractJson(rawText)
+    let parsed = extractJson(rawText)
 
-    if (!parsed.recommendedMethod || !parsed.analysisResult) {
-      throw new Error('Response tidak memiliki field recommendedMethod atau analysisResult yang valid')
+    if (!Array.isArray(parsed)) {
+      if (parsed.recommendations && Array.isArray(parsed.recommendations)) {
+        parsed = parsed.recommendations
+      } else {
+        throw new Error('Response bukan berupa array JSON yang diharapkan')
+      }
     }
 
     return NextResponse.json(parsed)

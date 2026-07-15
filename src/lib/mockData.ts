@@ -92,9 +92,23 @@ export interface ParetoItem {
   score: number
 }
 
+export interface ActionStep {
+  id: string
+  action_plan_id: string
+  description: string
+  is_completed: boolean
+  pic?: string
+  step_order?: number
+  completed_by?: string
+  completed_at?: string
+  created_at?: string
+  updated_at?: string
+}
+
 export interface ActionPlan {
   id: string
   project_id: string
+  problem_title?: string
   title: string
   description: string
   methodology: string
@@ -117,6 +131,34 @@ export interface ActionPlan {
   end_date: string
   status: 'belum_mulai' | 'sedang_berjalan' | 'selesai' | 'tertunda'
   progress_percentage: number
+  /** Hasil analisis AI (Persiapan, Biaya, ROI, dll) */
+  ai_analysis?: ImproveAiAnalysis
+  /** Langkah-langkah / checklist penyelesaian */
+  steps?: ActionStep[]
+}
+
+export interface ImproveAiAnalysis {
+  persiapan: string
+  sumber_daya: {
+    sdm: string
+    alat: string
+    anggaran_terkait: string
+  }
+  biaya: {
+    estimasi: number
+    rincian: string
+  }
+  manfaat: {
+    kualitatif: string
+    kuantitatif: string
+  }
+  target_efisiensi: string
+  roi: {
+    estimasi_penghematan_tahunan: number
+    biaya_implementasi: number
+    roi_persen: number
+    catatan: string
+  }
 }
 
 // ── Tipe baru untuk revisi 2026 ───────────────────────────────────────────────
@@ -182,14 +224,36 @@ export interface MeasureDataRequirement {
   }
 }
 
+export interface AnalyzeRecommendation {
+  method: string
+  reasoning: string
+  priority: number
+  source: 'ai' | 'custom'
+  structure_type?: 'category_list' | 'ranked_list' | 'key_value' | string
+  data?: any
+}
+
+export interface ActionPlanStep {
+  id: string
+  action: string
+  pic: string
+  timeline: string
+}
+
+export interface PriorityItem {
+  no: number
+  problem: string
+  priority_score: number
+  priority_level: string
+  justification: string
+  related_methods: string[]
+  action_plan: ActionPlanStep[]
+}
+
 export interface AnalyzeResult {
   project_id: string
-  recommended_method: string
-  selected_method: string
-  reasoning: string
-  summary: string
-  key_findings: string[]
-  suggested_root_causes: string[]
+  recommendations: AnalyzeRecommendation[]
+  priority_result?: PriorityItem[]
   status: 'draft' | 'saved'
 }
 
@@ -207,6 +271,7 @@ export interface AnalyzeNeed {
   notes?: string
   is_available: boolean
 }
+
 
 /** Bukti implementasi dengan status verifikasi */
 export interface EvidenceItem {
@@ -397,54 +462,7 @@ const INITIAL_ASSESSMENTS: Record<string, Assessment[]> = {
   ]
 }
 
-const INITIAL_FISHBONES: Record<string, FishboneNode[]> = {
-  'proj-1': [
-    { id: 'fb-1', category: 'man', text: 'Operator kurang teliti saat menjahit kerutan' },
-    { id: 'fb-2', category: 'man', text: 'Operator baru belum ditraining secara penuh' },
-    { id: 'fb-3', category: 'machine', text: 'Tension benang mesin jahit sering berubah sendiri' },
-    { id: 'fb-4', category: 'machine', text: 'Perawatan mesin obras tidak terjadwal (no PM)' },
-    { id: 'fb-5', category: 'method', text: 'Belum ada SOP penyeimbangan lini jahit (line balancing)' },
-    { id: 'fb-6', category: 'material', text: 'Benang jahit dari supplier X mudah putus' }
-  ]
-}
 
-const INITIAL_5WHY: Record<string, WhyNode[]> = {
-  'proj-1': [
-    {
-      level: 1,
-      why: 'Mengapa defect jahit tinggi?',
-      answer: 'Karena operator sering salah jahit di bagian kerutan.',
-      children: [
-        {
-          level: 2,
-          why: 'Mengapa operator sering salah?',
-          answer: 'Karena mereka terburu-buru mengejar target harian.',
-          children: [
-            {
-              level: 3,
-              why: 'Mengapa terburu-buru?',
-              answer: 'Karena line balancing kurang seimbang sehingga terjadi bottleneck di sewing.',
-              children: [
-                {
-                  level: 4,
-                  why: 'Mengapa line balancing tidak seimbang?',
-                  answer: 'Karena supervisor tidak punya tool untuk mengukur standar waktu pengerjaan per stasiun.',
-                  children: [
-                    {
-                      level: 5,
-                      why: 'Mengapa tidak punya tool standar waktu?',
-                      answer: 'Karena belum pernah dilakukan Time Study dan penetapan SOP baru.'
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    }
-  ]
-}
 
 const INITIAL_ACTION_PLANS: Record<string, ActionPlan[]> = {
   'proj-1': [
@@ -512,8 +530,6 @@ export const getMockDB = () => {
       projects: INITIAL_PROJECTS,
       charters: INITIAL_CHARTERS,
       assessments: INITIAL_ASSESSMENTS,
-      fishbones: INITIAL_FISHBONES,
-      fiveWhys: INITIAL_5WHY,
       actionPlans: INITIAL_ACTION_PLANS,
       measureProblems: {} as Record<string, MeasureProblem[]>,
       analyzeNeeds: {} as Record<string, AnalyzeNeed[]>,
@@ -537,8 +553,6 @@ export const getMockDB = () => {
     projects: getOrSet('projects', INITIAL_PROJECTS),
     charters: getOrSet('charters', INITIAL_CHARTERS),
     assessments: getOrSet('assessments', INITIAL_ASSESSMENTS),
-    fishbones: getOrSet('fishbones', INITIAL_FISHBONES),
-    fiveWhys: getOrSet('fiveWhys', INITIAL_5WHY),
     actionPlans: getOrSet('actionPlans', INITIAL_ACTION_PLANS),
     measureProblems: getOrSet('measureProblems', {}),
     analyzeNeeds: getOrSet('analyzeNeeds', {}),

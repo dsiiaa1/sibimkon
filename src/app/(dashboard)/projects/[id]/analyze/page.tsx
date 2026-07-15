@@ -1,80 +1,298 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import {
   getProjects,
-  getFishbones, saveFishbones, getFiveWhys, saveFiveWhys,
   updateProjectPhase, getMeasureProblems, getAnalyzeNeeds, saveAnalyzeNeeds, getProjectCharter,
-  getParetoData, saveParetoData, getAnalyzeResult, saveAnalyzeResult, getMeasureDataRequirements
+  getAnalyzeResult, saveAnalyzeResult, getMeasureDataRequirements
 } from '@/lib/db'
 import {
-  Project, FishboneNode, WhyNode,
-  MeasureProblem, AnalyzeNeed, ParetoItem, AnalyzeResult, MeasureDataRequirement
+  Project, AnalyzeRecommendation, MeasureProblem, AnalyzeNeed, AnalyzeResult, MeasureDataRequirement, PriorityItem, ActionPlanStep
 } from '@/lib/mockData'
 import {
-  Sparkles, Plus, AlertCircle, ArrowRight, Trash2, Save, CheckCircle,
-  PackageCheck, CheckCircle2, Download, Loader2, RefreshCw, ChevronRight
+  Sparkles, Plus, AlertCircle, ArrowRight, Trash2, Save, CheckCircle, Edit3,
+  Download, Loader2, RefreshCw, X, PackageCheck, CheckCircle2
 } from 'lucide-react'
-import {
-  ResponsiveContainer, Bar, XAxis, YAxis, Tooltip,
-  ComposedChart, Line,
-} from 'recharts'
 import { useUserRole } from '@/hooks/useUserRole'
 
+// --- Generic Analyze Component (EDITABLE) ---
+function GenericAnalyzeComponent({
+  recommendation,
+  onDataChange
+}: {
+  recommendation: AnalyzeRecommendation
+  onDataChange?: (newData: any) => void
+}) {
+  const { structure_type, data } = recommendation
+
+  if (!structure_type || !data) {
+    return <div className="text-xs text-slate-500 italic mt-2">Data analisis belum di-generate. Silakan klik "Generate Ulang AI" di atas.</div>
+  }
+
+  const uid = () => Math.random().toString(36).substr(2, 9)
+
+  // ── Category List (Fishbone) ──
+  if (structure_type === 'category_list') {
+    const addItem = (catIdx: number) => {
+      const cats = [...(data.categories || [])]
+      cats[catIdx] = { ...cats[catIdx], items: [...(cats[catIdx].items || []), { id: 'fb-' + uid(), text: '' }] }
+      onDataChange?.({ ...data, categories: cats })
+    }
+    const updateItem = (catIdx: number, itemIdx: number, text: string) => {
+      const cats = [...(data.categories || [])]
+      const items = [...cats[catIdx].items]
+      items[itemIdx] = { ...items[itemIdx], text }
+      cats[catIdx] = { ...cats[catIdx], items }
+      onDataChange?.({ ...data, categories: cats })
+    }
+    const deleteItem = (catIdx: number, itemIdx: number) => {
+      const cats = [...(data.categories || [])]
+      const items = [...cats[catIdx].items]
+      items.splice(itemIdx, 1)
+      cats[catIdx] = { ...cats[catIdx], items }
+      onDataChange?.({ ...data, categories: cats })
+    }
+    const updateCategoryName = (catIdx: number, name: string) => {
+      const cats = [...(data.categories || [])]
+      cats[catIdx] = { ...cats[catIdx], name }
+      onDataChange?.({ ...data, categories: cats })
+    }
+    const addCategory = () => {
+      const cats = [...(data.categories || []), { name: 'Kategori Baru', items: [{ id: 'fb-' + uid(), text: '' }] }]
+      onDataChange?.({ ...data, categories: cats })
+    }
+    const deleteCategory = (catIdx: number) => {
+      const cats = [...(data.categories || [])]
+      cats.splice(catIdx, 1)
+      onDataChange?.({ ...data, categories: cats })
+    }
+
+    return (
+      <div className="mt-4 space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {data.categories?.map((cat: any, cIdx: number) => (
+            <div key={cIdx} className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <input
+                  type="text" value={cat.name}
+                  onChange={(e) => updateCategoryName(cIdx, e.target.value)}
+                  className="text-sm font-bold text-slate-300 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 rounded px-1 flex-1"
+                />
+                <button onClick={() => deleteCategory(cIdx)} className="p-1 text-slate-600 hover:text-rose-400 transition-colors cursor-pointer" title="Hapus kategori">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <ul className="space-y-2">
+                {cat.items?.map((item: any, iIdx: number) => (
+                  <li key={item.id || iIdx} className="flex items-center gap-2 text-xs bg-slate-950 p-2 rounded-lg border border-slate-800">
+                    <input
+                      type="text"
+                      value={item.text || item.name || ''}
+                      onChange={(e) => updateItem(cIdx, iIdx, e.target.value)}
+                      placeholder="Isi penyebab..."
+                      className="flex-1 text-slate-400 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 rounded px-1"
+                    />
+                    <button onClick={() => deleteItem(cIdx, iIdx)} className="p-0.5 text-slate-600 hover:text-rose-400 transition-colors cursor-pointer">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button onClick={() => addItem(cIdx)} className="w-full text-center text-[10px] text-slate-500 hover:text-indigo-400 border border-dashed border-slate-800 hover:border-indigo-500/30 rounded-lg py-1.5 transition-colors cursor-pointer flex items-center justify-center gap-1">
+                <Plus className="w-3 h-3" /> Tambah Item
+              </button>
+            </div>
+          ))}
+        </div>
+        <button onClick={addCategory} className="w-full text-center text-xs text-slate-500 hover:text-indigo-400 border border-dashed border-slate-700 hover:border-indigo-500/30 rounded-xl py-2.5 transition-colors cursor-pointer flex items-center justify-center gap-1.5">
+          <Plus className="w-3.5 h-3.5" /> Tambah Kategori Baru
+        </button>
+      </div>
+    )
+  }
+
+  // ── Ranked List (Pareto) ──
+  if (structure_type === 'ranked_list') {
+    const updateRankedItem = (idx: number, field: 'name' | 'score', value: string) => {
+      const items = [...(data.items || [])]
+      items[idx] = { ...items[idx], [field]: field === 'score' ? Number(value) || 0 : value }
+      onDataChange?.({ ...data, items })
+    }
+    const addRankedItem = () => {
+      const items = [...(data.items || []), { id: 'p-' + uid(), name: '', score: 0 }]
+      onDataChange?.({ ...data, items })
+    }
+    const deleteRankedItem = (idx: number) => {
+      const items = [...(data.items || [])]
+      items.splice(idx, 1)
+      onDataChange?.({ ...data, items })
+    }
+
+    return (
+      <div className="mt-4 space-y-3">
+        <div className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden">
+          <table className="w-full text-xs text-left">
+            <thead className="bg-slate-950 text-slate-400 uppercase font-bold">
+              <tr>
+                <th className="px-4 py-3 w-12">No</th>
+                {data.columns?.map((col: string, idx: number) => (
+                  <th key={idx} className="px-4 py-3">{col}</th>
+                ))}
+                <th className="px-4 py-3 w-12"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/50">
+              {data.items?.map((item: any, idx: number) => (
+                <tr key={item.id || idx} className="hover:bg-slate-800/20">
+                  <td className="px-4 py-3 text-slate-500 font-bold">{idx + 1}</td>
+                  <td className="px-4 py-3">
+                    <input type="text" value={item.name || item.problem_name || ''} onChange={(e) => updateRankedItem(idx, 'name', e.target.value)}
+                      placeholder="Nama masalah..." className="w-full bg-transparent text-slate-300 border-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 rounded px-1 text-xs" />
+                  </td>
+                  <td className="px-4 py-3">
+                    <input type="number" value={item.score || item.value || 0} onChange={(e) => updateRankedItem(idx, 'score', e.target.value)}
+                      className="w-20 bg-transparent text-indigo-400 font-bold border-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 rounded px-1 text-xs" />
+                  </td>
+                  <td className="px-4 py-3">
+                    <button onClick={() => deleteRankedItem(idx)} className="p-0.5 text-slate-600 hover:text-rose-400 transition-colors cursor-pointer">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <button onClick={addRankedItem} className="w-full text-center text-xs text-slate-500 hover:text-indigo-400 border border-dashed border-slate-700 hover:border-indigo-500/30 rounded-xl py-2.5 transition-colors cursor-pointer flex items-center justify-center gap-1.5">
+          <Plus className="w-3.5 h-3.5" /> Tambah Baris
+        </button>
+      </div>
+    )
+  }
+
+  // ── Nested List (5 Whys) ──
+  if (structure_type === 'nested_list') {
+    const updateProblem = (value: string) => {
+      onDataChange?.({ ...data, problem: value })
+    }
+    const updateWhyItem = (idx: number, field: 'question' | 'answer', value: string) => {
+      const items = [...(data.items || [])]
+      items[idx] = { ...items[idx], [field]: value }
+      onDataChange?.({ ...data, items })
+    }
+    const addWhyItem = () => {
+      const currentItems = data.items || []
+      const nextLevel = currentItems.length > 0 ? currentItems[currentItems.length - 1].level + 1 : 1
+      const items = [...currentItems, { id: 'w-' + uid(), level: nextLevel, question: '', answer: '' }]
+      onDataChange?.({ ...data, items })
+    }
+    const deleteWhyItem = (idx: number) => {
+      const items = [...(data.items || [])]
+      items.splice(idx, 1)
+      // Re-number levels
+      items.forEach((it: any, i: number) => { it.level = i + 1 })
+      onDataChange?.({ ...data, items })
+    }
+
+    return (
+      <div className="mt-4 bg-slate-900/60 border border-slate-800 rounded-xl p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <h5 className="text-sm font-bold text-slate-200 whitespace-nowrap">Masalah:</h5>
+          <input type="text" value={data.problem || ''} onChange={(e) => updateProblem(e.target.value)}
+            className="flex-1 text-sm text-indigo-400 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 rounded px-2" />
+        </div>
+        <div className="space-y-3 pl-4 border-l-2 border-slate-800">
+          {data.items?.map((item: any, idx: number) => (
+            <div key={item.id || idx} className="relative group/why">
+              <span className="absolute -left-[22px] top-1.5 w-2.5 h-2.5 rounded-full bg-indigo-500 border border-slate-900"></span>
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <div className="flex items-start gap-2">
+                  <div className="flex-1 space-y-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-slate-500 whitespace-nowrap">Why {item.level}:</span>
+                      <input type="text" value={item.question || ''} onChange={(e) => updateWhyItem(idx, 'question', e.target.value)}
+                        placeholder="Mengapa...?" className="flex-1 text-xs text-slate-300 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-indigo-500/50 rounded px-1" />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-semibold text-emerald-500 whitespace-nowrap">Jawaban:</span>
+                      <input type="text" value={item.answer || ''} onChange={(e) => updateWhyItem(idx, 'answer', e.target.value)}
+                        placeholder="Karena..." className="flex-1 text-xs text-emerald-300 bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-emerald-500/50 rounded px-1" />
+                    </div>
+                  </div>
+                  <button onClick={() => deleteWhyItem(idx)} className="p-0.5 text-slate-600 hover:text-rose-400 transition-colors opacity-0 group-hover/why:opacity-100 cursor-pointer mt-1">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <button onClick={addWhyItem} className="w-full text-center text-xs text-slate-500 hover:text-indigo-400 border border-dashed border-slate-700 hover:border-indigo-500/30 rounded-xl py-2.5 transition-colors cursor-pointer flex items-center justify-center gap-1.5">
+          <Plus className="w-3.5 h-3.5" /> Tambah Why Level
+        </button>
+      </div>
+    )
+  }
+
+  // Fallback for key_value or generic
+  return (
+    <div className="mt-4 bg-slate-900/60 border border-slate-800 rounded-xl p-4 text-xs text-slate-300">
+      <pre className="whitespace-pre-wrap font-mono">{JSON.stringify(data, null, 2)}</pre>
+    </div>
+  )
+}
+
 export default function AnalyzePage() {
-  const router    = useRouter()
-  const params    = useParams()
+  const router = useRouter()
+  const params = useParams()
   const projectId = params.id as string
 
   useUserRole()
 
   /* ── tab state ── */
-  const [activeTab, setActiveTab] = useState<'ai_recommendation' | 'fishbone' | '5why' | 'pareto' | 'needs' | 'ai'>('ai_recommendation')
+  const [activeTab, setActiveTab] = useState<'ai_recommendation' | 'needs'>('ai_recommendation')
 
   /* ── core data ── */
-  const [project,     setProject]     = useState<Project | null>(null)
-
-  /* ── fishbone ── */
-  const [fishboneItems, setFishboneItems] = useState<FishboneNode[]>([])
-  const [newFbText,     setNewFbText]     = useState('')
-  const [newFbCategory, setNewFbCategory] =
-    useState<'man'|'machine'|'method'|'material'|'measurement'|'environment'>('man')
-
-  /* ── 5-why ── */
-  const [whys, setWhys] = useState<WhyNode[]>([])
-
-  /* ── AI ── */
-  const [aiLoading, setAiLoading] = useState(false)
-  const [aiResult,  setAiResult]  = useState<any>(null)
+  const [project, setProject] = useState<Project | null>(null)
 
   /* ── AI Analyze Recommendation ── */
   const [dataRequirements, setDataRequirements] = useState<MeasureDataRequirement[]>([])
   const [analyzeResult, setAnalyzeResult] = useState<AnalyzeResult | null>(null)
   const [aiError, setAiError] = useState<string | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
   const [aiSaveMsg, setAiSaveMsg] = useState<string | null>(null)
-  const [selectedMethod, setSelectedMethod] = useState<string>('')
   const [saving, setSaving] = useState(false)
+  
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const [editReasoning, setEditReasoning] = useState('')
+  const [showAddCustom, setShowAddCustom] = useState(false)
+  const [customMethod, setCustomMethod] = useState('')
+  const [customReasoning, setCustomReasoning] = useState('')
+  
+  const [priorityResult, setPriorityResult] = useState<PriorityItem[] | null>(null)
+  const [isGeneratingPriority, setIsGeneratingPriority] = useState(false)
+  const [priorityError, setPriorityError] = useState<string | null>(null)
+  const priorityTriggered = useRef(false)
+  const [expandedPriority, setExpandedPriority] = useState<number | null>(null)
+  
+  const aiTriggered = useRef(false)
 
   /* ── kebutuhan implementasi ── */
   const [measureProblems, setMeasureProblems] = useState<MeasureProblem[]>([])
-  const [analyzeNeeds,    setAnalyzeNeeds]    = useState<AnalyzeNeed[]>([])
-  const [needSaveMsg,     setNeedSaveMsg]     = useState<string | null>(null)
-  const [showNeedForm,    setShowNeedForm]    = useState(false)
-  const [needMethod,      setNeedMethod]      = useState('')
-  const [needDimension,   setNeedDimension]   = useState('')
-  const [needCategory,    setNeedCategory]    = useState<AnalyzeNeed['need_category']>('sdm')
-  const [needItem,        setNeedItem]        = useState('')
-  const [needQuantity,    setNeedQuantity]    = useState('')
-  const [needCost,        setNeedCost]        = useState<number | ''>('')
+  const [analyzeNeeds, setAnalyzeNeeds] = useState<AnalyzeNeed[]>([])
+  const [needSaveMsg, setNeedSaveMsg] = useState<string | null>(null)
+  const [showNeedForm, setShowNeedForm] = useState(false)
+  const [needMethod, setNeedMethod] = useState('')
+  const [needDimension, setNeedDimension] = useState('')
+  const [needCategory, setNeedCategory] = useState<AnalyzeNeed['need_category']>('sdm')
+  const [needItem, setNeedItem] = useState('')
+  const [needQuantity, setNeedQuantity] = useState('')
+  const [needCost, setNeedCost] = useState<number | ''>('')
   const [needResponsible, setNeedResponsible] = useState('')
-  const [needNotes,       setNeedNotes]       = useState('')
-  const [needAvailable,   setNeedAvailable]   = useState(false)
-  const [projectCharter,  setProjectCharter]  = useState<any>(null)
-
-  /* ── pareto input manual ── */
-  const [paretoItems,    setParetoItems]    = useState<ParetoItem[]>([])
-  const [paretoSaveMsg,  setParetoSaveMsg]  = useState<string | null>(null)
+  const [needNotes, setNeedNotes] = useState('')
+  const [needAvailable, setNeedAvailable] = useState(false)
+  const [projectCharter, setProjectCharter] = useState<any>(null)
 
   /* ── load ── */
   useEffect(() => {
@@ -84,26 +302,20 @@ export default function AnalyzePage() {
       if (!proj) { router.push('/dashboard'); return }
       setProject(proj)
 
-      const [fishbones, fiveWhys, mProblems, aNeeds, charter, pareto, dataReqs, resultAI] = await Promise.all([
-        getFishbones(projectId),
-        getFiveWhys(projectId),
+      const [mProblems, aNeeds, charter, dataReqs, resultAI] = await Promise.all([
         getMeasureProblems(projectId),
         getAnalyzeNeeds(projectId),
         getProjectCharter(projectId),
-        getParetoData(projectId),
         getMeasureDataRequirements(projectId),
-        getAnalyzeResult(projectId),
+        getAnalyzeResult(projectId)
       ])
-      setFishboneItems(fishbones)
-      setWhys(fiveWhys)
       setMeasureProblems(mProblems)
       setAnalyzeNeeds(aNeeds)
       setProjectCharter(charter)
-      setParetoItems(pareto)
       setDataRequirements(dataReqs)
       if (resultAI) {
         setAnalyzeResult(resultAI)
-        setSelectedMethod(resultAI.selected_method)
+        setPriorityResult(resultAI.priority_result || null)
       }
 
       if (mProblems.length > 0 && mProblems[0].recommended_methods?.length > 0) {
@@ -114,103 +326,22 @@ export default function AnalyzePage() {
     loadData()
   }, [projectId, router])
 
-  /* ── pareto (computed from user input) ── */
-  const paretoData = (() => {
-    if (paretoItems.length === 0) return []
-    const sorted = [...paretoItems].sort((a, b) => b.score - a.score)
-    const total = sorted.reduce((acc, a) => acc + a.score, 0) || 1
-    let cumulative = 0
-    return sorted.map((a) => {
-      const pct = Math.round((a.score / total) * 100)
-      cumulative += pct
-      return { name: a.problem_name, value: a.score, percentage: pct, cumulative: Math.min(cumulative, 100) }
-    })
-  })()
-  const top2Labels = paretoData.slice(0, 2).map((d) => d.name).join(' dan ')
-
-  /* ── pareto handlers ── */
-  const handleAddParetoRow = () => {
-    setParetoItems([...paretoItems, { project_id: projectId, problem_name: '', score: 0 }])
-  }
-  const handleParetoChange = (index: number, field: 'problem_name' | 'score', value: string) => {
-    const updated = [...paretoItems]
-    if (field === 'score') updated[index].score = parseInt(value) || 0
-    else updated[index].problem_name = value
-    setParetoItems(updated)
-  }
-  const handleDeleteParetoRow = (index: number) => {
-    setParetoItems(paretoItems.filter((_, i) => i !== index))
-  }
-  const handleSavePareto = async () => {
-    try {
-      await saveParetoData(projectId, paretoItems)
-      setParetoSaveMsg('Data Pareto berhasil disimpan!')
-      setTimeout(() => setParetoSaveMsg(null), 3000)
-    } catch (err) {
-      console.error(err)
-    }
-  }
-
   /* ── computed for needs tab ── */
-  const needMethods        = Array.from(new Set(analyzeNeeds.map((n) => n.method_name)))
-  const needTotalCost      = analyzeNeeds.reduce((a, n) => a + (n.estimated_cost || 0), 0)
+  const needMethods = Array.from(new Set(analyzeNeeds.map((n) => n.method_name)))
+  const needTotalCost = analyzeNeeds.reduce((a, n) => a + (n.estimated_cost || 0), 0)
   const needAvailableCount = analyzeNeeds.filter((n) => n.is_available).length
-
-  /* ── fishbone handlers ── */
-  const handleAddFishbone = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newFbText) return
-    const item: FishboneNode = { id: 'fb-' + Math.random().toString(36).substr(2,9), category: newFbCategory, text: newFbText }
-    const updated = [...fishboneItems, item]
-    setFishboneItems(updated)
-    saveFishbones(projectId, updated).catch(console.error)
-    setNewFbText('')
-  }
-  const handleDeleteFb = (id: string) => {
-    if (!window.confirm('Hapus item fishbone ini?')) return
-    const updated = fishboneItems.filter((i) => i.id !== id)
-    setFishboneItems(updated)
-    saveFishbones(projectId, updated).catch(console.error)
-  }
-
-  /* ── 5-why handlers ── */
-  const handleSave5Why = (index: number, field: 'why'|'answer', value: string, l2?: number, l3?: number, l4?: number, l5?: number) => {
-    const updated = [...whys]
-    let node = updated[index]
-    if (l2 !== undefined) node = node.children![l2]
-    if (l3 !== undefined) node = node.children![l3]
-    if (l4 !== undefined) node = node.children![l4]
-    if (l5 !== undefined) node = node.children![l5]
-    if (node) node[field] = value
-    setWhys(updated)
-    saveFiveWhys(projectId, updated).catch(console.error)
-  }
-  const handleAddWhyNode = () => {
-    const blank: WhyNode = { level:1, why:'Mengapa masalah ini terjadi?', answer:'', children:[{ level:2, why:'Mengapa demikian?', answer:'', children:[{ level:3, why:'Mengapa demikian?', answer:'', children:[{ level:4, why:'Mengapa demikian?', answer:'', children:[{ level:5, why:'Mengapa demikian?', answer:'' }] }] }] }] }
-    const updated = [...whys, blank]
-    setWhys(updated)
-    saveFiveWhys(projectId, updated).catch(console.error)
-  }
-  const handleDeleteWhyNode = (index: number) => {
-    if (!window.confirm('Hapus analisis 5-Why ini?')) return
-    const updated = whys.filter((_, i) => i !== index)
-    setWhys(updated)
-    saveFiveWhys(projectId, updated).catch(console.error)
-  }
 
   /* ── AI Analyze Recommendation ── */
   const CLOSED_METHODS = [
     '5 Whys',
-    'Fishbone / Ishikawa Diagram',
+    'Fishbone Diagram',
     'Pareto Analysis',
-    'Regression Analysis',
-    'Hypothesis Testing',
     'FMEA (Failure Mode and Effects Analysis)'
   ]
 
   const isMeasureSaved = !!projectCharter?.measure_summary
 
-  const handleTriggerAnalyzeAI = async () => {
+  const handleTriggerAnalyzeAI = useCallback(async () => {
     if (!isMeasureSaved) return
     setAiLoading(true)
     setAiError(null)
@@ -230,26 +361,81 @@ export default function AnalyzePage() {
       })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || `Server error (${response.status})`)
+      
+      const recs = Array.isArray(result) ? result : []
 
       const newResult: AnalyzeResult = {
         project_id: projectId,
-        recommended_method: result.recommendedMethod,
-        selected_method: result.recommendedMethod,
-        reasoning: result.reasoning,
-        summary: result.analysisResult.summary,
-        key_findings: result.analysisResult.keyFindings || [],
-        suggested_root_causes: result.analysisResult.suggestedRootCauses || [],
+        recommendations: recs.map((r, i) => ({
+          method: r.method,
+          reasoning: r.reasoning,
+          priority: r.priority || (i + 1),
+          source: r.source || 'ai',
+          structure_type: r.structure_type,
+          data: r.data
+        })),
         status: 'draft'
       }
 
       setAnalyzeResult(newResult)
-      setSelectedMethod(newResult.recommended_method)
     } catch (err: any) {
       setAiError(err.message || 'Gagal melakukan analisis AI.')
     } finally {
       setAiLoading(false)
     }
-  }
+  }, [isMeasureSaved, projectCharter, dataRequirements, measureProblems, projectId])
+
+  // Auto trigger AI on first open if no result
+  useEffect(() => {
+    if (activeTab === 'ai_recommendation' && isMeasureSaved && !analyzeResult && !aiLoading && !aiError && !aiTriggered.current) {
+      aiTriggered.current = true
+      handleTriggerAnalyzeAI()
+    }
+  }, [activeTab, isMeasureSaved, analyzeResult, aiLoading, aiError, handleTriggerAnalyzeAI])
+
+  const handleGeneratePriority = useCallback(async () => {
+    if (!analyzeResult || analyzeResult.recommendations.length === 0) return
+    setIsGeneratingPriority(true)
+    setPriorityError(null)
+    try {
+      const response = await fetch('/api/analyze-priority-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          charter: projectCharter,
+          dataCollected: {
+            requirements: dataRequirements,
+            problems: measureProblems,
+            measure_summary: projectCharter?.measure_summary
+          },
+          rcaResults: analyzeResult.recommendations
+        })
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || `Server error`)
+      
+      const parsed = Array.isArray(result) ? result : []
+      setPriorityResult(parsed)
+      
+      const updatedResult = { ...analyzeResult, priority_result: parsed, status: 'draft' as const }
+      setAnalyzeResult(updatedResult)
+      await saveAnalyzeResult(projectId, updatedResult)
+    } catch(err: any) {
+      setPriorityError(err.message || 'Gagal generate prioritas.')
+    } finally {
+      setIsGeneratingPriority(false)
+    }
+  }, [analyzeResult, projectCharter, dataRequirements, measureProblems, projectId])
+
+  useEffect(() => {
+    if (analyzeResult && analyzeResult.recommendations.length > 0) {
+      const allDone = analyzeResult.recommendations.every(r => r.data)
+      if (allDone && !priorityResult && !isGeneratingPriority && !priorityError && !priorityTriggered.current) {
+        priorityTriggered.current = true
+        handleGeneratePriority()
+      }
+    }
+  }, [analyzeResult, priorityResult, isGeneratingPriority, priorityError, handleGeneratePriority])
 
   const handleSaveAnalyzeAI = async () => {
     if (!analyzeResult) return
@@ -258,7 +444,7 @@ export default function AnalyzePage() {
     try {
       const toSave: AnalyzeResult = {
         ...analyzeResult,
-        selected_method: selectedMethod,
+        priority_result: priorityResult || analyzeResult.priority_result,
         status: 'saved'
       }
       await saveAnalyzeResult(projectId, toSave)
@@ -272,6 +458,61 @@ export default function AnalyzePage() {
     }
   }
 
+  const updateActionPlan = (priorityIndex: number, planIndex: number, field: keyof ActionPlanStep, value: string) => {
+    if (!priorityResult) return
+    const newPr = [...priorityResult]
+    newPr[priorityIndex].action_plan[planIndex] = { ...newPr[priorityIndex].action_plan[planIndex], [field]: value }
+    setPriorityResult(newPr)
+    setAnalyzeResult(prev => prev ? { ...prev, priority_result: newPr, status: 'draft' } : null)
+  }
+
+  const addActionPlan = (priorityIndex: number) => {
+    if (!priorityResult) return
+    const newPr = [...priorityResult]
+    newPr[priorityIndex].action_plan.push({ id: 'ap-' + Math.random().toString(36).substr(2,9), action: '', pic: '', timeline: '' })
+    setPriorityResult(newPr)
+    setAnalyzeResult(prev => prev ? { ...prev, priority_result: newPr, status: 'draft' } : null)
+  }
+
+  const removeActionPlan = (priorityIndex: number, planIndex: number) => {
+    if (!priorityResult) return
+    const newPr = [...priorityResult]
+    newPr[priorityIndex].action_plan.splice(planIndex, 1)
+    setPriorityResult(newPr)
+    setAnalyzeResult(prev => prev ? { ...prev, priority_result: newPr, status: 'draft' } : null)
+  }
+
+  const handleDeleteRecommendation = (index: number) => {
+    if (!analyzeResult) return
+    if (!window.confirm('Hapus rekomendasi ini?')) return
+    const newRecs = [...analyzeResult.recommendations]
+    newRecs.splice(index, 1)
+    setAnalyzeResult({ ...analyzeResult, recommendations: newRecs, status: 'draft' })
+  }
+
+  const handleSaveEditReasoning = (index: number) => {
+    if (!analyzeResult) return
+    const newRecs = [...analyzeResult.recommendations]
+    newRecs[index].reasoning = editReasoning
+    setAnalyzeResult({ ...analyzeResult, recommendations: newRecs, status: 'draft' })
+    setEditingIndex(null)
+    setEditReasoning('')
+  }
+
+  const handleAddCustom = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!analyzeResult || !customMethod || !customReasoning) return
+    const newRecs = [...analyzeResult.recommendations, {
+      method: customMethod,
+      reasoning: customReasoning,
+      priority: analyzeResult.recommendations.length + 1,
+      source: 'custom' as const
+    }]
+    setAnalyzeResult({ ...analyzeResult, recommendations: newRecs, status: 'draft' })
+    setShowAddCustom(false)
+    setCustomMethod('')
+    setCustomReasoning('')
+  }
 
 
   /* ── needs handlers ── */
@@ -353,26 +594,14 @@ export default function AnalyzePage() {
 
   if (!project) return null
 
-  const fbCategories = [
-    { id: 'man',         label: 'Man (Manusia)',          color: '#ec4899' },
-    { id: 'machine',     label: 'Machine (Mesin)',         color: '#f59e0b' },
-    { id: 'method',      label: 'Method (Metode)',         color: '#6366f1' },
-    { id: 'material',    label: 'Material (Bahan)',        color: '#10b981' },
-    { id: 'measurement', label: 'Measurement (Alat Ukur)', color: '#8b5cf6' },
-    { id: 'environment', label: 'Environment (Lingkungan)', color: '#06b6d4' },
-  ] as const
-
   const needCategoryLabels: Record<AnalyzeNeed['need_category'], string> = {
     sdm: '👤 SDM / Tenaga Ahli', alat: '🔧 Alat & Mesin', bahan: '📦 Bahan & Material',
     sop: '📋 SOP & Prosedur', pelatihan: '🎓 Pelatihan', anggaran: '💰 Anggaran', lainnya: '🗂️ Lainnya',
   }
 
   const tabs = [
-    { id: 'ai_recommendation', name: '🤖 Rekomendasi Metode AI' },
-    { id: 'fishbone',          name: 'Ishikawa Fishbone' },
-    { id: '5why',              name: '5-Why Analysis' },
-    { id: 'pareto',            name: 'Pareto Chart' },
-    { id: 'needs',             name: '📦 Kebutuhan Implementasi' },
+    { id: 'ai_recommendation', name: '🤖 Rekomendasi & Analisis AI', hidden: false },
+    { id: 'needs',             name: '📝 Kebutuhan Implementasi', hidden: false },
   ]
 
   return (
@@ -391,14 +620,10 @@ export default function AnalyzePage() {
       <div className="flex items-center justify-between px-5 py-3.5 rounded-2xl bg-indigo-500/5 border border-indigo-500/15 phase-banner">
         <div>
           <p className="text-xs font-semibold text-indigo-300">Fase Saat Ini: <span className="uppercase font-black">ANALYZE</span></p>
-          <p className="text-[10px] text-slate-500 mt-0.5">Lengkapi Fishbone, 5-Why, dan kebutuhan implementasi sebelum lanjut ke IMPROVE.</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">Selesaikan analisis AI dan identifikasi kebutuhan sebelum lanjut ke IMPROVE.</p>
         </div>
         <button
           onClick={async () => {
-            if (fishboneItems.length === 0 && whys.length === 0) {
-              alert('Harap isi minimal satu item Fishbone atau satu analisis 5-Why sebelum melanjutkan ke IMPROVE.')
-              return
-            }
             if (project.status === 'analyze') await updateProjectPhase(projectId, 'improve')
             router.push(`/projects/${projectId}/improve`)
           }}
@@ -410,7 +635,7 @@ export default function AnalyzePage() {
 
       {/* ── Tabs ── */}
       <div className="flex gap-2 border-b border-slate-800 overflow-x-auto pb-1">
-        {tabs.map((tab) => (
+        {tabs.filter(t => !t.hidden).map((tab) => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
             className={`px-4 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === tab.id
@@ -426,14 +651,14 @@ export default function AnalyzePage() {
       {/* ── Tab panels ── */}
       <div className="glass-card rounded-3xl border border-slate-800 bg-slate-950/20 p-6 md:p-8">
 
-        {/* ══ AI RECOMMENDATION ══ */}
+        {/* ══ AI RECOMMENDATION & GENERIC COMPONENT ══ */}
         {activeTab === 'ai_recommendation' && (
           <div className="space-y-6">
             <div className="border-b border-slate-850 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
-                <h2 className="text-lg font-bold text-slate-200">Rekomendasi Metode AI</h2>
+                <h2 className="text-lg font-bold text-slate-200">Rekomendasi & Analisis Akar Masalah (AI)</h2>
                 <p className="text-xs text-slate-500">
-                  AI menganalisis data Piagam Proyek (Define) dan hasil pengukuran (Measure) untuk menyarankan metode root cause terbaik
+                  AI merekomendasikan metode sekaligus melakukan generate struktur datanya secara otomatis.
                 </p>
               </div>
 
@@ -485,7 +710,7 @@ export default function AnalyzePage() {
                 <Loader2 className="w-10 h-10 text-indigo-400 animate-spin" />
                 <h3 className="text-sm font-bold text-slate-300">Menjalankan Analisis AI...</h3>
                 <p className="text-xs text-slate-500 max-w-sm leading-relaxed">
-                  Menghubungkan ke API, membaca Piagam Proyek (Define) dan data pengukuran (Measure) untuk merumuskan rekomendasi metode terbaik.
+                  Menganalisis data, merekomendasikan metode, dan menyusun data RCA Anda...
                 </p>
               </div>
             )}
@@ -497,11 +722,10 @@ export default function AnalyzePage() {
                 <div className="space-y-1">
                   <h3 className="text-base font-bold text-slate-200">Mulai Analisis Akar Masalah berbasis AI</h3>
                   <p className="text-xs text-slate-500 max-w-lg leading-relaxed">
-                    Sistem akan mengekstrak problem statement, goal, dan metrik data pengukuran yang telah Anda kumpulkan pada tahap Measure untuk merekomendasikan metode analisis terstruktur yang paling cocok.
+                    Sistem akan membuat rekomendasi Root Cause Analysis beserta simulasinya (Fishbone/Pareto/5Whys) dalam satu langkah.
                   </p>
                 </div>
 
-                {/* Tooltip & Button Container */}
                 <div className="relative group">
                   <button
                     onClick={handleTriggerAnalyzeAI}
@@ -513,10 +737,9 @@ export default function AnalyzePage() {
                     }`}
                   >
                     <Sparkles className="w-4 h-4" />
-                    Rekomendasikan Metode
+                    Jalankan AI Analisis
                   </button>
 
-                  {/* Tooltip */}
                   {!isMeasureSaved && (
                     <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 hidden group-hover:block bg-slate-900 border border-slate-800 text-slate-300 text-xs px-3 py-2 rounded-xl shadow-xl w-64 z-50 text-center">
                       Selesaikan dan simpan tahap Measure terlebih dahulu.
@@ -528,398 +751,225 @@ export default function AnalyzePage() {
 
             {/* Result View */}
             {analyzeResult && !aiLoading && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="space-y-6">
                 
-                {/* Left Column: Recommendations & Select Dropdown */}
-                <div className="lg:col-span-8 space-y-6">
-                  
-                  {/* Recommended Method Display */}
-                  <div className="p-6 rounded-3xl bg-indigo-500/5 border border-indigo-500/15 space-y-3">
-                    <div className="flex items-center gap-2 text-indigo-400 text-xs font-bold uppercase tracking-wider">
-                      <Sparkles className="h-4 w-4" />
-                      Rekomendasi AI
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-black text-slate-100">{analyzeResult.recommended_method}</h3>
-                      <p className="text-xs text-slate-400 mt-2 leading-relaxed font-medium">
-                        {analyzeResult.reasoning}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Dropdown to accept or change manually */}
-                  <div className="p-6 rounded-3xl bg-slate-950/40 border border-slate-850 space-y-3">
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">
-                      Ganti Metode Secara Manual
-                    </label>
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <select
-                        value={selectedMethod}
-                        onChange={(e) => setSelectedMethod(e.target.value)}
-                        className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
-                      >
-                        {CLOSED_METHODS.map((m) => (
-                          <option key={m} value={m}>
-                            {m} {m === analyzeResult.recommended_method ? '(Rekomendasi AI)' : ''}
-                          </option>
-                        ))}
-                      </select>
-
-                      {/* Navigation Shortcut to the selected method */}
-                      {(() => {
-                        const getTargetTab = (methodName: string) => {
-                          const name = methodName.toLowerCase()
-                          if (name.includes('5 why') || name.includes('whys')) return '5why'
-                          if (name.includes('fishbone') || name.includes('ishikawa')) return 'fishbone'
-                          if (name.includes('pareto')) return 'pareto'
-                          return null
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-slate-200">Rekomendasi & Hasil RCA</h3>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setShowAddCustom(!showAddCustom)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-lg text-slate-300 transition-all cursor-pointer"
+                    >
+                      {showAddCustom ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                      {showAddCustom ? 'Batal' : 'Tambah Manual'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm('Generate ulang akan menimpa semua data analisis saat ini. Lanjutkan?')) {
+                          handleTriggerAnalyzeAI()
                         }
-                        const targetTab = getTargetTab(selectedMethod)
-                        if (!targetTab) return null
-
-                        const tabLabel = tabs.find(t => t.id === targetTab)?.name || 'Analisis'
-                        return (
-                          <button
-                            onClick={() => setActiveTab(targetTab)}
-                            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 text-xs font-bold rounded-xl border border-indigo-500/20 transition-all cursor-pointer whitespace-nowrap"
-                          >
-                            Buka Tab {tabLabel} <ChevronRight className="h-3.5 w-3.5" />
-                          </button>
-                        )
-                      })()}
-                    </div>
-                    <p className="text-[10px] text-slate-500">
-                      Rekomendasi AI adalah panduan awal. Anda dapat mengikuti saran AI atau memilih metode lain yang dirasa lebih praktis untuk dijalankan.
-                    </p>
-                  </div>
-
-                  {/* Summary of findings */}
-                  <div className="p-6 rounded-3xl bg-slate-950/40 border border-slate-850 space-y-4">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-850 pb-2">
-                      Ringkasan Temuan Analisa
-                    </h4>
-                    <p className="text-xs text-slate-350 leading-relaxed">
-                      {analyzeResult.summary}
-                    </p>
+                      }}
+                      className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-xs font-semibold rounded-lg text-indigo-400 border border-indigo-500/20 transition-all cursor-pointer"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      Generate Ulang AI
+                    </button>
                   </div>
                 </div>
 
-                {/* Right Column: Key Findings & Root Causes */}
-                <div className="lg:col-span-4 space-y-6">
-                  
-                  {/* Key Findings Card */}
-                  <div className="p-6 rounded-3xl bg-slate-950/40 border border-slate-850 space-y-4">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-850 pb-2">
-                      Temuan Kunci (Define/Measure)
-                    </h4>
-                    {analyzeResult.key_findings?.length === 0 ? (
-                      <p className="text-xs text-slate-600 italic">Tidak ada temuan kunci.</p>
-                    ) : (
-                      <ul className="space-y-3">
-                        {analyzeResult.key_findings.map((item, idx) => (
-                          <li key={idx} className="flex items-start gap-2.5 text-xs text-slate-300">
-                            <span className="h-5 w-5 shrink-0 rounded-full bg-indigo-500/10 text-indigo-400 font-bold flex items-center justify-center text-[10px] mt-0.5">
-                              {idx + 1}
-                            </span>
-                            <span className="leading-normal">{item}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-
-                  {/* Suggested Root Causes Card */}
-                  <div className="p-6 rounded-3xl bg-slate-950/40 border border-slate-850 space-y-4">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-850 pb-2 text-rose-400">
-                      Kandidat Akar Masalah
-                    </h4>
-                    {analyzeResult.suggested_root_causes?.length === 0 ? (
-                      <p className="text-xs text-slate-600 italic">Tidak ada kandidat akar masalah.</p>
-                    ) : (
-                      <ul className="space-y-3">
-                        {analyzeResult.suggested_root_causes.map((item, idx) => (
-                          <li key={idx} className="flex items-start gap-2.5 text-xs text-slate-300">
-                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500 mt-2" />
-                            <span className="leading-normal">{item}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-
-                  {/* Re-analyze Button */}
-                  <button
-                    onClick={() => {
-                      if (window.confirm('Analisis ulang akan menimpa rekomendasi saat ini. Lanjutkan?')) {
-                        handleTriggerAnalyzeAI()
-                      }
-                    }}
-                    className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-xs font-semibold rounded-xl text-slate-400 hover:text-slate-200 border border-slate-800 transition-all cursor-pointer"
-                  >
-                    <RefreshCw className="h-3.5 w-3.5" />
-                    Analisis Ulang dengan AI
-                  </button>
-
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ══ FISHBONE ══ */}
-        {activeTab === 'fishbone' && (
-          <div className="space-y-8">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-850 pb-4">
-              <div>
-                <h2 className="text-lg font-bold text-slate-200">Diagram Fishbone (RCA)</h2>
-                <p className="text-xs text-slate-500">Petakan potensi penyebab masalah berdasarkan kategori 6M</p>
-              </div>
-              <form onSubmit={handleAddFishbone} className="flex flex-wrap gap-2">
-                <select value={newFbCategory} onChange={(e) => setNewFbCategory(e.target.value as any)}
-                  className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none">
-                  {fbCategories.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-                </select>
-                <input type="text" required placeholder="Detail kendala..." value={newFbText} onChange={(e) => setNewFbText(e.target.value)}
-                  className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-250 focus:outline-none w-48" />
-                <button type="submit" className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-bold rounded-xl text-white cursor-pointer">
-                  <Plus className="h-3.5 w-3.5" /> Tambah
-                </button>
-              </form>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {fbCategories.map((cat) => {
-                const items = fishboneItems.filter((i) => i.category === cat.id)
-                return (
-                  <div key={cat.id} className="bg-slate-950/40 border border-slate-850 rounded-2xl p-5 space-y-4">
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-850">
-                      <span className="text-xs font-bold" style={{ color: cat.color }}>{cat.label}</span>
-                      <span className="text-[10px] bg-slate-900 px-1.5 py-0.5 rounded font-mono text-slate-500">{items.length}</span>
-                    </div>
-                    <div className="space-y-2">
-                      {items.length === 0
-                        ? <p className="text-[11px] text-slate-600 italic">Belum ada input</p>
-                        : items.map((item) => (
-                          <div key={item.id} className="flex justify-between items-start bg-slate-900/60 border border-slate-850 p-2.5 rounded-lg text-xs">
-                            <span className="text-slate-300 leading-normal">{item.text}</span>
-                            <button onClick={() => handleDeleteFb(item.id)} className="text-slate-600 hover:text-red-400 ml-2 cursor-pointer">✕</button>
-                          </div>
-                        ))
-                      }
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-
-        {/* ══ 5-WHY ══ */}
-        {activeTab === '5why' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-850 pb-4">
-              <div>
-                <h2 className="text-lg font-bold text-slate-200">5-Why Analysis</h2>
-                <p className="text-xs text-slate-500">Mencari akar terdalam dari kendala yang terjadi</p>
-              </div>
-              <button onClick={handleAddWhyNode}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-bold rounded-xl text-white cursor-pointer">
-                <Plus className="h-3.5 w-3.5" /> Tambah Analisis
-              </button>
-            </div>
-            {whys.length === 0 ? (
-              <div className="text-center py-10 text-sm text-slate-500 border border-dashed border-slate-800 rounded-2xl">
-                Belum ada analisis 5-Why. Klik "Tambah Analisis" untuk memulai.
-              </div>
-            ) : (
-              <div className="space-y-8 max-w-3xl mx-auto">
-                {whys.map((w, idx) => (
-                  <div key={idx} className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Analisis #{idx + 1}</span>
-                      <button onClick={() => handleDeleteWhyNode(idx)} className="text-xs text-red-400 hover:text-red-300 cursor-pointer">Hapus</button>
-                    </div>
-                    {/* Level 1 */}
-                    <div className="space-y-2 p-4 bg-slate-950/60 border border-slate-850 rounded-2xl relative">
-                      <span className="absolute -left-3 top-4 h-6 w-6 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-xs font-bold flex items-center justify-center text-indigo-400">1</span>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 ml-4">Why #1</label>
-                      <input type="text" value={w.why} onChange={(e) => handleSave5Why(idx,'why',e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-350 focus:outline-none" />
-                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 ml-4">Jawaban</label>
-                      <input type="text" value={w.answer} onChange={(e) => handleSave5Why(idx,'answer',e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-250 focus:outline-none" />
-                    </div>
-                    {w.children?.map((c1,i1) => (
-                      <div key={i1} className="pl-6 border-l border-slate-800 space-y-4">
-                        <div className="space-y-2 p-4 bg-slate-950/60 border border-slate-850 rounded-2xl relative">
-                          <span className="absolute -left-3 top-4 h-6 w-6 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-xs font-bold flex items-center justify-center text-indigo-400">2</span>
-                          <input type="text" value={c1.why}    onChange={(e) => handleSave5Why(idx,'why',e.target.value,i1)}    placeholder="Why #2"     className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-350 focus:outline-none" />
-                          <input type="text" value={c1.answer} onChange={(e) => handleSave5Why(idx,'answer',e.target.value,i1)} placeholder="Jawaban #2" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-250 focus:outline-none" />
-                        </div>
-                        {c1.children?.map((c2,i2) => (
-                          <div key={i2} className="pl-6 border-l border-slate-800 space-y-4">
-                            <div className="space-y-2 p-4 bg-slate-950/60 border border-slate-850 rounded-2xl relative">
-                              <span className="absolute -left-3 top-4 h-6 w-6 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-xs font-bold flex items-center justify-center text-indigo-400">3</span>
-                              <input type="text" value={c2.why}    onChange={(e) => handleSave5Why(idx,'why',e.target.value,i1,i2)}    placeholder="Why #3"     className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-350 focus:outline-none" />
-                              <input type="text" value={c2.answer} onChange={(e) => handleSave5Why(idx,'answer',e.target.value,i1,i2)} placeholder="Jawaban #3" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-250 focus:outline-none" />
-                            </div>
-                            {c2.children?.map((c3,i3) => (
-                              <div key={i3} className="pl-6 border-l border-slate-800 space-y-4">
-                                <div className="space-y-2 p-4 bg-slate-950/60 border border-slate-850 rounded-2xl relative">
-                                  <span className="absolute -left-3 top-4 h-6 w-6 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-xs font-bold flex items-center justify-center text-indigo-400">4</span>
-                                  <input type="text" value={c3.why}    onChange={(e) => handleSave5Why(idx,'why',e.target.value,i1,i2,i3)}    placeholder="Why #4"     className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-350 focus:outline-none" />
-                                  <input type="text" value={c3.answer} onChange={(e) => handleSave5Why(idx,'answer',e.target.value,i1,i2,i3)} placeholder="Jawaban #4" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-250 focus:outline-none" />
-                                </div>
-                                {c3.children?.map((c4,i4) => (
-                                  <div key={i4} className="pl-6 border-l border-slate-800">
-                                    <div className="space-y-2 p-4 bg-slate-950/60 border border-slate-850 rounded-2xl relative">
-                                      <span className="absolute -left-3 top-4 h-6 w-6 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-xs font-bold flex items-center justify-center text-emerald-400">5</span>
-                                      <input type="text" value={c4.why}    onChange={(e) => handleSave5Why(idx,'why',e.target.value,i1,i2,i3,i4)}    placeholder="Why #5"                            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-350 focus:outline-none" />
-                                      <input type="text" value={c4.answer} onChange={(e) => handleSave5Why(idx,'answer',e.target.value,i1,i2,i3,i4)} placeholder="Jawaban #5 (Akar masalah sesungguhnya)" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-250 focus:outline-none" />
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-
-        {/* ══ PARETO ══ */}
-        {activeTab === 'pareto' && (
-          <div className="space-y-6">
-            <div className="border-b border-slate-850 pb-4">
-              <h2 className="text-lg font-bold text-slate-200">Analisis Pareto (80/20 Rule)</h2>
-              <p className="text-xs text-slate-500">Masukkan daftar masalah beserta skor/jumlahnya, lalu diagram Pareto akan otomatis terbentuk</p>
-            </div>
-
-            {/* ── Tabel Input Masalah ── */}
-            <div className="bg-slate-950/40 border border-slate-850 rounded-2xl p-5 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-slate-300">Daftar Masalah & Skor</h3>
-                <div className="flex items-center gap-2">
-                  {paretoSaveMsg && (
-                    <span className="flex items-center gap-1 text-xs text-emerald-400 font-semibold animate-pulse">
-                      <CheckCircle className="h-3.5 w-3.5" /> {paretoSaveMsg}
-                    </span>
-                  )}
-                  <button onClick={handleSavePareto} className="flex items-center gap-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-2 rounded-xl transition-colors cursor-pointer">
-                    <Save className="h-3.5 w-3.5" /> Simpan
-                  </button>
-                </div>
-              </div>
-
-              {/* Header tabel */}
-              <div className="grid grid-cols-12 gap-3 text-xs font-bold uppercase tracking-wider text-slate-500 px-1">
-                <div className="col-span-1 text-center">No</div>
-                <div className="col-span-7">Nama Masalah / Faktor</div>
-                <div className="col-span-3 text-center">Skor / Jumlah</div>
-                <div className="col-span-1 text-center">Aksi</div>
-              </div>
-
-              {/* Baris data */}
-              {paretoItems.length === 0 ? (
-                <div className="text-center py-8 text-slate-600 text-sm border border-dashed border-slate-800 rounded-xl">
-                  Belum ada data. Klik tombol &quot;Tambah Baris&quot; di bawah untuk mulai.
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {paretoItems.map((item, idx) => (
-                    <div key={idx} className="grid grid-cols-12 gap-3 items-center bg-slate-900/60 border border-slate-800 rounded-xl px-3 py-2">
-                      <div className="col-span-1 text-center text-xs font-bold text-slate-500">{idx + 1}</div>
-                      <div className="col-span-7">
+                {showAddCustom && (
+                  <form onSubmit={handleAddCustom} className="p-4 bg-slate-900 border border-slate-800 rounded-2xl space-y-3">
+                    <h4 className="text-xs font-bold text-slate-300">Tambah Metode Manual</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <select
+                        value={customMethod}
+                        onChange={(e) => setCustomMethod(e.target.value)}
+                        required
+                        className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none"
+                      >
+                        <option value="">-- Pilih Metode --</option>
+                        {CLOSED_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+                        <option value="Lainnya">Lainnya (Custom)</option>
+                      </select>
+                      {customMethod === 'Lainnya' && (
                         <input
                           type="text"
-                          value={item.problem_name}
-                          onChange={(e) => handleParetoChange(idx, 'problem_name', e.target.value)}
-                          placeholder="Contoh: Cacat produk, Keterlambatan pengiriman..."
-                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-sm text-slate-300 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50 transition-colors"
+                          required
+                          placeholder="Nama Metode..."
+                          className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none"
+                          onChange={(e) => setCustomMethod(e.target.value)}
                         />
+                      )}
+                    </div>
+                    <textarea
+                      value={customReasoning}
+                      onChange={(e) => setCustomReasoning(e.target.value)}
+                      required
+                      placeholder="Alasan / Hasil manual..."
+                      rows={2}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none resize-none"
+                    />
+                    <button type="submit" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl cursor-pointer">
+                      Simpan Metode
+                    </button>
+                  </form>
+                )}
+
+                <div className="space-y-6">
+                  {analyzeResult.recommendations.map((rec, idx) => (
+                    <div key={idx} className="p-5 rounded-2xl bg-slate-950/40 border border-slate-850 flex flex-col gap-3 relative group">
+                      
+                      {/* Badge Source & Priority */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                            rec.source === 'ai' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'bg-slate-800 text-slate-400 border border-slate-700'
+                          }`}>
+                            {rec.source === 'ai' ? <><Sparkles className="w-3 h-3 inline mr-1" /> AI Generated</> : 'Manual'}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-mono">Prioritas {rec.priority}</span>
+                        </div>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {editingIndex !== idx && (
+                            <button onClick={() => { setEditingIndex(idx); setEditReasoning(rec.reasoning) }} className="p-1.5 text-slate-400 hover:text-indigo-400 bg-slate-900 rounded-lg cursor-pointer">
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <button onClick={() => handleDeleteRecommendation(idx)} className="p-1.5 text-slate-400 hover:text-rose-400 bg-slate-900 rounded-lg cursor-pointer">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
-                      <div className="col-span-3">
-                        <input
-                          type="number"
-                          value={item.score || ''}
-                          onChange={(e) => handleParetoChange(idx, 'score', e.target.value)}
-                          placeholder="0"
-                          min={0}
-                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-sm text-center text-slate-300 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50 transition-colors"
-                        />
-                      </div>
-                      <div className="col-span-1 text-center">
-                        <button onClick={() => handleDeleteParetoRow(idx)} className="text-red-500/60 hover:text-red-400 transition-colors cursor-pointer">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
+
+                      {/* Method Name */}
+                      <h4 className="text-lg font-black text-slate-200">{rec.method}</h4>
+
+                      {/* Reasoning */}
+                      {editingIndex === idx ? (
+                        <div className="space-y-2 mt-2">
+                          <textarea
+                            value={editReasoning}
+                            onChange={(e) => setEditReasoning(e.target.value)}
+                            rows={3}
+                            className="w-full bg-slate-900 border border-indigo-500/50 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none resize-none"
+                          />
+                          <div className="flex gap-2">
+                            <button onClick={() => handleSaveEditReasoning(idx)} className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold rounded-lg cursor-pointer">
+                              Simpan
+                            </button>
+                            <button onClick={() => setEditingIndex(null)} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold rounded-lg cursor-pointer">
+                              Batal
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400 leading-relaxed bg-slate-900/50 p-3 rounded-xl border border-slate-800/50">
+                          {rec.reasoning}
+                        </p>
+                      )}
+
+                      <GenericAnalyzeComponent recommendation={rec} onDataChange={(newData) => {
+                        if (!analyzeResult) return
+                        const newRecs = [...analyzeResult.recommendations]
+                        newRecs[idx] = { ...newRecs[idx], data: newData }
+                        setAnalyzeResult({ ...analyzeResult, recommendations: newRecs, status: 'draft' })
+                      }} />
                     </div>
                   ))}
                 </div>
-              )}
 
-              <button onClick={handleAddParetoRow} className="flex items-center gap-1.5 text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer mt-1">
-                <Plus className="h-4 w-4" /> Tambah Baris Masalah
-              </button>
-            </div>
-
-            {/* ── Chart ── */}
-            {paretoData.length > 0 && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-                <div className="lg:col-span-8 bg-slate-950/40 border border-slate-850 p-4 rounded-3xl h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={paretoData}>
-                      <defs>
-                        <linearGradient id="paretoBarGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#6366f1" stopOpacity={0.85} />
-                          <stop offset="100%" stopColor="#4f46e5" stopOpacity={0.15} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis dataKey="name" tick={{ fill:'#94a3b8', fontSize:10 }} axisLine={false} tickLine={false} />
-                      <YAxis yAxisId="left" tick={{ fill:'#64748b', fontSize:10 }} axisLine={false} tickLine={false} label={{ value:'Skor', angle:-90, position:'insideLeft', fill:'#64748b', fontSize:9, offset: -5 }} />
-                      <YAxis yAxisId="right" orientation="right" domain={[0,100]} tick={{ fill:'#64748b', fontSize:10 }} axisLine={false} tickLine={false} label={{ value:'Kumulatif %', angle:90, position:'insideRight', fill:'#64748b', fontSize:9, offset: -5 }} />
-                      <Tooltip
-                        contentStyle={{ backgroundColor:'rgba(15, 23, 42, 0.95)', borderColor:'#4f46e5', borderRadius:12, backdropFilter: 'blur(8px)', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)' }}
-                        formatter={(val:any, name:any) => [name==='cumulative' ? `${val}%` : val, name==='cumulative' ? 'Kumulatif' : 'Skor']}
-                      />
-                      <Bar yAxisId="left" dataKey="value" fill="url(#paretoBarGrad)" stroke="#6366f1" strokeWidth={1} radius={[4,4,0,0]} animationDuration={1200} />
-                      <Line yAxisId="right" type="monotone" dataKey="cumulative" stroke="#ec4899" strokeWidth={3} dot={{ r:4, fill:'#ec4899', strokeWidth: 2, stroke: '#0f172a' }} activeDot={{ r: 6 }} animationDuration={1500} />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="lg:col-span-4 space-y-4">
-                  {paretoData.length >= 2 && (
-                    <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 space-y-2">
-                      <div className="flex items-center gap-1 text-xs font-bold text-indigo-400">
-                        <AlertCircle className="h-4 w-4" /> Prioritas Utama (80/20)
-                      </div>
-                      <p className="text-xs text-slate-400 leading-normal">
-                        Fokus perbaikan pada masalah <span className="text-indigo-400 font-semibold">{top2Labels}</span> yang menyumbang{' '}
-                        <span className="text-indigo-400 font-bold">{paretoData[1]?.cumulative || paretoData[0]?.cumulative}%</span> dari total skor permasalahan.
-                      </p>
-                    </div>
-                  )}
-                  <div className="space-y-2">
-                    {paretoData.map((item, idx) => (
-                      <div key={idx} className="flex justify-between items-center bg-slate-950/60 border border-slate-850 px-3.5 py-2 rounded-xl text-xs">
-                        <span className="font-semibold text-slate-350 truncate">{item.name}</span>
-                        <div className="flex items-center gap-3 ml-2 shrink-0">
-                          <span className="text-slate-500">Skor: <span className="text-slate-300">{item.value}</span></span>
-                          <span className="font-bold text-indigo-400">{item.cumulative}%</span>
-                        </div>
-                      </div>
-                    ))}
+                {analyzeResult.recommendations.length === 0 && (
+                  <div className="text-center py-10 text-xs text-slate-500 border border-dashed border-slate-800 rounded-2xl">
+                    Belum ada data analisis. Klik "Tambah Manual" atau "Generate Ulang AI".
                   </div>
-                </div>
+                )}
+
+                {/* --- Priority Result Table --- */}
+                {analyzeResult.recommendations.length > 0 && (
+                  <div className="mt-8 border-t border-slate-800 pt-8">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-200">Skala Prioritas Masalah</h3>
+                        <p className="text-xs text-slate-400">Daftar prioritas masalah disintesis otomatis dari hasil RCA di atas</p>
+                      </div>
+                      <button onClick={handleGeneratePriority} disabled={isGeneratingPriority} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-xs font-bold rounded-lg text-slate-300 transition-colors disabled:opacity-50">
+                        {isGeneratingPriority ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Generate Ulang Prioritas
+                      </button>
+                    </div>
+
+                    {isGeneratingPriority ? (
+                      <div className="flex flex-col items-center justify-center py-10 text-slate-400 bg-slate-900/30 rounded-2xl border border-slate-800">
+                        <Loader2 className="h-8 w-8 animate-spin mb-4 text-indigo-500" />
+                        <p className="text-sm font-semibold animate-pulse">Menyintesis skala prioritas dan action plan...</p>
+                      </div>
+                    ) : priorityError ? (
+                      <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-red-400 text-xs">
+                        <AlertCircle className="h-4 w-4 inline mr-1.5" /> {priorityError}
+                      </div>
+                    ) : priorityResult && priorityResult.length > 0 ? (
+                      <div className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-slate-950 text-slate-400 font-bold uppercase">
+                            <tr>
+                              <th className="px-4 py-3 w-12 text-center">No</th>
+                              <th className="px-4 py-3">Masalah Prioritas</th>
+                              <th className="px-4 py-3 text-center">Skor</th>
+                              <th className="px-4 py-3 text-center">Level</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/50">
+                            {priorityResult.map((pr, pIdx) => (
+                              <React.Fragment key={pIdx}>
+                                <tr onClick={() => setExpandedPriority(expandedPriority === pIdx ? null : pIdx)} className="hover:bg-slate-800/30 cursor-pointer transition-colors group">
+                                  <td className="px-4 py-4 text-center font-bold text-slate-500">{pr.no}</td>
+                                  <td className="px-4 py-4">
+                                    <div className="font-bold text-slate-200 text-sm group-hover:text-indigo-400 transition-colors">{pr.problem}</div>
+                                    <div className="text-[10px] text-slate-500 mt-1 line-clamp-1">{pr.justification}</div>
+                                  </td>
+                                  <td className="px-4 py-4 text-center font-black text-indigo-400">{pr.priority_score}</td>
+                                  <td className="px-4 py-4 text-center">
+                                    <span className={`inline-block px-2 py-1 rounded text-[10px] font-bold uppercase ${pr.priority_level.toLowerCase() === 'tinggi' ? 'bg-red-500/10 text-red-400' : pr.priority_level.toLowerCase() === 'sedang' ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
+                                      {pr.priority_level}
+                                    </span>
+                                  </td>
+                                </tr>
+                                {expandedPriority === pIdx && (
+                                  <tr className="bg-slate-950 border-t border-slate-800/50">
+                                    <td colSpan={4} className="px-6 py-4">
+                                      <div className="flex items-center justify-between mb-3 border-b border-slate-800 pb-2">
+                                        <h4 className="text-xs font-bold text-slate-300 flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-amber-400" /> Draft Action Plan</h4>
+                                        <button onClick={() => addActionPlan(pIdx)} className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded font-semibold transition-colors flex items-center gap-1"><Plus className="h-3 w-3"/> Tambah Langkah</button>
+                                      </div>
+                                      <div className="space-y-2">
+                                        {pr.action_plan.length === 0 && <p className="text-xs text-slate-500 italic">Belum ada langkah action plan.</p>}
+                                        {pr.action_plan.map((ap, apIdx) => (
+                                          <div key={ap.id || apIdx} className="flex items-center gap-3 bg-slate-900 p-2 rounded-lg border border-slate-800">
+                                            <input type="text" value={ap.action} onChange={(e) => updateActionPlan(pIdx, apIdx, 'action', e.target.value)} placeholder="Langkah tindakan..." className="flex-1 bg-transparent border-none text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 rounded px-2" />
+                                            <input type="text" value={ap.pic} onChange={(e) => updateActionPlan(pIdx, apIdx, 'pic', e.target.value)} placeholder="PIC / Penanggung Jawab" className="w-1/4 bg-slate-800/50 border border-slate-800 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 rounded px-2 py-1" />
+                                            <input type="text" value={ap.timeline} onChange={(e) => updateActionPlan(pIdx, apIdx, 'timeline', e.target.value)} placeholder="Timeline" className="w-1/5 bg-slate-800/50 border border-slate-800 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 rounded px-2 py-1" />
+                                            <button onClick={() => removeActionPlan(pIdx, apIdx)} className="p-1 text-slate-500 hover:text-red-400 cursor-pointer"><Trash2 className="h-3.5 w-3.5" /></button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 text-xs text-slate-500 border border-dashed border-slate-800 rounded-xl">
+                        Tidak ada data prioritas.
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
         )}
-
 
         {/* ══ KEBUTUHAN IMPLEMENTASI ══ */}
         {activeTab === 'needs' && (
@@ -934,167 +984,107 @@ export default function AnalyzePage() {
                   className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-xs font-bold rounded-xl text-slate-300 cursor-pointer transition-all">
                   <Download className="h-3.5 w-3.5" /> Ekspor CSV
                 </button>
-                <button onClick={() => setShowNeedForm((v) => !v)}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-bold rounded-xl text-white cursor-pointer">
-                  <Plus className="h-3.5 w-3.5" /> Tambah Kebutuhan
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-slate-900/50 border border-slate-850 p-4 rounded-2xl flex items-center gap-4">
+                <div className="p-3 bg-indigo-500/10 rounded-xl"><AlertCircle className="h-5 w-5 text-indigo-400" /></div>
+                <div><p className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Metode Diidentifikasi</p><p className="text-lg font-black text-slate-200 mt-0.5">{needMethods.length}</p></div>
+              </div>
+              <div className="bg-slate-900/50 border border-slate-850 p-4 rounded-2xl flex items-center gap-4">
+                <div className="p-3 bg-emerald-500/10 rounded-xl"><CheckCircle2 className="h-5 w-5 text-emerald-400" /></div>
+                <div><p className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Kebutuhan Tersedia</p><p className="text-lg font-black text-slate-200 mt-0.5">{needAvailableCount} <span className="text-xs text-slate-500 font-normal">/ {analyzeNeeds.length}</span></p></div>
+              </div>
+              <div className="bg-slate-900/50 border border-slate-850 p-4 rounded-2xl flex items-center gap-4">
+                <div className="p-3 bg-amber-500/10 rounded-xl"><Sparkles className="h-5 w-5 text-amber-400" /></div>
+                <div><p className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Estimasi Total Biaya</p><p className="text-lg font-black text-slate-200 mt-0.5">Rp {needTotalCost.toLocaleString('id-ID')}</p></div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <h3 className="text-sm font-bold text-slate-300">Daftar Kebutuhan</h3>
+              <div className="flex items-center gap-3">
+                {needSaveMsg && <span className="text-xs font-semibold text-emerald-400 animate-pulse flex items-center gap-1"><CheckCircle className="h-3 w-3"/> {needSaveMsg}</span>}
+                <button onClick={() => setShowNeedForm(!showNeedForm)} className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-bold rounded-xl text-white cursor-pointer">
+                  {showNeedForm ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />} {showNeedForm ? 'Batal' : 'Tambah Kebutuhan'}
                 </button>
               </div>
             </div>
 
-            {needSaveMsg && (
-              <div className="px-4 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400">
-                ✅ {needSaveMsg}
-              </div>
-            )}
-
-            {/* Chip metode dari Measure */}
-            {measureProblems.length > 0 && (
-              <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/15 space-y-2">
-                <p className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Metode Direkomendasikan dari Fase MEASURE</p>
-                <div className="flex flex-wrap gap-2">
-                  {Array.from(new Set(
-                    measureProblems.flatMap((p) => p.recommended_methods.slice(0,3).map((m) => m.method))
-                  )).map((method, i) => (
-                    <button key={i} onClick={() => { setNeedMethod(method); setShowNeedForm(true) }}
-                      className="px-2.5 py-1 text-[10px] font-bold bg-indigo-950/50 border border-indigo-500/30 text-indigo-300 rounded-lg hover:bg-indigo-500/20 cursor-pointer transition-all">
-                      + {method}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[10px] text-slate-600">Klik metode untuk langsung mengisi kebutuhan implementasinya</p>
-              </div>
-            )}
-
-            {/* Form tambah */}
             {showNeedForm && (
-              <div className="p-5 bg-slate-950/60 border border-slate-800 rounded-2xl space-y-4">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Detail Kebutuhan Baru</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Metode / Program *</label>
-                    <input type="text" value={needMethod} onChange={(e) => setNeedMethod(e.target.value)} placeholder="Misal: Lean Manufacturing"
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-250 focus:outline-none focus:border-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Kategori Kebutuhan *</label>
-                    <select value={needCategory} onChange={(e) => setNeedCategory(e.target.value as AnalyzeNeed['need_category'])}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-300 focus:outline-none focus:border-indigo-500">
-                      {(Object.entries(needCategoryLabels) as [AnalyzeNeed['need_category'], string][]).map(([v, l]) => (
-                        <option key={v} value={v}>{l}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Item Kebutuhan *</label>
-                    <input type="text" value={needItem} onChange={(e) => setNeedItem(e.target.value)} placeholder="Misal: Pelatih Time Study bersertifikat, Stopwatch digital 5 unit"
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-250 focus:outline-none focus:border-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Jumlah / Kapasitas</label>
-                    <input type="text" value={needQuantity} onChange={(e) => setNeedQuantity(e.target.value)} placeholder="Misal: 2 orang, 5 unit, 3 hari"
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-250 focus:outline-none focus:border-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Estimasi Biaya (Rp)</label>
-                    <input type="number" min="0" value={needCost} onChange={(e) => setNeedCost(e.target.value === '' ? '' : Number(e.target.value))} placeholder="Misal: 5000000"
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-250 focus:outline-none focus:border-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Penanggung Jawab</label>
-                    <input type="text" value={needResponsible} onChange={(e) => setNeedResponsible(e.target.value)} placeholder="Nama / Departemen"
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-250 focus:outline-none focus:border-indigo-500" />
-                  </div>
-                  <div className="flex items-center gap-3 pt-4">
-                    <button onClick={() => setNeedAvailable((v) => !v)}
-                      className={`h-5 w-5 rounded border flex items-center justify-center cursor-pointer transition-all shrink-0 ${needAvailable ? 'bg-emerald-600 border-emerald-500' : 'border-slate-700'}`}>
-                      {needAvailable && <CheckCircle2 className="h-3 w-3 text-white" />}
-                    </button>
-                    <span className="text-xs text-slate-400">Sudah tersedia / terpenuhi</span>
-                  </div>
+              <div className="p-5 bg-slate-950/60 border border-slate-800 rounded-2xl mb-6">
+                <h4 className="text-xs font-bold text-slate-300 mb-4 border-b border-slate-850 pb-2">Form Tambah Kebutuhan</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Metode / Program</label><input type="text" value={needMethod} onChange={(e) => setNeedMethod(e.target.value)} required placeholder="Misal: Line Balancing" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none" /></div>
+                  <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Dimensi PQCDSM</label><input type="text" value={needDimension} onChange={(e) => setNeedDimension(e.target.value)} placeholder="Opsional (cth: productivity)" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none" /></div>
+                  <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Kategori Kebutuhan</label><select value={needCategory} onChange={(e) => setNeedCategory(e.target.value as any)} className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none">{Object.entries(needCategoryLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+                  <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Item Kebutuhan</label><input type="text" value={needItem} onChange={(e) => setNeedItem(e.target.value)} required placeholder="Misal: Stopwatch, Modul Training" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none" /></div>
+                  <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Jumlah / Kapasitas</label><input type="text" value={needQuantity} onChange={(e) => setNeedQuantity(e.target.value)} placeholder="Misal: 5 unit, 20 peserta" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none" /></div>
+                  <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Estimasi Biaya (Rp)</label><input type="number" min={0} value={needCost} onChange={(e) => setNeedCost(e.target.value ? Number(e.target.value) : '')} placeholder="Misal: 1500000" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none" /></div>
+                  <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">PIC / Penanggung Jawab</label><input type="text" value={needResponsible} onChange={(e) => setNeedResponsible(e.target.value)} placeholder="Misal: Tim HRD, Pak Budi" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none" /></div>
+                  <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Status Ketersediaan</label><div className="flex items-center gap-2 mt-2 cursor-pointer" onClick={() => setNeedAvailable(!needAvailable)}><div className={`w-10 h-5 rounded-full p-0.5 transition-colors ${needAvailable ? 'bg-emerald-500' : 'bg-slate-700'}`}><div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${needAvailable ? 'translate-x-5' : 'translate-x-0'}`} /></div><span className="text-xs text-slate-400">{needAvailable ? 'Sudah Tersedia' : 'Belum Tersedia'}</span></div></div>
                 </div>
-                <div className="flex justify-end gap-3 border-t border-slate-800 pt-3">
-                  <button onClick={() => setShowNeedForm(false)} className="px-4 py-2 text-xs text-slate-400 hover:text-slate-200 cursor-pointer">Batal</button>
-                  <button onClick={handleAddNeed} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-bold rounded-xl text-white cursor-pointer">
-                    Simpan Kebutuhan
-                  </button>
+                <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Catatan Tambahan</label><textarea value={needNotes} onChange={(e) => setNeedNotes(e.target.value)} rows={2} className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none resize-none" placeholder="Catatan spesifikasi atau justifikasi kebutuhan..." /></div>
+                <div className="mt-4 flex justify-end gap-2">
+                  <button onClick={() => setShowNeedForm(false)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition-colors cursor-pointer">Batal</button>
+                  <button onClick={handleAddNeed} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer">Simpan Kebutuhan</button>
                 </div>
               </div>
             )}
 
-            {/* Daftar kebutuhan */}
             {analyzeNeeds.length === 0 ? (
-              <div className="py-12 text-center border border-dashed border-slate-800 rounded-2xl text-slate-500 text-sm space-y-2">
-                <PackageCheck className="h-8 w-8 mx-auto text-slate-700" />
-                <p>Belum ada data kebutuhan implementasi.</p>
-                <p className="text-xs text-slate-600">Tambahkan kebutuhan SDM, alat, bahan, atau anggaran untuk setiap metode yang akan dijalankan.</p>
+              <div className="text-center py-10 text-xs text-slate-500 border border-dashed border-slate-800 rounded-2xl">
+                Belum ada identifikasi kebutuhan implementasi.
               </div>
             ) : (
-              <div className="space-y-5">
-                {/* Summary */}
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="p-3 bg-slate-950/50 border border-slate-850 rounded-2xl text-center">
-                    <span className="text-xl font-black text-slate-200">{analyzeNeeds.length}</span>
-                    <span className="text-[10px] text-slate-500 block font-bold mt-0.5">Total Kebutuhan</span>
-                  </div>
-                  <div className="p-3 bg-emerald-500/5 border border-emerald-500/15 rounded-2xl text-center">
-                    <span className="text-xl font-black text-emerald-400">{needAvailableCount}</span>
-                    <span className="text-[10px] text-slate-500 block font-bold mt-0.5">Sudah Tersedia</span>
-                  </div>
-                  <div className="p-3 bg-amber-500/5 border border-amber-500/15 rounded-2xl text-center">
-                    <span className="text-sm font-black text-amber-400">{needTotalCost > 0 ? `Rp ${needTotalCost.toLocaleString('id-ID')}` : '—'}</span>
-                    <span className="text-[10px] text-slate-500 block font-bold mt-0.5">Est. Total Biaya</span>
-                  </div>
-                </div>
-                {/* Per metode */}
-                {needMethods.map((method) => {
-                  const items      = analyzeNeeds.filter((n) => n.method_name === method)
-                  const methodCost = items.reduce((a: number, n) => a + (n.estimated_cost || 0), 0)
-                  return (
-                    <div key={method} className="bg-slate-950/30 border border-slate-800 rounded-2xl overflow-hidden">
-                      <div className="flex items-center justify-between px-5 py-3 bg-slate-950/60 border-b border-slate-800">
-                        <span className="text-sm font-bold text-indigo-300">{method}</span>
-                        <div className="flex items-center gap-3 text-[10px]">
-                          <span className="text-slate-500">{items.length} item</span>
-                          {methodCost > 0 && <span className="text-amber-400 font-bold">Rp {methodCost.toLocaleString('id-ID')}</span>}
-                        </div>
-                      </div>
-                      <div className="divide-y divide-slate-800/50">
-                        {items.map((n) => (
-                          <div key={n.id} className="flex items-start justify-between gap-3 px-5 py-3.5 hover:bg-slate-900/30 transition-all group">
-                            <div className="flex items-start gap-3 flex-1 min-w-0">
-                              <button onClick={() => handleToggleAvailable(n.id)}
-                                className={`mt-0.5 h-5 w-5 rounded border flex items-center justify-center cursor-pointer shrink-0 transition-all ${n.is_available ? 'bg-emerald-600 border-emerald-500' : 'border-slate-700 hover:border-emerald-600'}`}
-                                title={n.is_available ? 'Tandai belum tersedia' : 'Tandai sudah tersedia'}>
-                                {n.is_available && <CheckCircle2 className="h-3 w-3 text-white" />}
-                              </button>
-                              <div className="space-y-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-[9px] font-bold uppercase tracking-wider bg-slate-900 border border-slate-800 px-2 py-0.5 rounded text-slate-400">{n.need_category}</span>
-                                  {n.is_available && <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">✓ Tersedia</span>}
-                                </div>
-                                <p className={`text-sm font-semibold leading-snug ${n.is_available ? 'text-slate-400 line-through' : 'text-slate-200'}`}>{n.need_item}</p>
-                                <div className="flex flex-wrap gap-3 text-[10px] text-slate-500">
-                                  {n.quantity       && <span>Jumlah: <span className="text-slate-300">{n.quantity}</span></span>}
-                                  {n.estimated_cost != null && <span>Biaya: <span className="text-amber-400">Rp {n.estimated_cost.toLocaleString('id-ID')}</span></span>}
-                                  {n.responsible    && <span>PIC: <span className="text-slate-300">{n.responsible}</span></span>}
-                                </div>
-                              </div>
-                            </div>
-                            <button onClick={() => handleDeleteNeed(n.id)}
-                              className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-900/20 cursor-pointer transition-all shrink-0">
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })}
+              <div className="overflow-x-auto border border-slate-850 rounded-2xl">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-900 text-slate-400 font-bold uppercase tracking-wider">
+                    <tr>
+                      <th className="px-4 py-3">Metode & Item</th>
+                      <th className="px-4 py-3">Kategori</th>
+                      <th className="px-4 py-3">Jumlah & Biaya</th>
+                      <th className="px-4 py-3">PIC & Status</th>
+                      <th className="px-4 py-3 text-right">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-850 bg-slate-950/40">
+                    {analyzeNeeds.map((need) => (
+                      <tr key={need.id} className="hover:bg-slate-900/50 transition-colors">
+                        <td className="px-4 py-3">
+                          <p className="font-bold text-slate-200">{need.need_item}</p>
+                          <p className="text-[10px] text-slate-500 mt-0.5 font-mono">{need.method_name}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-block px-2 py-1 rounded bg-slate-800 text-slate-300 border border-slate-700 font-medium">
+                            {needCategoryLabels[need.need_category]}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="text-slate-300">{need.quantity || '-'}</p>
+                          <p className="text-[10px] text-emerald-400 font-mono mt-0.5">Rp {need.estimated_cost?.toLocaleString('id-ID') || 0}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="text-slate-300">{need.responsible || '-'}</p>
+                          <button onClick={() => handleToggleAvailable(need.id)} className={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest cursor-pointer transition-colors ${need.is_available ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'bg-amber-500/10 text-amber-400 hover:bg-emerald-500/20'}`}>
+                            {need.is_available ? <PackageCheck className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
+                            {need.is_available ? 'Tersedia' : 'Belum Tersedia'}
+                          </button>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button onClick={() => handleDeleteNeed(need.id)} className="p-1.5 text-slate-500 hover:text-red-400 transition-colors cursor-pointer bg-slate-900 rounded-lg">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
         )}
-
       </div>
     </div>
   )

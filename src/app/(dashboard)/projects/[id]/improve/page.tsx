@@ -6,22 +6,24 @@ import { Project, ActionPlan, EvidenceItem, MeasureProblem, AnalyzeNeed } from '
 import {
   Plus, CheckCircle2, Calendar, User, DollarSign, ArrowUpRight,
   Trash, Upload, FileText, ArrowRight, Lock, ShieldCheck,
-  Clock, XCircle, Eye, Save, Sparkles, Lightbulb, X,
+  Clock, XCircle, Eye, Save, Sparkles, Lightbulb, X, ChevronDown, ChevronUp, RefreshCw, Activity, CheckSquare, ListTodo
 } from 'lucide-react'
 import { ACTION_STATUS_LABELS, sanitizeText } from '@/lib/utils'
 import {
   getProjects, getActionPlans, saveActionPlans as saveActionPlansDb,
   updateProjectPhase, updateProjectScore, saveAuditLog,
   submitEvidence, verifyEvidence, getEvidenceItems, saveNotification,
-  getMeasureProblems, getAnalyzeNeeds,
+  getMeasureProblems, getAnalyzeNeeds, getAnalyzeResult,
+  getChecklistEvidences, submitChecklistEvidence, verifyChecklistEvidence, ChecklistEvidenceItem
 } from '@/lib/db'
 import { useUserRole } from '@/hooks/useUserRole'
 
 /* ── badge warna status bukti ── */
-const EVIDENCE_STATUS_BADGE: Record<EvidenceItem['evidence_status'], { label: string; cls: string }> = {
+const EVIDENCE_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   pending:  { label: 'Menunggu Verifikasi', cls: 'bg-amber-500/10 border-amber-500/30 text-amber-400' },
   reviewed: { label: 'Sudah Dilihat',       cls: 'bg-blue-500/10  border-blue-500/30  text-blue-400'  },
-  verified: { label: 'Terverifikasi',        cls: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' },
+  verified: { label: 'Terverifikasi',       cls: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' },
+  approved: { label: 'Disetujui',           cls: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' },
   rejected: { label: 'Ditolak',             cls: 'bg-red-500/10   border-red-500/30   text-red-400'   },
 }
 
@@ -41,6 +43,12 @@ export default function ImprovePage() {
   const [analyzeNeeds,    setAnalyzeNeeds]    = useState<AnalyzeNeed[]>([])
   /* evidence per action plan id */
   const [evidenceMap, setEvidenceMap] = useState<Record<string, EvidenceItem[]>>({})
+  /* evidence per checklist step id */
+  const [checklistEvidenceMap, setChecklistEvidenceMap] = useState<Record<string, ChecklistEvidenceItem[]>>({})
+
+  /* ── ai analysis state ── */
+  const [generatingAiId, setGeneratingAiId] = useState<string | null>(null)
+  const [expandedActionIds, setExpandedActionIds] = useState<Set<string>>(new Set())
 
   /* ── add action plan modal ── */
   const [showAddModal,   setShowAddModal]   = useState(false)
@@ -59,6 +67,75 @@ export default function ImprovePage() {
   })
   const [newCostSaving,  setNewCostSaving]  = useState<number>(0)
   const [newInvestment,  setNewInvestment]  = useState<number>(0)
+  
+  // Grouping state
+  const [expandedProblemGroups, setExpandedProblemGroups] = useState<Set<string>>(new Set())
+  const [generatingStepsId, setGeneratingStepsId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (actionPlans.length > 0 && expandedProblemGroups.size === 0) {
+      const groups = new Set(actionPlans.map(a => a.problem_title || 'Tindakan Lainnya'))
+      setExpandedProblemGroups(groups)
+    }
+  }, [actionPlans])
+
+  const toggleGroup = (group: string) => {
+    setExpandedProblemGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(group)) next.delete(group)
+      else next.add(group)
+      return next
+    })
+  }
+
+  const handleGenerateSteps = async (act: ActionPlan) => {
+    setGeneratingStepsId(act.id)
+    try {
+      const res = await fetch('/api/generate-action-steps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action_title: act.title,
+          description: act.description,
+          problem_title: act.problem_title,
+          methodology: act.methodology
+        })
+      })
+      if (!res.ok) throw new Error(await res.text())
+      
+      const steps = await res.json()
+      const newSteps = steps.map((s: any, idx: number) => ({
+        id: crypto.randomUUID?.() ?? 'step-' + Math.random().toString(36).substr(2,9),
+        action_plan_id: act.id,
+        description: s.description,
+        is_completed: false,
+        step_order: idx
+      }))
+      
+      const updated = actionPlans.map(a => a.id === act.id ? { ...a, steps: newSteps } : a)
+      setActionPlans(updated)
+      await persistActionPlans(updated)
+    } catch (error) {
+      console.error('Failed to generate steps:', error)
+      alert('Gagal generate langkah AI')
+    } finally {
+      setGeneratingStepsId(null)
+    }
+  }
+
+  const handleToggleStep = async (actId: string, stepId: string, isCompleted: boolean) => {
+    const updated = actionPlans.map(act => {
+      if (act.id !== actId) return act
+      const newSteps = (act.steps || []).map(s => s.id === stepId ? { ...s, is_completed: isCompleted } : s)
+      const totalSteps = newSteps.length
+      const completedSteps = newSteps.filter(s => s.is_completed).length
+      const progress = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : act.progress_percentage
+      const status: ActionPlan['status'] = progress >= 100 ? 'selesai' : progress > 0 ? 'sedang_berjalan' : 'belum_mulai'
+      return { ...act, steps: newSteps, progress_percentage: progress, status }
+    })
+    setActionPlans(updated)
+    await persistActionPlans(updated)
+  }
 
   /* ── upload bukti modal (perusahaan) ── */
   const [uploadAction,   setUploadAction]   = useState<ActionPlan | null>(null)
@@ -78,6 +155,18 @@ export default function ImprovePage() {
   const [verifyStatus,    setVerifyStatus]    = useState<'verified' | 'rejected'>('verified')
   const [verifySaving,    setVerifySaving]    = useState(false)
 
+  /* ── upload checklist bukti modal (perusahaan) ── */
+  const [uploadChecklistStep, setUploadChecklistStep] = useState<{ actionId: string, stepId: string, title: string } | null>(null)
+  const [chkEvidenceFile,     setChkEvidenceFile]     = useState<File | null>(null)
+  const [chkUploading,        setChkUploading]        = useState(false)
+  const chkFileInputRef = useRef<HTMLInputElement>(null)
+
+  /* ── verifikasi checklist modal (konsultan) ── */
+  const [verifyChkTarget, setVerifyChkTarget] = useState<ChecklistEvidenceItem | null>(null)
+  const [verifyChkStatus, setVerifyChkStatus] = useState<'approved' | 'rejected'>('approved')
+  const [verifyChkNotes,  setVerifyChkNotes]  = useState('')
+  const [verifyChkSaving, setVerifyChkSaving] = useState(false)
+
   /* ── load ── */
   useEffect(() => {
     async function loadData() {
@@ -91,7 +180,86 @@ export default function ImprovePage() {
       const proj = projects.find((p: Project) => p.id === projectId)
       if (!proj) { router.push('/dashboard'); return }
       setProject(proj)
-      setActionPlans(actions)
+      let loadedActions = actions
+      if (loadedActions.length === 0) {
+        // Auto-fill from Analyze Phase
+        const analyzeRes = await getAnalyzeResult(projectId)
+        console.log('[Improve] analyzeRes:', analyzeRes)
+        console.log('[Improve] priority_result:', analyzeRes?.priority_result)
+        if (analyzeRes?.priority_result?.length) {
+          loadedActions = analyzeRes.priority_result.flatMap((pr: any) => {
+            const steps = pr.action_plan || []
+            // If the priority has action_plan steps, create one ActionPlan per step
+            if (steps.length > 0) {
+              return steps.map((ap: any) => ({
+                id: crypto.randomUUID?.() ?? 'act-' + Math.random().toString(36).substr(2,9),
+                project_id: projectId,
+                title: ap.action || pr.problem || 'Tindakan Baru',
+                description: `Menjawab masalah: ${pr.problem || '-'}\nJustifikasi: ${pr.justification || '-'}`,
+                methodology: pr.related_methods?.[0] || 'Lainnya',
+                dimension: 'productivity',
+                kpi_name: 'Target Pencapaian',
+                kpi_baseline: 0,
+                kpi_target: 100,
+                kpi_unit: '%',
+                pic_name: ap.pic || 'Belum ditentukan',
+                start_date: new Date().toISOString().split('T')[0],
+                end_date: (() => { const d = new Date(); d.setMonth(d.getMonth() + 1); return d.toISOString().split('T')[0] })(),
+                status: 'belum_mulai' as const,
+                progress_percentage: 0
+              }))
+            }
+            // Fallback: create one ActionPlan from the priority problem itself
+            return [{
+              id: crypto.randomUUID?.() ?? 'act-' + Math.random().toString(36).substr(2,9),
+              project_id: projectId,
+              title: `Perbaikan: ${pr.problem || 'Masalah Prioritas'}`,
+              description: `Skor Prioritas: ${pr.priority_score || '-'} (${pr.priority_level || '-'})\nJustifikasi: ${pr.justification || '-'}`,
+              methodology: pr.related_methods?.[0] || 'Lainnya',
+              dimension: 'productivity',
+              kpi_name: 'Target Pencapaian',
+              kpi_baseline: 0,
+              kpi_target: 100,
+              kpi_unit: '%',
+              pic_name: 'Belum ditentukan',
+              start_date: new Date().toISOString().split('T')[0],
+              end_date: (() => { const d = new Date(); d.setMonth(d.getMonth() + 1); return d.toISOString().split('T')[0] })(),
+              status: 'belum_mulai' as const,
+              progress_percentage: 0
+            }]
+          })
+          console.log('[Improve] Generated action plans from priority:', loadedActions.length)
+          if (loadedActions.length > 0) {
+            await saveActionPlansDb(projectId, loadedActions)
+          }
+        }
+        // Fallback 2: if priority_result is empty, try recommendations
+        if (loadedActions.length === 0 && analyzeRes?.recommendations?.length) {
+          console.log('[Improve] Fallback: creating from recommendations')
+          loadedActions = analyzeRes.recommendations.map((rec: any) => ({
+            id: crypto.randomUUID?.() ?? 'act-' + Math.random().toString(36).substr(2,9),
+            project_id: projectId,
+            title: `Perbaikan via ${rec.method_name || 'Metode Analisis'}`,
+            description: rec.reason || rec.description || 'Action plan dari rekomendasi Analyze',
+            methodology: rec.method_name || 'Lainnya',
+            dimension: rec.pqcdsm_dimension || 'productivity',
+            kpi_name: 'Target Pencapaian',
+            kpi_baseline: 0,
+            kpi_target: 100,
+            kpi_unit: '%',
+            pic_name: 'Belum ditentukan',
+            start_date: new Date().toISOString().split('T')[0],
+            end_date: (() => { const d = new Date(); d.setMonth(d.getMonth() + 1); return d.toISOString().split('T')[0] })(),
+            status: 'belum_mulai' as const,
+            progress_percentage: 0
+          }))
+          if (loadedActions.length > 0) {
+            await saveActionPlansDb(projectId, loadedActions)
+          }
+        }
+      }
+
+      setActionPlans(loadedActions)
       setMeasureProblems(mProblems)
       setAnalyzeNeeds(aNeeds)
 
@@ -101,6 +269,16 @@ export default function ImprovePage() {
         grouped[ev.action_plan_id].push(ev)
       }
       setEvidenceMap(grouped)
+
+      // Ambil checklist evidence
+      const allStepIds = loadedActions.flatMap(a => (a.steps || []).map(s => s.id))
+      const allChecklistEvidences = await getChecklistEvidences(allStepIds)
+      const chkGrouped: Record<string, ChecklistEvidenceItem[]> = {}
+      for (const cev of allChecklistEvidences) {
+        if (!chkGrouped[cev.step_id]) chkGrouped[cev.step_id] = []
+        chkGrouped[cev.step_id].push(cev)
+      }
+      setChecklistEvidenceMap(chkGrouped)
     }
     loadData()
   }, [projectId, router])
@@ -237,6 +415,129 @@ export default function ImprovePage() {
     persistActionPlans(actionPlans.filter(act => act.id !== actionId))
   }
 
+  /* ── AI Analysis ── */
+  const handleToggleExpand = (actionId: string) => {
+    setExpandedActionIds(prev => {
+      const next = new Set(prev)
+      if (next.has(actionId)) next.delete(actionId)
+      else next.add(actionId)
+      return next
+    })
+  }
+
+  const handleUpdateAiAnalysis = (actionId: string, updatedAnalysis: any) => {
+    const updated = actionPlans.map(act =>
+      act.id === actionId ? { ...act, ai_analysis: updatedAnalysis } : act
+    )
+    setActionPlans(updated)
+  }
+
+  const handleGenerateAiAnalysis = async (act: ActionPlan) => {
+    setGeneratingAiId(act.id)
+    try {
+      const contextData = {
+        sigma_level: 'Data tidak tersedia',
+        dpmo: 'Data tidak tersedia',
+        kpi_pendukung: {
+          total_biaya_rework: 'Data tidak tersedia'
+        }
+      }
+
+      const res = await fetch('/api/improve-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: act.title,
+          problem: act.description,
+          pic: act.pic_name,
+          timeline: `${act.start_date} s/d ${act.end_date}`,
+          context_data: contextData
+        })
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Gagal generate AI')
+      }
+
+      const aiData = await res.json()
+      
+      const updated = actionPlans.map(a =>
+        a.id === act.id ? { ...a, ai_analysis: aiData } : a
+      )
+      
+      // Auto expand on success
+      setExpandedActionIds(prev => new Set(prev).add(act.id))
+      await persistActionPlans(updated)
+
+    } catch (err: any) {
+      alert(`Error AI: ${err.message}`)
+    } finally {
+      setGeneratingAiId(null)
+    }
+  }
+
+  /* ── Auto-generate AI for empty ones ── */
+  useEffect(() => {
+    // Only run if actionPlans is loaded and we have at least one empty
+    if (actionPlans.length > 0 && !generatingAiId) {
+      const emptyAct = actionPlans.find(act => !act.ai_analysis)
+      if (emptyAct) {
+        // use an inline async call or exclude from deps if handleGenerateAiAnalysis is not memoized
+        const generate = async () => {
+          setGeneratingAiId(emptyAct.id)
+          try {
+            const contextData = {
+              sigma_level: 'Data tidak tersedia',
+              dpmo: 'Data tidak tersedia',
+              kpi_pendukung: {
+                total_biaya_rework: 'Data tidak tersedia'
+              }
+            }
+
+            const res = await fetch('/api/improve-ai', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: emptyAct.title,
+                problem: emptyAct.description,
+                pic: emptyAct.pic_name,
+                timeline: `${emptyAct.start_date} s/d ${emptyAct.end_date}`,
+                context_data: contextData
+              })
+            })
+
+            if (!res.ok) {
+              const data = await res.json()
+              throw new Error(data.error || 'Gagal generate AI')
+            }
+
+            const aiData = await res.json()
+            
+            const updated = actionPlans.map(a =>
+              a.id === emptyAct.id ? { ...a, ai_analysis: aiData } : a
+            )
+            
+            // Auto expand on success
+            setExpandedActionIds(prev => new Set(prev).add(emptyAct.id))
+            
+            // Save to DB (inline to avoid dependency issues with persistActionPlans)
+            setActionPlans(updated)
+            import('@/lib/db').then(({ saveActionPlans: saveDb }) => {
+              saveDb(projectId, updated).catch(console.error)
+            })
+
+          } catch (err: any) {
+            console.warn(`Error AI: ${err.message}`)
+          } finally {
+            setGeneratingAiId(null)
+          }
+        }
+        generate()
+      }
+    }
+  }, [actionPlans, generatingAiId, projectId])
+
   /* ── PERUSAHAAN: upload bukti ── */
   const handleUploadEvidence = async () => {
     if (!uploadAction) return
@@ -356,10 +657,110 @@ export default function ImprovePage() {
     setVerifyNotes('')
   }
 
+  /* ── PERUSAHAAN: upload checklist bukti ── */
+  const handleUploadChecklistEvidence = async () => {
+    if (!uploadChecklistStep || !chkEvidenceFile) return
+    setChkUploading(true)
+
+    const maxSizeBytes = 10 * 1024 * 1024 // 10MB
+    if (chkEvidenceFile.size > maxSizeBytes) {
+      alert('❌ Ukuran file terlalu besar! Maksimal ukuran file adalah 10MB.')
+      setChkUploading(false)
+      return
+    }
+
+    const allowedTypes = [
+      'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+      'application/pdf',
+      'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    ]
+    const fileExt = chkEvidenceFile.name.split('.').pop()?.toLowerCase() || ''
+    const allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx', 'xls', 'xlsx']
+
+    if (!allowedTypes.includes(chkEvidenceFile.type) && !allowedExtensions.includes(fileExt)) {
+      alert('❌ Format file tidak didukung! Harap unggah gambar, PDF, Word, atau Excel.')
+      setChkUploading(false)
+      return
+    }
+
+    let fileUrl = ''
+    try {
+      const { createClient } = await import('@/lib/supabase/client')
+      const sb = createClient()
+      const path = `${projectId}/checklist/${uploadChecklistStep.stepId}/${Date.now()}_${chkEvidenceFile.name}`
+      const { data: up, error: upErr } = await sb.storage.from('evidence-files').upload(path, chkEvidenceFile, { cacheControl:'3600', upsert:false })
+      if (upErr) throw upErr
+      const { data: urlData } = sb.storage.from('evidence-files').getPublicUrl(up.path)
+      fileUrl = urlData.publicUrl
+    } catch {
+      alert('❌ Gagal mengunggah ke Supabase Storage.')
+      setChkUploading(false)
+      return
+    }
+
+    const localUser = localStorage.getItem('sibimkon_user')
+    const uploaderInfo = localUser ? JSON.parse(localUser) : null
+
+    const newEv = await submitChecklistEvidence(uploadChecklistStep.stepId, {
+      file_name: chkEvidenceFile.name,
+      file_url: fileUrl,
+      file_type: chkEvidenceFile.type,
+      file_size: chkEvidenceFile.size,
+      uploaded_by: uploaderInfo?.id,
+      uploaded_by_name: uploaderInfo?.full_name,
+      uploaded_by_role: uploaderInfo?.role
+    })
+
+    if (newEv.id) {
+      setChecklistEvidenceMap(prev => {
+        const oldArr = prev[uploadChecklistStep.stepId] || []
+        // we can filter out old 'pending' or just prepend
+        return { ...prev, [uploadChecklistStep.stepId]: [newEv, ...oldArr] }
+      })
+    }
+
+    setChkUploading(false)
+    setUploadChecklistStep(null)
+    setChkEvidenceFile(null)
+  }
+
+  /* ── KONSULTAN: verify checklist bukti ── */
+  const handleVerifyChecklistEvidence = async () => {
+    if (!verifyChkTarget) return
+    setVerifyChkSaving(true)
+    const localUser = localStorage.getItem('sibimkon_user')
+    const actor = localUser ? JSON.parse(localUser) : null
+
+    await verifyChecklistEvidence(verifyChkTarget.id, verifyChkStatus, verifyChkNotes, actor?.id ?? '')
+
+    setChecklistEvidenceMap(prev => ({
+      ...prev,
+      [verifyChkTarget.step_id]: (prev[verifyChkTarget.step_id] ?? []).map(e =>
+        e.id === verifyChkTarget.id ? { ...e, verification_status: verifyChkStatus, rejection_note: verifyChkNotes, verified_by: actor?.id, verified_at: new Date().toISOString() } : e
+      )
+    }))
+
+    if (verifyChkStatus === 'approved') {
+      // Auto complete step
+      const stepId = verifyChkTarget.step_id
+      const actionId = actionPlans.find(act => act.steps?.some(s => s.id === stepId))?.id
+      if (actionId) {
+        await handleToggleStep(actionId, stepId, true)
+      }
+    }
+
+    setVerifyChkSaving(false)
+    setVerifyChkTarget(null)
+    setVerifyChkNotes('')
+  }
+
   if (!project) return null
 
   /* ── pending evidence count (untuk badge konsultan) ── */
-  const pendingCount = Object.values(evidenceMap).flat().filter(e => e.evidence_status === 'pending').length
+  const pendingCountAction = Object.values(evidenceMap).flat().filter(e => e.evidence_status === 'pending').length
+  const pendingCountChecklist = Object.values(checklistEvidenceMap).flat().filter(e => e.verification_status === 'pending').length
+  const pendingCount = pendingCountAction + pendingCountChecklist
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -429,12 +830,43 @@ export default function ImprovePage() {
               </p>
             </div>
           ) : (
-            actionPlans.map(act => {
-              const evidences     = evidenceMap[act.id] ?? []
-              const pendingEv     = evidences.filter(e => e.evidence_status === 'pending')
-              const verifiedEv    = evidences.filter(e => e.evidence_status === 'verified')
-              return (
-                <div key={act.id} className="glass-card rounded-2xl border border-slate-800 bg-slate-950/30 p-5 space-y-4 hover:border-slate-700 transition-all">
+            Object.entries(
+              actionPlans.reduce((acc, act) => {
+                const groupName = act.problem_title || 'Tindakan Lainnya'
+                if (!acc[groupName]) acc[groupName] = []
+                acc[groupName].push(act)
+                return acc
+              }, {} as Record<string, ActionPlan[]>)
+            ).map(([groupName, groupActs]) => (
+              <div key={groupName} className="space-y-4">
+                {/* Collapsible Header */}
+                <button
+                  onClick={() => toggleGroup(groupName)}
+                  className="w-full flex items-center justify-between p-4 bg-slate-900 border border-slate-800 rounded-2xl cursor-pointer hover:bg-slate-800/50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <ListTodo className="h-5 w-5 text-indigo-400" />
+                    <h2 className="text-sm font-bold text-slate-200">{groupName}</h2>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                      {groupActs.length} plan
+                    </span>
+                  </div>
+                  {expandedProblemGroups.has(groupName) ? (
+                    <ChevronUp className="w-4 h-4 text-slate-500" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-slate-500" />
+                  )}
+                </button>
+
+                {/* Group Content */}
+                {expandedProblemGroups.has(groupName) && (
+                  <div className="pl-4 border-l-2 border-slate-800/50 space-y-4 ml-2">
+                    {groupActs.map(act => {
+                      const evidences     = evidenceMap[act.id] ?? []
+                      const pendingEv     = evidences.filter(e => e.evidence_status === 'pending')
+                      const verifiedEv    = evidences.filter(e => e.evidence_status === 'verified')
+                      return (
+                        <div key={act.id} className="glass-card rounded-2xl border border-slate-800 bg-slate-950/30 p-5 space-y-4 hover:border-slate-700 transition-all">
 
                   {/* ── row atas ── */}
                   <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-850 pb-3.5">
@@ -597,11 +1029,271 @@ export default function ImprovePage() {
                     })()}
                   </div>
 
+                  {/* ── Checklist Implementasi ── */}
+                  <div className="pt-2 border-t border-slate-850">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <CheckSquare className="w-4 h-4 text-emerald-400" />
+                        <span className="text-xs font-bold text-slate-300">Checklist Implementasi</span>
+                      </div>
+                      {isKonsultan && (!act.steps || act.steps.length === 0) && (
+                        <button
+                          onClick={() => handleGenerateSteps(act)}
+                          disabled={generatingStepsId === act.id}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-900 border border-slate-800 hover:border-slate-700 text-[10px] font-bold rounded-lg text-emerald-400 transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          {generatingStepsId === act.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                          AI Auto-Checklist
+                        </button>
+                      )}
+                    </div>
+                    {act.steps && act.steps.length > 0 ? (
+                      <div className="space-y-2">
+                        {act.steps.map(step => {
+                          const chkEvs = checklistEvidenceMap[step.id] || []
+                          const latestEv = chkEvs[0]
+                          const isApproved = latestEv?.verification_status === 'approved'
+                          const isPending = latestEv?.verification_status === 'pending'
+                          const isRejected = latestEv?.verification_status === 'rejected'
+                          const stepCompleted = isApproved || step.is_completed
+
+                          return (
+                            <div key={step.id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-2.5 rounded-xl bg-slate-900/40 border border-slate-800 hover:bg-slate-800/40 transition-colors">
+                              <div className="flex items-start gap-3 flex-1">
+                                <input 
+                                  type="checkbox" 
+                                  checked={stepCompleted} 
+                                  disabled
+                                  className="mt-0.5 rounded border-slate-700 text-emerald-500 focus:ring-emerald-500/20 bg-slate-950 disabled:opacity-70" 
+                                />
+                                <span className={`text-xs flex-1 leading-relaxed ${stepCompleted ? 'text-slate-500 line-through' : 'text-slate-300'}`}>
+                                  {step.description}
+                                  {isRejected && latestEv?.rejection_note && (
+                                    <span className="block mt-1 text-[10px] text-red-400 bg-red-500/10 p-1.5 rounded-md border border-red-500/20">Catatan Penolakan: {latestEv.rejection_note}</span>
+                                  )}
+                                </span>
+                              </div>
+                              
+                              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 pl-7 sm:pl-0">
+                                {latestEv ? (
+                                  <div className="flex items-center gap-2">
+                                    <a href={latestEv.file_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-2 py-1 bg-slate-900 border border-slate-700 hover:bg-slate-800 text-[10px] rounded-lg text-slate-300 transition-colors" title={latestEv.file_name}>
+                                      <FileText className="w-3 h-3" />
+                                      <span className="max-w-[100px] truncate">{latestEv.file_name}</span>
+                                    </a>
+                                    
+                                    {isKonsultan ? (
+                                      isPending ? (
+                                        <button onClick={() => {
+                                          setVerifyChkTarget(latestEv)
+                                          setVerifyChkStatus('approved')
+                                          setVerifyChkNotes('')
+                                        }} className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/40 text-xs font-bold rounded-lg text-indigo-300 hover:text-white transition-all cursor-pointer">
+                                          <Eye className="w-3.5 h-3.5" /> Cek Bukti
+                                          <span className="ml-1 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                                        </button>
+                                      ) : (
+                                        <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${EVIDENCE_STATUS_BADGE[latestEv.verification_status as any]?.cls || 'text-slate-500'}`}>
+                                          {EVIDENCE_STATUS_BADGE[latestEv.verification_status as any]?.label || latestEv.verification_status}
+                                        </span>
+                                      )
+                                    ) : (
+                                      <div className="flex items-center gap-2">
+                                        <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${EVIDENCE_STATUS_BADGE[latestEv.verification_status as any]?.cls || 'text-slate-500'}`}>
+                                          {EVIDENCE_STATUS_BADGE[latestEv.verification_status as any]?.label || latestEv.verification_status}
+                                        </span>
+                                        {!isApproved && (
+                                          <button onClick={() => setUploadChecklistStep({ actionId: act.id, stepId: step.id, title: step.description })} className="p-1.5 text-slate-400 hover:text-indigo-400 bg-slate-900 border border-slate-700 hover:border-indigo-500/50 rounded-lg transition-colors" title="Upload ulang">
+                                            <Upload className="w-3 h-3" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  !isKonsultan ? (
+                                    <button onClick={() => setUploadChecklistStep({ actionId: act.id, stepId: step.id, title: step.description })} className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-800 hover:bg-indigo-600/30 border border-slate-700 hover:border-indigo-500/50 text-[10px] font-bold rounded-lg text-slate-300 hover:text-indigo-300 transition-all cursor-pointer">
+                                      <Upload className="w-3 h-3" /> Upload Bukti
+                                    </button>
+                                  ) : (
+                                    <span className="text-[10px] italic text-slate-500">Belum ada bukti</span>
+                                  )
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-slate-500 italic">Belum ada rincian langkah kerja.</p>
+                    )}
+                  </div>
+
+                  {/* ── AI Analysis Expandable Section ── */}
+                  <div className="pt-2 border-t border-slate-850">
+                    <button
+                      onClick={() => handleToggleExpand(act.id)}
+                      className="flex items-center justify-between w-full p-2 bg-slate-900/50 hover:bg-slate-900 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-indigo-400" />
+                        <span className="text-xs font-bold text-slate-300">Analisis Lean Six Sigma</span>
+                        {act.ai_analysis && (
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded border ml-2 ${
+                            act.ai_analysis.roi.roi_persen > 0 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' :
+                            act.ai_analysis.roi.roi_persen < 0 ? 'bg-red-500/10 border-red-500/30 text-red-400' :
+                            'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                          }`}>
+                            {act.ai_analysis.roi.roi_persen > 0 ? 'ROI Positif' : act.ai_analysis.roi.roi_persen < 0 ? 'ROI Negatif' : 'Break-even'}
+                          </span>
+                        )}
+                      </div>
+                      {expandedActionIds.has(act.id) ? (
+                        <ChevronUp className="w-4 h-4 text-slate-500" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-slate-500" />
+                      )}
+                    </button>
+
+                    {expandedActionIds.has(act.id) && (
+                      <div className="mt-3 space-y-4 p-3 bg-slate-950/40 border border-slate-800 rounded-xl relative">
+                        {!act.ai_analysis && generatingAiId !== act.id ? (
+                          <div className="text-center py-6">
+                            <Activity className="w-8 h-8 text-slate-600 mx-auto mb-2 opacity-50" />
+                            <p className="text-xs text-slate-400 mb-3">Analisis persiapan, biaya, dan ROI belum tersedia.</p>
+                            <button
+                              onClick={() => handleGenerateAiAnalysis(act)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-xs font-bold rounded-lg text-white transition-all cursor-pointer"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" /> Generate Analisis AI
+                            </button>
+                          </div>
+                        ) : generatingAiId === act.id ? (
+                          <div className="text-center py-6">
+                            <RefreshCw className="w-6 h-6 text-indigo-400 animate-spin mx-auto mb-2" />
+                            <p className="text-xs text-slate-400 animate-pulse">AI sedang menganalisis persiapan & kelayakan...</p>
+                          </div>
+                        ) : act.ai_analysis ? (
+                          <>
+                            <div className="flex justify-end mb-2">
+                              <button
+                                onClick={() => persistActionPlans(actionPlans)}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600 border border-emerald-500/50 text-[10px] font-bold rounded-lg text-emerald-400 hover:text-white transition-all cursor-pointer shadow-sm"
+                              >
+                                <Save className="w-3.5 h-3.5" /> Simpan Analisis
+                              </button>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                              {/* Persiapan */}
+                              <div className="space-y-1">
+                                <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">Persiapan</span>
+                                <textarea
+                                  value={act.ai_analysis.persiapan}
+                                  onChange={(e) => handleUpdateAiAnalysis(act.id, { ...act.ai_analysis, persiapan: e.target.value })}
+                                  className="w-full h-20 bg-slate-900 border border-slate-800 rounded-lg p-2 text-slate-300 focus:outline-none focus:border-indigo-500"
+                                />
+                              </div>
+
+                              {/* Target Efisiensi */}
+                              <div className="space-y-1">
+                                <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">Target Efisiensi</span>
+                                <textarea
+                                  value={act.ai_analysis.target_efisiensi}
+                                  onChange={(e) => handleUpdateAiAnalysis(act.id, { ...act.ai_analysis, target_efisiensi: e.target.value })}
+                                  className="w-full h-20 bg-slate-900 border border-slate-800 rounded-lg p-2 text-emerald-400 focus:outline-none focus:border-indigo-500"
+                                />
+                              </div>
+
+                              {/* Sumber Daya */}
+                              <div className="space-y-1 md:col-span-2">
+                                <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">Sumber Daya</span>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                  <textarea placeholder="SDM" value={act.ai_analysis.sumber_daya.sdm} onChange={(e) => handleUpdateAiAnalysis(act.id, { ...act.ai_analysis, sumber_daya: { ...act.ai_analysis!.sumber_daya, sdm: e.target.value } })} className="bg-slate-900 border border-slate-800 rounded p-2 text-slate-300 focus:outline-none focus:border-indigo-500 min-h-[60px]" />
+                                  <textarea placeholder="Alat" value={act.ai_analysis.sumber_daya.alat} onChange={(e) => handleUpdateAiAnalysis(act.id, { ...act.ai_analysis, sumber_daya: { ...act.ai_analysis!.sumber_daya, alat: e.target.value } })} className="bg-slate-900 border border-slate-800 rounded p-2 text-slate-300 focus:outline-none focus:border-indigo-500 min-h-[60px]" />
+                                  <textarea placeholder="Anggaran" value={act.ai_analysis.sumber_daya.anggaran_terkait} onChange={(e) => handleUpdateAiAnalysis(act.id, { ...act.ai_analysis, sumber_daya: { ...act.ai_analysis!.sumber_daya, anggaran_terkait: e.target.value } })} className="bg-slate-900 border border-slate-800 rounded p-2 text-slate-300 focus:outline-none focus:border-indigo-500 min-h-[60px]" />
+                                </div>
+                              </div>
+
+                              {/* Biaya */}
+                              <div className="space-y-1">
+                                <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">Estimasi Biaya (Rp)</span>
+                                <div className="flex gap-2">
+                                  <input
+                                    type="number"
+                                    value={act.ai_analysis.biaya.estimasi}
+                                    onChange={(e) => handleUpdateAiAnalysis(act.id, { ...act.ai_analysis, biaya: { ...act.ai_analysis!.biaya, estimasi: Number(e.target.value) } })}
+                                    className="w-1/3 h-10 bg-slate-900 border border-slate-800 rounded p-1.5 text-slate-300 focus:outline-none focus:border-indigo-500"
+                                  />
+                                  <textarea
+                                    placeholder="Rincian"
+                                    value={act.ai_analysis.biaya.rincian}
+                                    onChange={(e) => handleUpdateAiAnalysis(act.id, { ...act.ai_analysis, biaya: { ...act.ai_analysis!.biaya, rincian: e.target.value } })}
+                                    className="w-2/3 h-10 bg-slate-900 border border-slate-800 rounded p-2 text-slate-300 focus:outline-none focus:border-indigo-500"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Manfaat */}
+                              <div className="space-y-1">
+                                <span className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">Manfaat (Kualitatif & Kuantitatif)</span>
+                                <div className="space-y-2">
+                                  <textarea placeholder="Kualitatif" value={act.ai_analysis.manfaat.kualitatif} onChange={(e) => handleUpdateAiAnalysis(act.id, { ...act.ai_analysis, manfaat: { ...act.ai_analysis!.manfaat, kualitatif: e.target.value } })} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-slate-300 focus:outline-none focus:border-indigo-500 min-h-[60px]" />
+                                  <textarea placeholder="Kuantitatif" value={act.ai_analysis.manfaat.kuantitatif} onChange={(e) => handleUpdateAiAnalysis(act.id, { ...act.ai_analysis, manfaat: { ...act.ai_analysis!.manfaat, kuantitatif: e.target.value } })} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-slate-300 focus:outline-none focus:border-indigo-500 min-h-[60px]" />
+                                </div>
+                              </div>
+
+                              {/* ROI */}
+                              <div className="space-y-1 md:col-span-2 bg-indigo-950/20 border border-indigo-500/20 rounded-xl p-3">
+                                <span className="text-indigo-300 font-bold uppercase tracking-wider text-[10px]">ROI (Return on Improvement)</span>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
+                                  <div>
+                                    <span className="text-[9px] text-slate-500 block mb-0.5">Penghematan Tahunan (Rp)</span>
+                                    <input type="number" value={act.ai_analysis.roi.estimasi_penghematan_tahunan} onChange={(e) => {
+                                      const saving = Number(e.target.value)
+                                      const cost = act.ai_analysis!.roi.biaya_implementasi
+                                      const roi = cost > 0 ? Math.round(((saving - cost) / cost) * 100) : 0
+                                      handleUpdateAiAnalysis(act.id, { ...act.ai_analysis, roi: { ...act.ai_analysis!.roi, estimasi_penghematan_tahunan: saving, roi_persen: roi } })
+                                    }} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-emerald-400 font-bold focus:outline-none focus:border-indigo-500" />
+                                  </div>
+                                  <div>
+                                    <span className="text-[9px] text-slate-500 block mb-0.5">Biaya Implementasi (Rp)</span>
+                                    <input type="number" value={act.ai_analysis.roi.biaya_implementasi} onChange={(e) => {
+                                      const cost = Number(e.target.value)
+                                      const saving = act.ai_analysis!.roi.estimasi_penghematan_tahunan
+                                      const roi = cost > 0 ? Math.round(((saving - cost) / cost) * 100) : 0
+                                      handleUpdateAiAnalysis(act.id, { ...act.ai_analysis, roi: { ...act.ai_analysis!.roi, biaya_implementasi: cost, roi_persen: roi } })
+                                    }} className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-rose-400 font-bold focus:outline-none focus:border-indigo-500" />
+                                  </div>
+                                  <div>
+                                    <span className="text-[9px] text-slate-500 block mb-0.5">ROI (%)</span>
+                                    <div className="flex items-center gap-2">
+                                      <input type="number" value={act.ai_analysis.roi.roi_persen} onChange={(e) => handleUpdateAiAnalysis(act.id, { ...act.ai_analysis, roi: { ...act.ai_analysis!.roi, roi_persen: Number(e.target.value) } })} className="w-20 bg-slate-900 border border-slate-800 rounded p-1.5 text-indigo-400 font-bold focus:outline-none focus:border-indigo-500" />
+                                      <span className="text-slate-400 text-[10px]">
+                                        (Otomatis)
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="mt-2">
+                                  <textarea placeholder="Catatan ROI" value={act.ai_analysis.roi.catatan} onChange={(e) => handleUpdateAiAnalysis(act.id, { ...act.ai_analysis, roi: { ...act.ai_analysis!.roi, catatan: e.target.value } })} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-slate-400 italic focus:outline-none focus:border-indigo-500 min-h-[60px]" />
+                                </div>
+                              </div>
+                            </div>
+                          </>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )
-            })
-          )}
-        </div>
+            })}
+          </div>
+        )}
+      </div>
+    ))
+  )}
+</div>
 
         {/* Kolom Kanan: Rekomendasi Sidebar (4 cols) — Hanya untuk Konsultan */}
         {isKonsultan && (
@@ -885,6 +1577,100 @@ export default function ImprovePage() {
                   className={`inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold rounded-xl text-white cursor-pointer disabled:opacity-50 ${verifyStatus === 'verified' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'}`}>
                   <Save className="h-3.5 w-3.5" />
                   {verifySaving ? 'Menyimpan...' : verifyStatus === 'verified' ? 'Simpan & Verifikasi' : 'Simpan & Tolak'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ MODAL: Upload Checklist Bukti (perusahaan) ══ */}
+      {uploadChecklistStep && !isKonsultan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2"><Upload className="h-4 w-4 text-blue-400" /> Upload Bukti Checklist</h3>
+              <button onClick={() => { setUploadChecklistStep(null); setChkEvidenceFile(null); }} className="text-slate-500 hover:text-slate-300 cursor-pointer"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="bg-slate-900 border border-slate-850 p-4 rounded-2xl">
+                <h4 className="text-xs font-bold text-slate-300">Item Checklist:</h4>
+                <p className="text-sm text-slate-400 mt-1">{uploadChecklistStep.title}</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">File Bukti (Max 10MB)</label>
+                <div className="flex gap-2">
+                  <input ref={chkFileInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" className="hidden" onChange={(e) => setChkEvidenceFile(e.target.files?.[0] ?? null)} />
+                  <button onClick={() => chkFileInputRef.current?.click()} className="flex-1 flex items-center justify-center gap-2 border border-dashed border-slate-700 hover:border-indigo-500 rounded-xl py-3 text-xs text-slate-400 hover:text-indigo-400 cursor-pointer transition-all">
+                    <Upload className="h-4 w-4" />
+                    {chkEvidenceFile ? chkEvidenceFile.name : 'Pilih file (Gambar, PDF, Dokumen)'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 border-t border-slate-800 pt-4 mt-2">
+                <button onClick={() => { setUploadChecklistStep(null); setChkEvidenceFile(null); }} className="px-4 py-2 text-xs text-slate-400 cursor-pointer">Batal</button>
+                <button onClick={handleUploadChecklistEvidence} disabled={chkUploading || !chkEvidenceFile}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-xs font-bold rounded-xl text-white cursor-pointer disabled:opacity-50">
+                  {chkUploading ? 'Mengupload...' : <><Upload className="h-3.5 w-3.5" /> Submit Bukti</>}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ MODAL: Verifikasi Checklist Bukti (konsultan) ══ */}
+      {verifyChkTarget && isKonsultan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-indigo-400" /> Verifikasi Bukti Checklist</h3>
+              <button onClick={() => setVerifyChkTarget(null)} className="text-slate-500 hover:text-slate-300 cursor-pointer"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-6 space-y-4">
+
+              <div className="bg-slate-900 border border-slate-850 p-4 rounded-2xl space-y-2">
+                <div className="flex items-start gap-2">
+                  <FileText className="h-4 w-4 text-slate-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-slate-200">{verifyChkTarget.file_name}</p>
+                    {verifyChkTarget.file_url && (
+                      <a href={verifyChkTarget.file_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-400 hover:underline">Buka file →</a>
+                    )}
+                  </div>
+                </div>
+                {verifyChkTarget.uploaded_by_name && <p className="text-[10px] text-slate-600">Diupload oleh: {verifyChkTarget.uploaded_by_name}</p>}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Keputusan Verifikasi</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => setVerifyChkStatus('approved')}
+                    className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold border cursor-pointer transition-all ${verifyChkStatus === 'approved' ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-emerald-600'}`}>
+                    <CheckCircle2 className="h-4 w-4" /> Setujui
+                  </button>
+                  <button onClick={() => setVerifyChkStatus('rejected')}
+                    className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold border cursor-pointer transition-all ${verifyChkStatus === 'rejected' ? 'bg-red-600 border-red-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-red-600'}`}>
+                    <XCircle className="h-4 w-4" /> Tolak
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Catatan untuk Perusahaan</label>
+                <textarea value={verifyChkNotes} onChange={(e) => setVerifyChkNotes(e.target.value)} rows={3}
+                  placeholder={verifyChkStatus === 'approved' ? 'Misal: Bukti memadai, item checklist disetujui.' : 'Jelaskan alasan penolakan dan apa yang perlu diperbaiki...'}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-250 focus:outline-none resize-none" />
+              </div>
+
+              <div className="flex justify-end gap-3 border-t border-slate-800 pt-4 mt-2">
+                <button onClick={() => setVerifyChkTarget(null)} className="px-4 py-2 text-xs text-slate-400 cursor-pointer">Batal</button>
+                <button onClick={handleVerifyChecklistEvidence} disabled={verifyChkSaving}
+                  className={`inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold rounded-xl text-white cursor-pointer disabled:opacity-50 ${verifyChkStatus === 'approved' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'}`}>
+                  <Save className="h-3.5 w-3.5" />
+                  {verifyChkSaving ? 'Menyimpan...' : verifyChkStatus === 'approved' ? 'Setujui Bukti' : 'Tolak Bukti'}
                 </button>
               </div>
             </div>
