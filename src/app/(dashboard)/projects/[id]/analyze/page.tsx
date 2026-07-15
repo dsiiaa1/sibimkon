@@ -4,15 +4,15 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import {
   getProjects,
-  updateProjectPhase, getMeasureProblems, getAnalyzeNeeds, saveAnalyzeNeeds, getProjectCharter,
+  updateProjectPhase, getMeasureProblems, getProjectCharter,
   getAnalyzeResult, saveAnalyzeResult, getMeasureDataRequirements
 } from '@/lib/db'
 import {
-  Project, AnalyzeRecommendation, MeasureProblem, AnalyzeNeed, AnalyzeResult, MeasureDataRequirement, PriorityItem, ActionPlanStep
+  Project, AnalyzeRecommendation, MeasureProblem, AnalyzeResult, MeasureDataRequirement, PriorityItem, ActionPlanStep
 } from '@/lib/mockData'
 import {
   Sparkles, Plus, AlertCircle, ArrowRight, Trash2, Save, CheckCircle, Edit3,
-  Download, Loader2, RefreshCw, X, PackageCheck, CheckCircle2
+  Loader2, RefreshCw, X
 } from 'lucide-react'
 import { useUserRole } from '@/hooks/useUserRole'
 
@@ -250,8 +250,7 @@ export default function AnalyzePage() {
 
   useUserRole()
 
-  /* ── tab state ── */
-  const [activeTab, setActiveTab] = useState<'ai_recommendation' | 'needs'>('ai_recommendation')
+  /* ── no tabs needed, single view ── */
 
   /* ── core data ── */
   const [project, setProject] = useState<Project | null>(null)
@@ -278,20 +277,7 @@ export default function AnalyzePage() {
   
   const aiTriggered = useRef(false)
 
-  /* ── kebutuhan implementasi ── */
   const [measureProblems, setMeasureProblems] = useState<MeasureProblem[]>([])
-  const [analyzeNeeds, setAnalyzeNeeds] = useState<AnalyzeNeed[]>([])
-  const [needSaveMsg, setNeedSaveMsg] = useState<string | null>(null)
-  const [showNeedForm, setShowNeedForm] = useState(false)
-  const [needMethod, setNeedMethod] = useState('')
-  const [needDimension, setNeedDimension] = useState('')
-  const [needCategory, setNeedCategory] = useState<AnalyzeNeed['need_category']>('sdm')
-  const [needItem, setNeedItem] = useState('')
-  const [needQuantity, setNeedQuantity] = useState('')
-  const [needCost, setNeedCost] = useState<number | ''>('')
-  const [needResponsible, setNeedResponsible] = useState('')
-  const [needNotes, setNeedNotes] = useState('')
-  const [needAvailable, setNeedAvailable] = useState(false)
   const [projectCharter, setProjectCharter] = useState<any>(null)
 
   /* ── load ── */
@@ -302,15 +288,13 @@ export default function AnalyzePage() {
       if (!proj) { router.push('/dashboard'); return }
       setProject(proj)
 
-      const [mProblems, aNeeds, charter, dataReqs, resultAI] = await Promise.all([
+      const [mProblems, charter, dataReqs, resultAI] = await Promise.all([
         getMeasureProblems(projectId),
-        getAnalyzeNeeds(projectId),
         getProjectCharter(projectId),
         getMeasureDataRequirements(projectId),
         getAnalyzeResult(projectId)
       ])
       setMeasureProblems(mProblems)
-      setAnalyzeNeeds(aNeeds)
       setProjectCharter(charter)
       setDataRequirements(dataReqs)
       if (resultAI) {
@@ -318,18 +302,12 @@ export default function AnalyzePage() {
         setPriorityResult(resultAI.priority_result || null)
       }
 
-      if (mProblems.length > 0 && mProblems[0].recommended_methods?.length > 0) {
-        setNeedMethod(mProblems[0].recommended_methods[0].method)
-        setNeedDimension(mProblems[0].pqcdsm_dimension)
-      }
+
     }
     loadData()
   }, [projectId, router])
 
-  /* ── computed for needs tab ── */
-  const needMethods = Array.from(new Set((analyzeNeeds || []).map((n) => n.method_name)))
-  const needTotalCost = analyzeNeeds.reduce((a, n) => a + (n.estimated_cost || 0), 0)
-  const needAvailableCount = analyzeNeeds.filter((n) => n.is_available).length
+
 
   /* ── AI Analyze Recommendation ── */
   const CLOSED_METHODS = [
@@ -387,11 +365,11 @@ export default function AnalyzePage() {
 
   // Auto trigger AI on first open if no result
   useEffect(() => {
-    if (activeTab === 'ai_recommendation' && isMeasureSaved && !analyzeResult && !aiLoading && !aiError && !aiTriggered.current) {
+    if (isMeasureSaved && !analyzeResult && !aiLoading && !aiError && !aiTriggered.current) {
       aiTriggered.current = true
       handleTriggerAnalyzeAI()
     }
-  }, [activeTab, isMeasureSaved, analyzeResult, aiLoading, aiError, handleTriggerAnalyzeAI])
+  }, [isMeasureSaved, analyzeResult, aiLoading, aiError, handleTriggerAnalyzeAI])
 
   const handleGeneratePriority = useCallback(async () => {
     if (!analyzeResult || (analyzeResult.recommendations || []).length === 0) return
@@ -515,94 +493,9 @@ export default function AnalyzePage() {
   }
 
 
-  /* ── needs handlers ── */
-  const showNeedToast = (msg: string) => { setNeedSaveMsg(msg); setTimeout(() => setNeedSaveMsg(null), 3000) }
-  const handleAddNeed = () => {
-    if (!needItem.trim() || !needMethod.trim()) return
-    const newNeed: AnalyzeNeed = {
-      id: 'need-' + Math.random().toString(36).substr(2,9), project_id: projectId,
-      method_name: needMethod.trim(), pqcdsm_dimension: needDimension || undefined,
-      need_category: needCategory, need_item: needItem.trim(),
-      quantity: needQuantity.trim() || undefined,
-      estimated_cost: needCost !== '' ? Number(needCost) : undefined,
-      responsible: needResponsible.trim() || undefined,
-      notes: needNotes.trim() || undefined, is_available: needAvailable,
-    }
-    const updated = [...analyzeNeeds, newNeed]
-    setAnalyzeNeeds(updated)
-    saveAnalyzeNeeds(projectId, updated).catch(console.error)
-    setNeedItem(''); setNeedQuantity(''); setNeedCost(''); setNeedResponsible(''); setNeedNotes(''); setNeedAvailable(false); setShowNeedForm(false)
-    showNeedToast('Kebutuhan berhasil ditambahkan!')
-  }
-  const handleToggleAvailable = (id: string) => {
-    const updated = (analyzeNeeds || []).map((n) => n.id === id ? { ...n, is_available: !n.is_available } : n)
-    setAnalyzeNeeds(updated)
-    saveAnalyzeNeeds(projectId, updated).catch(console.error)
-  }
-  const handleDeleteNeed = (id: string) => {
-    if (!window.confirm('Hapus item kebutuhan ini?')) return
-    const updated = analyzeNeeds.filter((n) => n.id !== id)
-    setAnalyzeNeeds(updated)
-    saveAnalyzeNeeds(projectId, updated).catch(console.error)
-  }
-
-  const handleExportNeeds = () => {
-    if (analyzeNeeds.length === 0) {
-      alert('Tidak ada data kebutuhan untuk diekspor.')
-      return
-    }
-
-    const headers = [
-      'Metode/Program',
-      'Kategori',
-      'Item Kebutuhan',
-      'Jumlah/Kapasitas',
-      'Estimasi Biaya (Rp)',
-      'PIC Penanggung Jawab',
-      'Status Ketersediaan',
-      'Catatan'
-    ]
-
-    const rows = (analyzeNeeds || []).map(n => [
-      n.method_name,
-      n.need_category.toUpperCase(),
-      n.need_item,
-      n.quantity || '-',
-      n.estimated_cost != null ? String(n.estimated_cost) : '0',
-      n.responsible || '-',
-      n.is_available ? 'Tersedia' : 'Belum Tersedia',
-      n.notes || '-'
-    ])
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.map(val => {
-        const escaped = String(val).replace(/"/g, '""')
-        return `"${escaped}"`
-      }).join(','))
-    ].join('\r\n')
-
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.setAttribute('href', url)
-    link.setAttribute('download', `Kebutuhan_Implementasi_${project?.project_code || 'Proyek'}.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  }
-
   if (!project) return null
 
-  const needCategoryLabels: Record<AnalyzeNeed['need_category'], string> = {
-    sdm: '👤 SDM / Tenaga Ahli', alat: '🔧 Alat & Mesin', bahan: '📦 Bahan & Material',
-    sop: '📋 SOP & Prosedur', pelatihan: '🎓 Pelatihan', anggaran: '💰 Anggaran', lainnya: '🗂️ Lainnya',
-  }
 
-  const tabs = [
-    { id: 'ai_recommendation', name: '🤖 Rekomendasi & Analisis AI', hidden: false },
-    { id: 'needs',             name: '📝 Kebutuhan Implementasi', hidden: false },
-  ]
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -633,26 +526,11 @@ export default function AnalyzePage() {
         </button>
       </div>
 
-      {/* ── Tabs ── */}
-      <div className="flex gap-2 border-b border-slate-800 overflow-x-auto pb-1">
-        {tabs.filter(t => !t.hidden).map((tab) => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
-            className={`px-4 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-              activeTab === tab.id
-                ? 'bg-amber-50 text-amber-800'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-            style={activeTab === tab.id ? { borderBottomColor: 'var(--gold-400,#d97706)', borderBottomWidth: '2px' } : {}}>
-            {tab.name}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Tab panels ── */}
+      {/* ── Content ── */}
       <div className="glass-card rounded-3xl border border-slate-800 bg-slate-950/20 p-6 md:p-8">
 
         {/* ══ AI RECOMMENDATION & GENERIC COMPONENT ══ */}
-        {activeTab === 'ai_recommendation' && (
+        {(
           <div className="space-y-6">
             <div className="border-b border-slate-850 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
@@ -971,120 +849,6 @@ export default function AnalyzePage() {
           </div>
         )}
 
-        {/* ══ KEBUTUHAN IMPLEMENTASI ══ */}
-        {activeTab === 'needs' && (
-          <div className="space-y-6">
-            <div className="border-b border-slate-850 pb-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-slate-200">Analisis Kebutuhan Implementasi</h2>
-                <p className="text-xs text-slate-500">Identifikasi SDM, alat, bahan, SOP, pelatihan, dan anggaran yang diperlukan untuk menjalankan metode yang direkomendasikan</p>
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <button onClick={handleExportNeeds}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-xs font-bold rounded-xl text-slate-300 cursor-pointer transition-all">
-                  <Download className="h-3.5 w-3.5" /> Ekspor CSV
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-slate-900/50 border border-slate-850 p-4 rounded-2xl flex items-center gap-4">
-                <div className="p-3 bg-indigo-500/10 rounded-xl"><AlertCircle className="h-5 w-5 text-indigo-400" /></div>
-                <div><p className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Metode Diidentifikasi</p><p className="text-lg font-black text-slate-200 mt-0.5">{needMethods.length}</p></div>
-              </div>
-              <div className="bg-slate-900/50 border border-slate-850 p-4 rounded-2xl flex items-center gap-4">
-                <div className="p-3 bg-emerald-500/10 rounded-xl"><CheckCircle2 className="h-5 w-5 text-emerald-400" /></div>
-                <div><p className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Kebutuhan Tersedia</p><p className="text-lg font-black text-slate-200 mt-0.5">{needAvailableCount} <span className="text-xs text-slate-500 font-normal">/ {analyzeNeeds.length}</span></p></div>
-              </div>
-              <div className="bg-slate-900/50 border border-slate-850 p-4 rounded-2xl flex items-center gap-4">
-                <div className="p-3 bg-amber-500/10 rounded-xl"><Sparkles className="h-5 w-5 text-amber-400" /></div>
-                <div><p className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Estimasi Total Biaya</p><p className="text-lg font-black text-slate-200 mt-0.5">Rp {needTotalCost.toLocaleString('id-ID')}</p></div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-2">
-              <h3 className="text-sm font-bold text-slate-300">Daftar Kebutuhan</h3>
-              <div className="flex items-center gap-3">
-                {needSaveMsg && <span className="text-xs font-semibold text-emerald-400 animate-pulse flex items-center gap-1"><CheckCircle className="h-3 w-3"/> {needSaveMsg}</span>}
-                <button onClick={() => setShowNeedForm(!showNeedForm)} className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-bold rounded-xl text-white cursor-pointer">
-                  {showNeedForm ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />} {showNeedForm ? 'Batal' : 'Tambah Kebutuhan'}
-                </button>
-              </div>
-            </div>
-
-            {showNeedForm && (
-              <div className="p-5 bg-slate-950/60 border border-slate-800 rounded-2xl mb-6">
-                <h4 className="text-xs font-bold text-slate-300 mb-4 border-b border-slate-850 pb-2">Form Tambah Kebutuhan</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Metode / Program</label><input type="text" value={needMethod} onChange={(e) => setNeedMethod(e.target.value)} required placeholder="Misal: Line Balancing" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none" /></div>
-                  <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Dimensi PQCDSM</label><input type="text" value={needDimension} onChange={(e) => setNeedDimension(e.target.value)} placeholder="Opsional (cth: productivity)" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none" /></div>
-                  <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Kategori Kebutuhan</label><select value={needCategory} onChange={(e) => setNeedCategory(e.target.value as any)} className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none">{Object.entries(needCategoryLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-                  <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Item Kebutuhan</label><input type="text" value={needItem} onChange={(e) => setNeedItem(e.target.value)} required placeholder="Misal: Stopwatch, Modul Training" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none" /></div>
-                  <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Jumlah / Kapasitas</label><input type="text" value={needQuantity} onChange={(e) => setNeedQuantity(e.target.value)} placeholder="Misal: 5 unit, 20 peserta" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none" /></div>
-                  <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Estimasi Biaya (Rp)</label><input type="number" min={0} value={needCost} onChange={(e) => setNeedCost(e.target.value ? Number(e.target.value) : '')} placeholder="Misal: 1500000" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none" /></div>
-                  <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">PIC / Penanggung Jawab</label><input type="text" value={needResponsible} onChange={(e) => setNeedResponsible(e.target.value)} placeholder="Misal: Tim HRD, Pak Budi" className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none" /></div>
-                  <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Status Ketersediaan</label><div className="flex items-center gap-2 mt-2 cursor-pointer" onClick={() => setNeedAvailable(!needAvailable)}><div className={`w-10 h-5 rounded-full p-0.5 transition-colors ${needAvailable ? 'bg-emerald-500' : 'bg-slate-700'}`}><div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${needAvailable ? 'translate-x-5' : 'translate-x-0'}`} /></div><span className="text-xs text-slate-400">{needAvailable ? 'Sudah Tersedia' : 'Belum Tersedia'}</span></div></div>
-                </div>
-                <div><label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Catatan Tambahan</label><textarea value={needNotes} onChange={(e) => setNeedNotes(e.target.value)} rows={2} className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none resize-none" placeholder="Catatan spesifikasi atau justifikasi kebutuhan..." /></div>
-                <div className="mt-4 flex justify-end gap-2">
-                  <button onClick={() => setShowNeedForm(false)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition-colors cursor-pointer">Batal</button>
-                  <button onClick={handleAddNeed} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer">Simpan Kebutuhan</button>
-                </div>
-              </div>
-            )}
-
-            {analyzeNeeds.length === 0 ? (
-              <div className="text-center py-10 text-xs text-slate-500 border border-dashed border-slate-800 rounded-2xl">
-                Belum ada identifikasi kebutuhan implementasi.
-              </div>
-            ) : (
-              <div className="overflow-x-auto border border-slate-850 rounded-2xl">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-900 text-slate-400 font-bold uppercase tracking-wider">
-                    <tr>
-                      <th className="px-4 py-3">Metode & Item</th>
-                      <th className="px-4 py-3">Kategori</th>
-                      <th className="px-4 py-3">Jumlah & Biaya</th>
-                      <th className="px-4 py-3">PIC & Status</th>
-                      <th className="px-4 py-3 text-right">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-850 bg-slate-950/40">
-                    {(analyzeNeeds || []).map((need) => (
-                      <tr key={need.id} className="hover:bg-slate-900/50 transition-colors">
-                        <td className="px-4 py-3">
-                          <p className="font-bold text-slate-200">{need.need_item}</p>
-                          <p className="text-[10px] text-slate-500 mt-0.5 font-mono">{need.method_name}</p>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="inline-block px-2 py-1 rounded bg-slate-800 text-slate-300 border border-slate-700 font-medium">
-                            {needCategoryLabels[need.need_category]}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <p className="text-slate-300">{need.quantity || '-'}</p>
-                          <p className="text-[10px] text-emerald-400 font-mono mt-0.5">Rp {need.estimated_cost?.toLocaleString('id-ID') || 0}</p>
-                        </td>
-                        <td className="px-4 py-3">
-                          <p className="text-slate-300">{need.responsible || '-'}</p>
-                          <button onClick={() => handleToggleAvailable(need.id)} className={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest cursor-pointer transition-colors ${need.is_available ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'bg-amber-500/10 text-amber-400 hover:bg-emerald-500/20'}`}>
-                            {need.is_available ? <PackageCheck className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
-                            {need.is_available ? 'Tersedia' : 'Belum Tersedia'}
-                          </button>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <button onClick={() => handleDeleteNeed(need.id)} className="p-1.5 text-slate-500 hover:text-red-400 transition-colors cursor-pointer bg-slate-900 rounded-lg">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </div>
   )
