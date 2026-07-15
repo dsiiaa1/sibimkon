@@ -199,6 +199,7 @@ export default function ImprovePage() {
               return steps.map((ap: any) => ({
                 id: crypto.randomUUID?.() ?? 'act-' + Math.random().toString(36).substr(2,9),
                 project_id: projectId,
+                problem_title: pr.problem || 'Tindakan Lainnya',
                 title: ap.action || pr.problem || 'Tindakan Baru',
                 description: `Menjawab masalah: ${pr.problem || '-'}\nJustifikasi: ${pr.justification || '-'}`,
                 methodology: pr.related_methods?.[0] || 'Lainnya',
@@ -217,6 +218,7 @@ export default function ImprovePage() {
             return [{
               id: crypto.randomUUID?.() ?? 'act-' + Math.random().toString(36).substr(2,9),
               project_id: projectId,
+              problem_title: pr.problem || 'Tindakan Lainnya',
               title: `Perbaikan: ${pr.problem || 'Masalah Prioritas'}`,
               description: `Skor Prioritas: ${pr.priority_score || '-'} (${pr.priority_level || '-'})\nJustifikasi: ${pr.justification || '-'}`,
               methodology: pr.related_methods?.[0] || 'Lainnya',
@@ -489,6 +491,7 @@ export default function ImprovePage() {
             return steps.map((ap: any) => ({
               id: crypto.randomUUID?.() ?? 'act-' + Math.random().toString(36).substr(2,9),
               project_id: projectId,
+              problem_title: pr.problem || 'Tindakan Lainnya',
               title: ap.action || pr.problem || 'Tindakan Baru',
               description: `Menjawab masalah: ${pr.problem || '-'}\nJustifikasi: ${pr.justification || '-'}`,
               methodology: pr.related_methods?.[0] || 'Lainnya',
@@ -507,6 +510,7 @@ export default function ImprovePage() {
           return [{
             id: crypto.randomUUID?.() ?? 'act-' + Math.random().toString(36).substr(2,9),
             project_id: projectId,
+            problem_title: pr.problem || 'Tindakan Lainnya',
             title: `Perbaikan: ${pr.problem || 'Masalah Prioritas'}`,
             description: `Skor Prioritas: ${pr.priority_score || '-'} (${pr.priority_level || '-'})\nJustifikasi: ${pr.justification || '-'}`,
             methodology: pr.related_methods?.[0] || 'Lainnya',
