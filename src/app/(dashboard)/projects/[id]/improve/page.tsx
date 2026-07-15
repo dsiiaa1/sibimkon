@@ -78,7 +78,6 @@ export default function ImprovePage() {
   // Grouping state
   const [expandedProblemGroups, setExpandedProblemGroups] = useState<Set<string>>(new Set())
   const [generatingStepsId, setGeneratingStepsId] = useState<string | null>(null)
-  const [generatingAiId, setGeneratingAiId] = useState<string | null>(null)
 
   useEffect(() => {
     if (actionPlans.length > 0 && expandedProblemGroups.size === 0) {
