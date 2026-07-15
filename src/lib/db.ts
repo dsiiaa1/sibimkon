@@ -1452,7 +1452,7 @@ export async function getAnalyzeResult(projectId: string): Promise<AnalyzeResult
       }
       // Ensure priority_result is always an array or null
       if (sbResult.priority_result && !Array.isArray(sbResult.priority_result)) {
-        sbResult.priority_result = null
+        sbResult.priority_result = undefined
       }
       // Merge: if Supabase has no priority_result but localStorage does, use localStorage's
       if (!sbResult.priority_result?.length && localResult?.priority_result?.length) {
