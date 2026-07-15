@@ -1054,9 +1054,17 @@ export default function ImprovePage() {
                             
                             {/* KPI Manual Evidence (Legacy/Existing) */}
                             <div className="pt-2 border-t border-slate-800/60 flex justify-end">
-                              <button onClick={() => { setUploadAction(act); setKpiSubmitted(act.kpi_actual ?? act.kpi_baseline) }} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold text-slate-300 transition-colors cursor-pointer flex items-center gap-2 border border-slate-700">
-                                <UploadCloud className="w-3.5 h-3.5" /> Upload Bukti KPI Akhir
-                              </button>
+                              {!isKonsultan ? (
+                                <button onClick={() => { setUploadAction(act); setKpiSubmitted(act.kpi_actual ?? act.kpi_baseline) }} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold text-slate-300 transition-colors cursor-pointer flex items-center gap-2 border border-slate-700">
+                                  <UploadCloud className="w-3.5 h-3.5" /> Upload Bukti KPI Akhir
+                                </button>
+                              ) : (
+                                (evidenceMap[act.id] && evidenceMap[act.id].length > 0) && (
+                                  <button onClick={() => setVerifyTarget(evidenceMap[act.id][0])} className="px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 rounded-xl text-xs font-bold text-indigo-400 border border-indigo-600/40 transition-colors cursor-pointer flex items-center gap-2">
+                                    <Eye className="w-3.5 h-3.5" /> Cek Bukti KPI Akhir
+                                  </button>
+                                )
+                              )}
                             </div>
                           </div>
                         )
