@@ -479,9 +479,7 @@ export async function saveActionPlans(projectId: string, actions: ActionPlan[]):
           action: s.action,
           is_completed: s.is_completed,
           pic: s.pic || null,
-          step_order: s.step_order || 0,
-          completed_by: s.completed_by || null,
-          completed_at: s.completed_at || null
+          timeline: s.timeline || null
         })),
         { onConflict: 'id' }
       )

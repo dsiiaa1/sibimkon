@@ -327,7 +327,7 @@ export default function AnalyzePage() {
   }, [projectId, router])
 
   /* ── computed for needs tab ── */
-  const needMethods = Array.from(new Set(analyzeNeeds.map((n) => n.method_name)))
+  const needMethods = Array.from(new Set((analyzeNeeds || []).map((n) => n.method_name)))
   const needTotalCost = analyzeNeeds.reduce((a, n) => a + (n.estimated_cost || 0), 0)
   const needAvailableCount = analyzeNeeds.filter((n) => n.is_available).length
 
@@ -535,7 +535,7 @@ export default function AnalyzePage() {
     showNeedToast('Kebutuhan berhasil ditambahkan!')
   }
   const handleToggleAvailable = (id: string) => {
-    const updated = analyzeNeeds.map((n) => n.id === id ? { ...n, is_available: !n.is_available } : n)
+    const updated = (analyzeNeeds || []).map((n) => n.id === id ? { ...n, is_available: !n.is_available } : n)
     setAnalyzeNeeds(updated)
     saveAnalyzeNeeds(projectId, updated).catch(console.error)
   }
@@ -563,7 +563,7 @@ export default function AnalyzePage() {
       'Catatan'
     ]
 
-    const rows = analyzeNeeds.map(n => [
+    const rows = (analyzeNeeds || []).map(n => [
       n.method_name,
       n.need_category.toUpperCase(),
       n.need_item,
@@ -1050,7 +1050,7 @@ export default function AnalyzePage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-850 bg-slate-950/40">
-                    {analyzeNeeds.map((need) => (
+                    {(analyzeNeeds || []).map((need) => (
                       <tr key={need.id} className="hover:bg-slate-900/50 transition-colors">
                         <td className="px-4 py-3">
                           <p className="font-bold text-slate-200">{need.need_item}</p>
