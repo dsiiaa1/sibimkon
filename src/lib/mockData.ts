@@ -134,8 +134,6 @@ export interface ActionPlan {
   progress_percentage: number
   /** Hasil analisis AI (Persiapan, Biaya, ROI, dll) */
   ai_analysis?: ImproveAiAnalysis
-  /** Langkah-langkah / checklist penyelesaian */
-  steps?: ActionStep[]
 }
 
 export interface ImproveAiAnalysis {
