@@ -78,6 +78,7 @@ export default function ImprovePage() {
   // Grouping state
   const [expandedProblemGroups, setExpandedProblemGroups] = useState<Set<string>>(new Set())
   const [generatingStepsId, setGeneratingStepsId] = useState<string | null>(null)
+  const [generatingAiId, setGeneratingAiId] = useState<string | null>(null)
 
   useEffect(() => {
     if (actionPlans.length > 0 && expandedProblemGroups.size === 0) {
@@ -989,7 +990,19 @@ export default function ImprovePage() {
                             
                             {/* Checklist Section */}
                             <div className="pt-2 border-t border-slate-800/60">
-                              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Checklist Implementasi</h4>
+                              <div className="flex justify-between items-center mb-3">
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Checklist Implementasi</h4>
+                                {(!act.steps || act.steps.length === 0) && (
+                                  <button
+                                    onClick={() => handleGenerateSteps(act)}
+                                    disabled={generatingStepsId === act.id}
+                                    className="px-3 py-1 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 border border-indigo-600/40 rounded-lg text-[10px] font-bold transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                                  >
+                                    <Sparkles className="w-3.5 h-3.5" />
+                                    {generatingStepsId === act.id ? 'Loading AI...' : 'Generate AI'}
+                                  </button>
+                                )}
+                              </div>
                               {act.steps && act.steps.length > 0 ? (
                                 <div className="space-y-2">
                                   {act.steps.map((step, idx) => {
@@ -1048,6 +1061,47 @@ export default function ImprovePage() {
                               ) : (
                                 <div className="text-xs text-slate-500 italic p-3 bg-slate-900/40 rounded-xl border border-slate-800/80">
                                   Belum ada checklist implementasi untuk aksi ini.
+                                </div>
+                              )}
+                            </div>
+
+                            {/* ROI & AI Analysis Section */}
+                            <div className="pt-2 border-t border-slate-800/60 mt-2">
+                              <div className="flex justify-between items-center mb-3">
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Analisis Dampak & ROI</h4>
+                                {!act.ai_analysis && (
+                                  <button
+                                    onClick={() => handleGenerateAiAnalysis(act)}
+                                    disabled={generatingAiId === act.id}
+                                    className="px-3 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-600/40 rounded-lg text-[10px] font-bold transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                                  >
+                                    <Sparkles className="w-3.5 h-3.5" />
+                                    {generatingAiId === act.id ? 'Menghitung ROI...' : 'Generate ROI & Dampak (AI)'}
+                                  </button>
+                                )}
+                              </div>
+                              {act.ai_analysis ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
+                                  <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Estimasi ROI</span>
+                                    <p className="text-xs text-emerald-400 font-semibold">{act.ai_analysis.roi}</p>
+                                  </div>
+                                  <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Target Efisiensi</span>
+                                    <p className="text-xs text-indigo-400 font-semibold">{act.ai_analysis.target_efisiensi}</p>
+                                  </div>
+                                  <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Manfaat</span>
+                                    <p className="text-xs text-slate-300">{act.ai_analysis.manfaat}</p>
+                                  </div>
+                                  <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Kebutuhan Biaya</span>
+                                    <p className="text-xs text-rose-400 font-semibold">{act.ai_analysis.biaya}</p>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-xs text-slate-500 italic p-3 bg-slate-900/40 rounded-xl border border-slate-800/80 mb-2">
+                                  Belum ada analisis ROI. Klik tombol di atas untuk generate menggunakan AI.
                                 </div>
                               )}
                             </div>
