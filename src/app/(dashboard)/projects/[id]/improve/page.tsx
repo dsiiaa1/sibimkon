@@ -1097,34 +1097,82 @@ export default function ImprovePage() {
                                   </button>
                                 </div>
                               </div>
-                              {act.ai_analysis ? (
+                              {(act.ai_analysis || (act.cost_saving_manual ?? 0) > 0 || (act.investment_manual ?? 0) > 0) ? (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
-                                  <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
+                                  {/* Blok Estimasi ROI */}
+                                  <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60 relative overflow-hidden">
+                                    {((act.cost_saving_manual ?? 0) > 0 || (act.investment_manual ?? 0) > 0) && (
+                                      <div className="absolute top-0 right-0 bg-emerald-500/20 text-emerald-400 text-[8px] font-bold px-2 py-0.5 rounded-bl-lg">MANUAL</div>
+                                    )}
                                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Estimasi ROI</span>
-                                    <p className="text-xs text-emerald-400 font-semibold">
-                                      {typeof act.ai_analysis.roi === 'object' ? `${act.ai_analysis.roi.roi_persen}% (Hemat Rp${Number(act.ai_analysis.roi.estimasi_penghematan_tahunan || 0).toLocaleString('id-ID')})` : act.ai_analysis.roi}
-                                    </p>
+                                    {(act.cost_saving_manual ?? 0) > 0 || (act.investment_manual ?? 0) > 0 ? (
+                                      <>
+                                        <p className="text-xs text-emerald-400 font-semibold">
+                                          {(() => {
+                                            const saving = act.cost_saving_manual || 0;
+                                            const invest = act.investment_manual || 0;
+                                            if (invest > 0) {
+                                              const pct = Math.round(((saving - invest) / invest) * 100);
+                                              return `${pct}% (Hemat Rp${saving.toLocaleString('id-ID')})`;
+                                            }
+                                            return `Hemat Rp${saving.toLocaleString('id-ID')}`;
+                                          })()}
+                                        </p>
+                                        {act.ai_analysis && (
+                                          <p className="text-[10px] text-slate-500 mt-1">
+                                            Saran AI: {typeof act.ai_analysis.roi === 'object' ? `${act.ai_analysis.roi.roi_persen}% (Hemat Rp${Number(act.ai_analysis.roi.estimasi_penghematan_tahunan || 0).toLocaleString('id-ID')})` : act.ai_analysis.roi}
+                                          </p>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <p className="text-xs text-emerald-400 font-semibold">
+                                        {typeof act.ai_analysis?.roi === 'object' ? `${act.ai_analysis.roi.roi_persen}% (Hemat Rp${Number(act.ai_analysis.roi.estimasi_penghematan_tahunan || 0).toLocaleString('id-ID')})` : act.ai_analysis?.roi}
+                                      </p>
+                                    )}
                                   </div>
-                                  <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Target Efisiensi</span>
-                                    <p className="text-xs text-indigo-400 font-semibold">{act.ai_analysis.target_efisiensi}</p>
+
+                                  {/* Blok Kebutuhan Biaya */}
+                                  <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60 relative overflow-hidden">
+                                    {((act.investment_manual ?? 0) > 0) && (
+                                      <div className="absolute top-0 right-0 bg-emerald-500/20 text-emerald-400 text-[8px] font-bold px-2 py-0.5 rounded-bl-lg">MANUAL</div>
+                                    )}
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Kebutuhan Biaya / Investasi</span>
+                                    {(act.investment_manual ?? 0) > 0 ? (
+                                      <>
+                                        <p className="text-xs text-rose-400 font-semibold">
+                                          Rp{Number(act.investment_manual).toLocaleString('id-ID')}
+                                        </p>
+                                        {act.ai_analysis && (
+                                          <p className="text-[10px] text-slate-500 mt-1">
+                                            Saran AI: {typeof act.ai_analysis.biaya === 'object' ? `Rp${Number(act.ai_analysis.biaya.estimasi || 0).toLocaleString('id-ID')}` : act.ai_analysis.biaya}
+                                          </p>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <p className="text-xs text-rose-400 font-semibold">
+                                        {typeof act.ai_analysis?.biaya === 'object' ? `Rp${Number(act.ai_analysis.biaya.estimasi || 0).toLocaleString('id-ID')}` : act.ai_analysis?.biaya}
+                                      </p>
+                                    )}
                                   </div>
-                                  <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Manfaat</span>
-                                    <p className="text-xs text-slate-300">
-                                      {typeof act.ai_analysis.manfaat === 'object' ? `${act.ai_analysis.manfaat.kualitatif} - ${act.ai_analysis.manfaat.kuantitatif}` : act.ai_analysis.manfaat}
-                                    </p>
-                                  </div>
-                                  <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Kebutuhan Biaya</span>
-                                    <p className="text-xs text-rose-400 font-semibold">
-                                      {typeof act.ai_analysis.biaya === 'object' ? `Rp${Number(act.ai_analysis.biaya.estimasi || 0).toLocaleString('id-ID')}` : act.ai_analysis.biaya}
-                                    </p>
-                                  </div>
+
+                                  {act.ai_analysis && (
+                                    <>
+                                      <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Target Efisiensi</span>
+                                        <p className="text-xs text-indigo-400 font-semibold">{act.ai_analysis.target_efisiensi}</p>
+                                      </div>
+                                      <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Manfaat</span>
+                                        <p className="text-xs text-slate-300">
+                                          {typeof act.ai_analysis.manfaat === 'object' ? `${act.ai_analysis.manfaat.kualitatif} - ${act.ai_analysis.manfaat.kuantitatif}` : act.ai_analysis.manfaat}
+                                        </p>
+                                      </div>
+                                    </>
+                                  )}
                                 </div>
                               ) : (
                                 <div className="text-xs text-slate-500 italic p-3 bg-slate-900/40 rounded-xl border border-slate-800/80 mb-2">
-                                  Belum ada analisis ROI. Klik tombol di atas untuk generate menggunakan AI.
+                                  Belum ada analisis ROI. Klik tombol "Generate ROI" untuk saran AI, atau klik "Input Manual".
                                 </div>
                               )}
                             </div>
