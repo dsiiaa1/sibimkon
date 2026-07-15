@@ -1507,3 +1507,75 @@ export async function saveAnalyzeResult(projectId: string, result: AnalyzeResult
     console.warn('[saveAnalyzeResult] Supabase failed, using localStorage only:', err?.message || err)
   }
 }
+
+// ── CONTROL: Efficiency Targets (AI) ──────────────────────────────────────────
+
+export async function getEfficiencyTargets(projectId: string): Promise<any[]> {
+  try {
+    const sb = getSupabase()
+    if (!sb) throw new Error('No Supabase client')
+
+    const { data, error } = await sb.from('efficiency_targets')
+      .select('*, actuals:efficiency_actuals(*)')
+      .eq('project_id', projectId)
+      .order('generated_at', { ascending: false })
+
+    if (error) handleDbError(error)
+    return data || []
+  } catch (err) {
+    console.warn('[getEfficiencyTargets] fallback to mockDB or empty:', err)
+    return []
+  }
+}
+
+export async function saveEfficiencyTargets(projectId: string, targets: any[]): Promise<void> {
+  const sb = getSupabase()
+  if (!sb) return
+
+  if (targets.length === 0) return
+
+  try {
+    const rows = targets.map((t) => ({
+      id: t.id,
+      action_plan_id: t.action_plan_id,
+      project_id: projectId,
+      raw_text: t.raw_text,
+      metric_name: t.metric_name,
+      baseline_value: t.baseline_value || null,
+      target_value: t.target_value,
+      duration: t.duration,
+      duration_unit: t.duration_unit,
+      needs_manual_review: t.needs_manual_review
+    }))
+
+    const { error } = await sb.from('efficiency_targets').upsert(rows, { onConflict: 'id' })
+    if (error) handleDbError(error)
+  } catch (err) {
+    console.warn('[saveEfficiencyTargets] failed:', err)
+  }
+}
+
+export async function saveEfficiencyActuals(actuals: any[]): Promise<void> {
+  const sb = getSupabase()
+  if (!sb) return
+
+  if (actuals.length === 0) return
+
+  try {
+    const rows = actuals.map((a) => ({
+      id: a.id,
+      efficiency_target_id: a.efficiency_target_id,
+      checkpoint_number: a.checkpoint_number,
+      due_date: a.due_date,
+      actual_value: a.actual_value,
+      input_by: a.input_by || null,
+      input_at: a.input_at || null,
+      note: a.note || ''
+    }))
+
+    const { error } = await sb.from('efficiency_actuals').upsert(rows, { onConflict: 'id' })
+    if (error) handleDbError(error)
+  } catch (err) {
+    console.warn('[saveEfficiencyActuals] failed:', err)
+  }
+}

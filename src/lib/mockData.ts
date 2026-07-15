@@ -136,6 +136,37 @@ export interface ActionPlan {
   ai_analysis?: ImproveAiAnalysis
 }
 
+export interface EfficiencyActual {
+  id: string
+  efficiency_target_id: string
+  checkpoint_number: number
+  due_date: string
+  actual_value?: number
+  input_by?: string
+  input_at?: string
+  note?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export interface EfficiencyTarget {
+  id: string
+  action_plan_id: string
+  project_id: string
+  raw_text: string
+  metric_name: string
+  baseline_value?: number
+  target_value: number
+  duration: number
+  duration_unit: string
+  needs_manual_review: boolean
+  generated_at?: string
+  created_at?: string
+  updated_at?: string
+  
+  actuals?: EfficiencyActual[]
+}
+
 export interface ImproveAiAnalysis {
   persiapan: string
   sumber_daya: {
