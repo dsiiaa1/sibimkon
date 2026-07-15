@@ -1458,6 +1458,13 @@ export async function getAnalyzeResult(projectId: string): Promise<AnalyzeResult
       if (!sbResult.priority_result?.length && localResult?.priority_result?.length) {
         sbResult.priority_result = localResult.priority_result
       }
+      
+      // Fix for when Supabase upsert failed previously, leaving an empty recommendations array in DB
+      // while localStorage has the successfully generated data.
+      if (!sbResult.recommendations?.length && localResult?.recommendations?.length) {
+        sbResult.recommendations = localResult.recommendations
+      }
+      
       return sbResult
     }
   } catch (err) {
@@ -1485,7 +1492,12 @@ export async function saveAnalyzeResult(projectId: string, result: AnalyzeResult
       recommendations: result.recommendations,
       priority_result: result.priority_result || [],
       status: result.status,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      // Fix for legacy NOT NULL constraints in DB schema
+      recommended_method: '-',
+      selected_method: '-',
+      reasoning: '-',
+      summary: '-'
     }, { onConflict: 'project_id' })
     if (error) {
       console.warn('[saveAnalyzeResult] Supabase upsert error:', error)
