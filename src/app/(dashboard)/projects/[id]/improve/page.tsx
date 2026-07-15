@@ -7,7 +7,7 @@ import { Project, ActionPlan, EvidenceItem, MeasureProblem, AnalyzeNeed } from '
 import {
   Plus, CheckCircle2, Calendar, User, DollarSign, ArrowUpRight,
   Trash, Upload, FileText, ArrowRight, Lock, ShieldCheck,
-  Clock, XCircle, Eye, Save, Sparkles, Lightbulb, X, ChevronDown, ChevronUp, RefreshCw, Activity, CheckSquare, ListTodo
+  Clock, XCircle, Eye, Save, Sparkles, Lightbulb, X, ChevronDown, ChevronUp, RefreshCw, Activity, CheckSquare, ListTodo, Target, Check, UploadCloud, Trash2
 } from 'lucide-react'
 import { ACTION_STATUS_LABELS, sanitizeText } from '@/lib/utils'
 import {
@@ -175,6 +175,9 @@ export default function ImprovePage() {
   const [verifyChkNotes,  setVerifyChkNotes]  = useState('')
   const [verifyChkSaving, setVerifyChkSaving] = useState(false)
 
+  /* ── mapping untuk detail skor & level masalah prioritas ── */
+  const [problemMetaMap, setProblemMetaMap] = useState<Record<string, { score: number, level: string }>>({})
+
   /* ── load ── */
   useEffect(() => {
     async function loadData() {
@@ -189,9 +192,20 @@ export default function ImprovePage() {
       if (!proj) { router.push('/dashboard'); return }
       setProject(proj)
       let loadedActions = actions
+      const analyzeRes = await getAnalyzeResult(projectId)
+      
+      if (analyzeRes?.priority_result?.length) {
+        const metaMap: Record<string, { score: number, level: string }> = {}
+        analyzeRes.priority_result.forEach((pr: any) => {
+          if (pr.problem) {
+            metaMap[pr.problem] = { score: pr.priority_score, level: pr.priority_level }
+          }
+        })
+        setProblemMetaMap(metaMap)
+      }
+
       if (loadedActions.length === 0) {
         // Auto-fill from Analyze Phase
-        const analyzeRes = await getAnalyzeResult(projectId)
         if (analyzeRes?.priority_result?.length) {
           loadedActions = analyzeRes.priority_result.flatMap((pr: any) => {
             const steps = pr.action_plan || []
@@ -482,6 +496,16 @@ export default function ImprovePage() {
         return
       }
 
+      if (analyzeRes?.priority_result?.length) {
+        const metaMap: Record<string, { score: number, level: string }> = {}
+        analyzeRes.priority_result.forEach((pr: any) => {
+          if (pr.problem) {
+            metaMap[pr.problem] = { score: pr.priority_score, level: pr.priority_level }
+          }
+        })
+        setProblemMetaMap(metaMap)
+      }
+
       let newActions: ActionPlan[] = []
       
       if (analyzeRes?.priority_result?.length) {
@@ -753,9 +777,22 @@ export default function ImprovePage() {
 
     if (verifyChkStatus === 'approved') {
       const stepId = verifyChkTarget.step_id
-      const actionId = actionPlans.find(act => act.steps?.some(s => s.id === stepId))?.id
-      if (actionId) {
-        await handleToggleStep(actionId, stepId, true)
+      const targetAct = actionPlans.find(act => act.steps?.some(s => s.id === stepId))
+      if (targetAct && targetAct.steps) {
+        // Calculate new progress including this newly approved step
+        const totalSteps = targetAct.steps.length
+        let newlyApprovedCount = 0
+        targetAct.steps.forEach(s => {
+          if (s.id === stepId) newlyApprovedCount++
+          else {
+            const evs = checklistEvidenceMap[s.id] || []
+            if (evs.some(e => e.verification_status === 'approved')) newlyApprovedCount++
+          }
+        })
+        const newProg = totalSteps > 0 ? Math.round((newlyApprovedCount / totalSteps) * 100) : 0
+        const updatedAct = { ...targetAct, progress_percentage: newProg, status: newProg === 100 ? 'selesai' as const : newProg > 0 ? 'sedang_berjalan' as const : targetAct.status }
+        
+        persistActionPlans(actionPlans.map(a => a.id === targetAct.id ? updatedAct : a))
       }
     }
 
@@ -830,40 +867,205 @@ export default function ImprovePage() {
                 acc[groupName].push(act)
                 return acc
               }, {} as Record<string, ActionPlan[]>)
-            ).map(([groupName, groupActs]) => (
-              <div key={groupName} className="space-y-4">
-                <button
-                  onClick={() => toggleGroup(groupName)}
-                  className="w-full flex items-center justify-between p-4 bg-slate-900 border border-slate-800 rounded-2xl cursor-pointer hover:bg-slate-800/50 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <ListTodo className="h-5 w-5 text-indigo-400" />
-                    <h2 className="text-sm font-bold text-slate-200">{groupName}</h2>
-                  </div>
-                  {expandedProblemGroups.has(groupName) ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
-                </button>
-                {expandedProblemGroups.has(groupName) && (
-                  <div className="space-y-4">
-                    {groupActs.map(act => (
-                      <div key={act.id} className="glass-card rounded-2xl border border-slate-800 bg-slate-950/30 p-5 space-y-4">
-                        <div className="flex justify-between items-start">
-                           <h3 className="text-base font-bold text-slate-200">{act.title}</h3>
-                           <select value={act.status} onChange={(e) => handleUpdateStatus(act.id, e.target.value as any)} className="bg-slate-900 border border-slate-800 rounded-lg p-1 text-xs">
-                             <option value="belum_mulai">Belum Mulai</option>
-                             <option value="sedang_berjalan">Sedang Berjalan</option>
-                             <option value="selesai">Selesai</option>
-                           </select>
+            ).map(([groupName, groupActs], groupIndex) => {
+              const meta = problemMetaMap[groupName];
+              
+              return (
+                <div key={groupName} className="space-y-4">
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={() => toggleGroup(groupName)}
+                      className="w-full flex items-center justify-between p-4 bg-slate-900 border border-slate-800 rounded-2xl cursor-pointer hover:bg-slate-800/50 transition-colors"
+                    >
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex items-center justify-center w-7 h-7 rounded-full bg-slate-800 text-xs font-bold text-slate-300">
+                          {groupIndex + 1}
                         </div>
-                        <p className="text-xs text-slate-400">{act.description}</p>
-                        <div className="flex justify-end gap-2">
-                          <button onClick={() => { setUploadAction(act); setKpiSubmitted(act.kpi_actual ?? act.kpi_baseline) }} className="px-3 py-1.5 bg-blue-600 rounded-lg text-xs font-bold text-white">Upload Bukti</button>
-                        </div>
+                        <h2 className="text-sm font-bold text-slate-200 text-left line-clamp-2">
+                          {groupName}
+                        </h2>
+                        {meta && (
+                          <div className="flex items-center gap-2 mt-1 sm:mt-0">
+                            <span className="px-2 py-1 bg-slate-800 text-slate-300 text-[10px] font-bold rounded-lg border border-slate-700">
+                              Skor: {meta.score}
+                            </span>
+                            <span className={`px-2 py-1 text-[10px] font-bold rounded-lg border ${
+                              meta.level === 'TINGGI' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                              meta.level === 'SEDANG' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                              'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                            }`}>
+                              {meta.level}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    ))}
+                      {expandedProblemGroups.has(groupName) ? <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />}
+                    </button>
                   </div>
-                )}
-              </div>
-            ))
+                  
+                  {expandedProblemGroups.has(groupName) && (
+                    <div className="space-y-4 pl-4 sm:pl-10 relative before:content-[''] before:absolute before:left-[19px] sm:before:left-[43px] before:top-0 before:bottom-4 before:w-[2px] before:bg-slate-800">
+                      {groupActs.map(act => {
+                        const totalSteps = act.steps?.length || 0;
+                        const approvedSteps = act.steps?.filter(step => {
+                          const evs = checklistEvidenceMap[step.id] || [];
+                          return evs.some(e => e.verification_status === 'approved');
+                        }).length || 0;
+                        const progress = totalSteps > 0 ? Math.round((approvedSteps / totalSteps) * 100) : 0;
+                        
+                        return (
+                          <div key={act.id} className="relative glass-card rounded-2xl border border-slate-800 bg-slate-950/50 p-5 sm:p-6 space-y-5">
+                            {/* Card Header */}
+                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-slate-800/60 pb-4">
+                              <div className="flex-1 space-y-1.5">
+                                <h3 className="text-lg font-bold text-slate-100">{act.title}</h3>
+                                <p className="text-sm text-slate-400 whitespace-pre-line leading-relaxed">{act.description}</p>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <select 
+                                  value={act.status} 
+                                  onChange={(e) => handleUpdateStatus(act.id, e.target.value as any)} 
+                                  className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-300 focus:outline-none focus:border-indigo-500"
+                                >
+                                  <option value="belum_mulai">Belum Mulai</option>
+                                  <option value="sedang_berjalan">Sedang Berjalan</option>
+                                  <option value="selesai">Selesai</option>
+                                </select>
+                                {isKonsultan && (
+                                  <button onClick={() => handleDeleteAction(act.id)} className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors cursor-pointer" title="Hapus Action Plan">
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            
+                            {/* Card Info Grid */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                              <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-800/50">
+                                <div className="flex items-center gap-1.5 text-slate-400 mb-1">
+                                  <User className="w-3.5 h-3.5" />
+                                  <span className="text-[10px] font-bold uppercase tracking-wider">PIC Pelaksana</span>
+                                </div>
+                                <div className="text-sm font-semibold text-slate-200">{act.pic_name || '-'}</div>
+                              </div>
+                              
+                              <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-800/50">
+                                <div className="flex items-center gap-1.5 text-slate-400 mb-1">
+                                  <Calendar className="w-3.5 h-3.5" />
+                                  <span className="text-[10px] font-bold uppercase tracking-wider">Timeline</span>
+                                </div>
+                                <div className="text-sm font-semibold text-slate-200">{act.start_date} s/d {act.end_date}</div>
+                              </div>
+                              
+                              <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-800/50">
+                                <div className="flex items-center gap-1.5 text-slate-400 mb-1">
+                                  <Target className="w-3.5 h-3.5" />
+                                  <span className="text-[10px] font-bold uppercase tracking-wider">Target KPI</span>
+                                </div>
+                                <div className="text-sm font-semibold text-indigo-400">{act.kpi_baseline} → {act.kpi_target} {act.kpi_unit}</div>
+                              </div>
+                              
+                              <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-800/50">
+                                <div className="flex items-center gap-1.5 text-slate-400 mb-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span className="text-[10px] font-bold uppercase tracking-wider">Aktual Verifikasi</span>
+                                </div>
+                                <div className="text-sm font-semibold text-emerald-400">
+                                  {act.verified_kpi_actual != null ? `${act.verified_kpi_actual} ${act.kpi_unit}` : 'Belum ada'}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Progress Bar */}
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between items-end">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Progress Implementasi</span>
+                                <span className="text-xs font-bold text-slate-200">{progress}%</span>
+                              </div>
+                              <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden">
+                                <div className={`h-full transition-all duration-500 ${progress === 100 ? 'bg-emerald-500' : 'bg-indigo-500'}`} style={{ width: `${progress}%` }}></div>
+                              </div>
+                            </div>
+                            
+                            {/* Checklist Section */}
+                            <div className="pt-2 border-t border-slate-800/60">
+                              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Checklist Implementasi</h4>
+                              {act.steps && act.steps.length > 0 ? (
+                                <div className="space-y-2">
+                                  {act.steps.map((step, idx) => {
+                                    const evs = checklistEvidenceMap[step.id] || [];
+                                    const hasEv = evs.length > 0;
+                                    const latestEv = evs[0];
+                                    const isApproved = latestEv?.verification_status === 'approved';
+                                    
+                                    return (
+                                      <div key={step.id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-slate-900/40 border border-slate-800/80 rounded-xl hover:bg-slate-900/80 transition-colors">
+                                        <div className="flex items-start gap-3 flex-1">
+                                          <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+                                            isApproved ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400' : 'border-slate-600 bg-slate-800 text-transparent'
+                                          }`}>
+                                            {isApproved && <Check className="w-2.5 h-2.5" />}
+                                          </div>
+                                          <span className={`text-sm ${isApproved ? 'text-slate-400 line-through' : 'text-slate-300'}`}>
+                                            {step.description || step.action}
+                                          </span>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-3 self-end sm:self-auto shrink-0 pl-7 sm:pl-0">
+                                          {hasEv && latestEv && (
+                                            <span className={`px-2 py-1 text-[9px] font-bold uppercase tracking-wider rounded-lg border ${
+                                              latestEv.verification_status === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                              latestEv.verification_status === 'rejected' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                                              'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                            }`}>
+                                              {latestEv.verification_status === 'approved' ? 'Disetujui' :
+                                               latestEv.verification_status === 'rejected' ? 'Ditolak' : 'Menunggu'}
+                                            </span>
+                                          )}
+                                          
+                                          {!isKonsultan ? (
+                                            <button 
+                                              onClick={() => setUploadChecklistStep({ actionId: act.id, stepId: step.id, title: step.description || step.action })}
+                                              className="px-3 py-1.5 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-600/30 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                                            >
+                                              {hasEv ? 'Upload Ulang' : 'Upload Bukti'}
+                                            </button>
+                                          ) : (
+                                            hasEv && (
+                                              <button
+                                                onClick={() => setVerifyChkTarget(latestEv)}
+                                                className="px-3 py-1.5 bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 border border-indigo-600/30 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                                              >
+                                                <Eye className="w-3.5 h-3.5" /> Cek Bukti
+                                              </button>
+                                            )
+                                          )}
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="text-xs text-slate-500 italic p-3 bg-slate-900/40 rounded-xl border border-slate-800/80">
+                                  Belum ada checklist implementasi untuk aksi ini.
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* KPI Manual Evidence (Legacy/Existing) */}
+                            <div className="pt-2 border-t border-slate-800/60 flex justify-end">
+                              <button onClick={() => { setUploadAction(act); setKpiSubmitted(act.kpi_actual ?? act.kpi_baseline) }} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold text-slate-300 transition-colors cursor-pointer flex items-center gap-2 border border-slate-700">
+                                <UploadCloud className="w-3.5 h-3.5" /> Upload Bukti KPI Akhir
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })
           )}
         </div>
         

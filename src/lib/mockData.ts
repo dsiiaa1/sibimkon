@@ -235,6 +235,7 @@ export interface AnalyzeRecommendation {
 export interface ActionPlanStep {
   id: string
   action: string
+  description?: string // from action_plan_steps table
   pic: string
   timeline: string
   is_completed?: boolean
