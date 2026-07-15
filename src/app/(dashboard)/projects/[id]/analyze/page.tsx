@@ -394,7 +394,7 @@ export default function AnalyzePage() {
   }, [activeTab, isMeasureSaved, analyzeResult, aiLoading, aiError, handleTriggerAnalyzeAI])
 
   const handleGeneratePriority = useCallback(async () => {
-    if (!analyzeResult || analyzeResult.recommendations.length === 0) return
+    if (!analyzeResult || (analyzeResult.recommendations || []).length === 0) return
     setIsGeneratingPriority(true)
     setPriorityError(null)
     try {
@@ -428,8 +428,8 @@ export default function AnalyzePage() {
   }, [analyzeResult, projectCharter, dataRequirements, measureProblems, projectId])
 
   useEffect(() => {
-    if (analyzeResult && analyzeResult.recommendations.length > 0) {
-      const allDone = analyzeResult.recommendations.every(r => r.data)
+    if (analyzeResult && (analyzeResult.recommendations || []).length > 0) {
+      const allDone = (analyzeResult.recommendations || []).every(r => r.data)
       if (allDone && !priorityResult && !isGeneratingPriority && !priorityError && !priorityTriggered.current) {
         priorityTriggered.current = true
         handleGeneratePriority()
@@ -485,14 +485,14 @@ export default function AnalyzePage() {
   const handleDeleteRecommendation = (index: number) => {
     if (!analyzeResult) return
     if (!window.confirm('Hapus rekomendasi ini?')) return
-    const newRecs = [...analyzeResult.recommendations]
+    const newRecs = [...(analyzeResult.recommendations || [])]
     newRecs.splice(index, 1)
     setAnalyzeResult({ ...analyzeResult, recommendations: newRecs, status: 'draft' })
   }
 
   const handleSaveEditReasoning = (index: number) => {
     if (!analyzeResult) return
-    const newRecs = [...analyzeResult.recommendations]
+    const newRecs = [...(analyzeResult.recommendations || [])]
     newRecs[index].reasoning = editReasoning
     setAnalyzeResult({ ...analyzeResult, recommendations: newRecs, status: 'draft' })
     setEditingIndex(null)
@@ -502,10 +502,10 @@ export default function AnalyzePage() {
   const handleAddCustom = (e: React.FormEvent) => {
     e.preventDefault()
     if (!analyzeResult || !customMethod || !customReasoning) return
-    const newRecs = [...analyzeResult.recommendations, {
+    const newRecs = [...(analyzeResult.recommendations || []), {
       method: customMethod,
       reasoning: customReasoning,
-      priority: analyzeResult.recommendations.length + 1,
+      priority: (analyzeResult.recommendations || []).length + 1,
       source: 'custom' as const
     }]
     setAnalyzeResult({ ...analyzeResult, recommendations: newRecs, status: 'draft' })
@@ -870,7 +870,7 @@ export default function AnalyzePage() {
 
                       <GenericAnalyzeComponent recommendation={rec} onDataChange={(newData) => {
                         if (!analyzeResult) return
-                        const newRecs = [...analyzeResult.recommendations]
+                        const newRecs = [...(analyzeResult.recommendations || [])]
                         newRecs[idx] = { ...newRecs[idx], data: newData }
                         setAnalyzeResult({ ...analyzeResult, recommendations: newRecs, status: 'draft' })
                       }} />
@@ -878,14 +878,14 @@ export default function AnalyzePage() {
                   ))}
                 </div>
 
-                {analyzeResult.recommendations.length === 0 && (
+                {(analyzeResult.recommendations || []).length === 0 && (
                   <div className="text-center py-10 text-xs text-slate-500 border border-dashed border-slate-800 rounded-2xl">
                     Belum ada data analisis. Klik "Tambah Manual" atau "Generate Ulang AI".
                   </div>
                 )}
 
                 {/* --- Priority Result Table --- */}
-                {analyzeResult.recommendations.length > 0 && (
+                {(analyzeResult.recommendations || []).length > 0 && (
                   <div className="mt-8 border-t border-slate-800 pt-8">
                     <div className="flex items-center justify-between mb-4">
                       <div>

@@ -1444,8 +1444,16 @@ export async function getAnalyzeResult(projectId: string): Promise<AnalyzeResult
     const sb = getSupabase()
     if (!sb) throw new Error('No Supabase client')
     const { data } = await sb.from('analyze_results').select('*').eq('project_id', projectId).maybeSingle()
-    if (data && Array.isArray(data.recommendations) && data.recommendations.length > 0) {
+    if (data) {
       const sbResult = data as AnalyzeResult
+      // Ensure recommendations is always an array
+      if (!Array.isArray(sbResult.recommendations)) {
+        sbResult.recommendations = []
+      }
+      // Ensure priority_result is always an array or null
+      if (sbResult.priority_result && !Array.isArray(sbResult.priority_result)) {
+        sbResult.priority_result = null
+      }
       // Merge: if Supabase has no priority_result but localStorage does, use localStorage's
       if (!sbResult.priority_result?.length && localResult?.priority_result?.length) {
         sbResult.priority_result = localResult.priority_result
@@ -1454,6 +1462,10 @@ export async function getAnalyzeResult(projectId: string): Promise<AnalyzeResult
     }
   } catch (err) {
     console.warn('[getAnalyzeResult] fallback to mockDB/localStorage:', err)
+  }
+  // Normalize local result too
+  if (localResult && !Array.isArray(localResult.recommendations)) {
+    localResult.recommendations = []
   }
   return localResult
 }
