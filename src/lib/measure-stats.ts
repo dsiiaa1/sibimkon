@@ -670,11 +670,10 @@ export function calcAggregatedSigmaLevel(
   let totalDefects = 0
   let totalVolume = 0
   let ctqOpportunities = 1
-  let hasCTQData = false
   const warnings: string[] = []
   const supportingKpis: { name: string; value: number; label: string }[] = []
 
-  let firstValidDynamic: any = dynamicMetricResult || null
+  const firstValidDynamic: any = dynamicMetricResult || null
 
   dataReqs.forEach(req => {
 
@@ -693,7 +692,6 @@ export function calcAggregatedSigmaLevel(
     } else if (req.group === 'primary_ctq') {
       const uniqueVals = new Set(req.raw_data.map(r => r[colName])).size
       ctqOpportunities = Math.max(ctqOpportunities, uniqueVals)
-      hasCTQData = true
     } else if (req.group === 'supporting') {
       const nameLower = req.name.toLowerCase()
       const isAverage = nameLower.includes('kepuasan') || nameLower.includes('satisfaction') || nameLower.includes('waktu') || nameLower.includes('lead time') || nameLower.includes('skor') || nameLower.includes('score') || nameLower.includes('rata')
