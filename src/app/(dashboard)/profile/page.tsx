@@ -30,7 +30,7 @@ export default function CompanyProfilePage() {
 
   useEffect(() => {
     async function loadCompany() {
-      const localUser = localStorage.getItem('sibimkon_user')
+      const localUser = localStorage.getItem('smartproductive_user')
       if (!localUser) return
       const u = JSON.parse(localUser)
       const userOrg = u.organization || 'My Company'
@@ -261,7 +261,7 @@ export default function CompanyProfilePage() {
             <User className="h-5 w-5 text-amber-400" /> Kontak Person in Charge (PIC)
           </h2>
           <p className="text-xs text-slate-500 -mt-3">
-            PIC adalah perwakilan resmi perusahaan yang dapat dihubungi langsung oleh konsultan SIBIMKON untuk koordinasi program.
+            PIC adalah perwakilan resmi perusahaan yang dapat dihubungi langsung oleh konsultan Smart Productive untuk koordinasi program.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

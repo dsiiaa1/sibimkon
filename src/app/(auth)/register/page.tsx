@@ -188,7 +188,7 @@ export default function RegisterPage() {
           <img src="/sibimkonicon.png" alt="Logo" className="h-10 w-10 object-contain" />
           <div>
             <h1 className="text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-200">
-              SIBIMKON
+              Smart Productive
             </h1>
             <p className="text-[10px] uppercase tracking-widest text-slate-400">
               Link Productive
@@ -239,7 +239,7 @@ export default function RegisterPage() {
 
         {/* Footer Brand Info */}
         <div className="flex items-center justify-between text-xs text-slate-400 border-t border-slate-800/40 pt-6 z-10">
-          <span>SIBIMKON — Link Productive</span>
+          <span>Smart Productive — Link Productive</span>
           <span>© 2026 Link Productive</span>
         </div>
       </div>
@@ -264,7 +264,7 @@ export default function RegisterPage() {
           <div className="lg:hidden flex flex-col items-center mb-6">
             <img src="/sibimkonicon.png" alt="Logo" className="h-12 w-12 object-contain" />
             <h2 className="mt-2 text-center text-xl font-black text-[#0a1628]">
-              Daftar SIBIMKON
+              Daftar Smart Productive
             </h2>
             <p className="mt-1 text-center text-xs text-slate-500">
               Registrasi Akun Baru Klien Perusahaan

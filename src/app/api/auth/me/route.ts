@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
 
     // Ambil role dari tabel profiles (sumber kebenaran utama)
     let role: string = user.user_metadata?.role || 'perusahaan'
-    let fullName: string = user.user_metadata?.full_name || 'Pengguna SIBIMKON'
+    let fullName: string = user.user_metadata?.full_name || 'Pengguna Smart Productive'
     let organization: string = user.user_metadata?.company_name || ''
 
     try {

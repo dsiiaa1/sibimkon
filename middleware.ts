@@ -18,7 +18,7 @@ export async function middleware(request: NextRequest) {
 
   // Guard: jika env vars tidak ada, jangan crash — cek demo session cookie
   if (!supabaseUrl || !supabaseAnonKey) {
-    const isDemoSession = request.cookies.get('sibimkon_demo_session')?.value === 'true'
+    const isDemoSession = request.cookies.get('smartproductive_demo_session')?.value === 'true'
     if (isProtected && !isDemoSession) {
       const loginUrl = new URL('/login', request.url)
       loginUrl.searchParams.set('redirect', pathname)
@@ -68,7 +68,7 @@ export async function middleware(request: NextRequest) {
   } catch (err) {
     console.error('Middleware Supabase auth error:', err)
     // Jika Supabase error, cek demo session sebagai fallback
-    const isDemoSession = request.cookies.get('sibimkon_demo_session')?.value === 'true'
+    const isDemoSession = request.cookies.get('smartproductive_demo_session')?.value === 'true'
     if (isProtected && !isDemoSession) {
       const loginUrl = new URL('/login', request.url)
       loginUrl.searchParams.set('redirect', pathname)

@@ -337,13 +337,13 @@ export async function getVom(projectId: string): Promise<any[]> {
       .eq('project_id', projectId).order('priority', { ascending: true })
     if (error) handleDbError(error)
     if (typeof window !== 'undefined') {
-      localStorage.setItem(`sibimkon_vom_${projectId}`, JSON.stringify(data || []))
+      localStorage.setItem(`smartproductive_vom_${projectId}`, JSON.stringify(data || []))
     }
     return data || []
   } catch (err) {
     console.warn('[getVom] fallback to localStorage:', err)
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(`sibimkon_vom_${projectId}`)
+      const saved = localStorage.getItem(`smartproductive_vom_${projectId}`)
       return saved ? JSON.parse(saved) : []
     }
     return []
@@ -352,7 +352,7 @@ export async function getVom(projectId: string): Promise<any[]> {
 
 export async function saveVom(projectId: string, vomList: any[]): Promise<void> {
   if (typeof window !== 'undefined') {
-    localStorage.setItem(`sibimkon_vom_${projectId}`, JSON.stringify(vomList))
+    localStorage.setItem(`smartproductive_vom_${projectId}`, JSON.stringify(vomList))
   }
   const sb = getSupabase()
   if (!sb) return
@@ -502,17 +502,17 @@ export async function getControlAudit(projectId: string): Promise<any[]> {
     if (data?.items && (data.items as any[]).length > 0) {
       return data.items as any[]
     }
-    const saved = typeof window !== 'undefined' ? localStorage.getItem(`sibimkon_audit_${projectId}`) : null
+    const saved = typeof window !== 'undefined' ? localStorage.getItem(`smartproductive_audit_${projectId}`) : null
     return saved ? JSON.parse(saved) : []
   } catch (err) {
     console.warn('[getControlAudit] fallback to localStorage:', err)
-    const saved = typeof window !== 'undefined' ? localStorage.getItem(`sibimkon_audit_${projectId}`) : null
+    const saved = typeof window !== 'undefined' ? localStorage.getItem(`smartproductive_audit_${projectId}`) : null
     return saved ? JSON.parse(saved) : []
   }
 }
 
 export async function saveControlAudit(projectId: string, items: any[]): Promise<void> {
-  if (typeof window !== 'undefined') localStorage.setItem(`sibimkon_audit_${projectId}`, JSON.stringify(items))
+  if (typeof window !== 'undefined') localStorage.setItem(`smartproductive_audit_${projectId}`, JSON.stringify(items))
   const sb = getSupabase()
   if (!sb) return
   const compliant = items.filter((i: any) => i.completed).length
@@ -542,17 +542,17 @@ export async function getControlPsi(projectId: string): Promise<{ people: number
         people_notes: data.people_notes || '', process_notes: data.process_notes || '', system_notes: data.system_notes || '', result_notes: data.result_notes || ''
       }
     }
-    const saved = typeof window !== 'undefined' ? localStorage.getItem(`sibimkon_psi_${projectId}`) : null
+    const saved = typeof window !== 'undefined' ? localStorage.getItem(`smartproductive_psi_${projectId}`) : null
     return saved ? JSON.parse(saved) : null
   } catch (err) {
     console.warn('[getControlPsi] fallback to localStorage:', err)
-    const saved = typeof window !== 'undefined' ? localStorage.getItem(`sibimkon_psi_${projectId}`) : null
+    const saved = typeof window !== 'undefined' ? localStorage.getItem(`smartproductive_psi_${projectId}`) : null
     return saved ? JSON.parse(saved) : null
   }
 }
 
 export async function saveControlPsi(projectId: string, psi: { people: number; process: number; system: number; result: number, people_notes?: string, process_notes?: string, system_notes?: string, result_notes?: string }): Promise<void> {
-  if (typeof window !== 'undefined') localStorage.setItem(`sibimkon_psi_${projectId}`, JSON.stringify(psi))
+  if (typeof window !== 'undefined') localStorage.setItem(`smartproductive_psi_${projectId}`, JSON.stringify(psi))
   const sb = getSupabase()
   if (!sb) return
   const psiTotal = Math.round((psi.people + psi.process + psi.system + psi.result) / 4)
@@ -662,7 +662,7 @@ export interface EvidenceRecord {
 
 export async function saveEvidenceRecord(projectId: string, record: Omit<EvidenceRecord, 'id'>): Promise<void> {
   if (typeof window !== 'undefined') {
-    const key = `sibimkon_evidence_${projectId}`
+    const key = `smartproductive_evidence_${projectId}`
     const existing = JSON.parse(localStorage.getItem(key) || '[]')
     existing.push({ ...record, id: 'ev-' + Math.random().toString(36).substr(2, 9), uploaded_at: record.uploaded_at || new Date().toISOString() })
     localStorage.setItem(key, JSON.stringify(existing))
@@ -700,7 +700,7 @@ export async function getEvidenceRecords(projectId: string, actionPlanId?: strin
     } as EvidenceRecord))
   } catch {
     if (typeof window === 'undefined') return []
-    const all: EvidenceRecord[] = JSON.parse(localStorage.getItem(`sibimkon_evidence_${projectId}`) || '[]')
+    const all: EvidenceRecord[] = JSON.parse(localStorage.getItem(`smartproductive_evidence_${projectId}`) || '[]')
     return actionPlanId ? all.filter(e => e.action_plan_id === actionPlanId) : all
   }
 }
@@ -714,7 +714,7 @@ export interface AuditLogEntry {
 
 export async function saveAuditLog(entry: AuditLogEntry): Promise<void> {
   if (typeof window !== 'undefined') {
-    const key = `sibimkon_status_audit_${entry.project_id}`
+    const key = `smartproductive_status_audit_${entry.project_id}`
     const existing = JSON.parse(localStorage.getItem(key) || '[]')
     existing.unshift({ ...entry, id: 'audit-' + Math.random().toString(36).substr(2, 9), created_at: new Date().toISOString() })
     localStorage.setItem(key, JSON.stringify(existing.slice(0, 200)))
@@ -735,7 +735,7 @@ export async function saveAuditLog(entry: AuditLogEntry): Promise<void> {
 
 export async function saveNotification(notification: { user_id: string; project_id: string; type: string; title: string; message: string }): Promise<void> {
   if (typeof window !== 'undefined') {
-    const key = `sibimkon_mock_notifications_${notification.user_id}`
+    const key = `smartproductive_mock_notifications_${notification.user_id}`
     const existing = JSON.parse(localStorage.getItem(key) || '[]')
     existing.unshift({ id: 'notif-' + Math.random().toString(36).substr(2, 9), ...notification, created_at: new Date().toISOString(), is_read: false })
     localStorage.setItem(key, JSON.stringify(existing.slice(0, 50)))
@@ -945,7 +945,7 @@ export async function getMeasureProblems(projectId: string): Promise<MeasureProb
   } catch (err) {
     console.warn('[getMeasureProblems] fallback to localStorage:', err)
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(`sibimkon_measure_problems_${projectId}`)
+      const saved = localStorage.getItem(`smartproductive_measure_problems_${projectId}`)
       return saved ? JSON.parse(saved) : []
     }
     return []
@@ -955,7 +955,7 @@ export async function getMeasureProblems(projectId: string): Promise<MeasureProb
 export async function saveMeasureProblems(projectId: string, problems: MeasureProblem[]): Promise<void> {
   // localStorage sebagai backup cepat
   if (typeof window !== 'undefined') {
-    localStorage.setItem(`sibimkon_measure_problems_${projectId}`, JSON.stringify(problems))
+    localStorage.setItem(`smartproductive_measure_problems_${projectId}`, JSON.stringify(problems))
   }
   const sb = getSupabase()
   if (!sb) return
@@ -1014,7 +1014,7 @@ export async function getAnalyzeNeeds(projectId: string): Promise<AnalyzeNeed[]>
   } catch (err) {
     console.warn('[getAnalyzeNeeds] fallback to localStorage:', err)
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(`sibimkon_analyze_needs_${projectId}`)
+      const saved = localStorage.getItem(`smartproductive_analyze_needs_${projectId}`)
       return saved ? JSON.parse(saved) : []
     }
     return []
@@ -1023,7 +1023,7 @@ export async function getAnalyzeNeeds(projectId: string): Promise<AnalyzeNeed[]>
 
 export async function saveAnalyzeNeeds(projectId: string, needs: AnalyzeNeed[]): Promise<void> {
   if (typeof window !== 'undefined') {
-    localStorage.setItem(`sibimkon_analyze_needs_${projectId}`, JSON.stringify(needs))
+    localStorage.setItem(`smartproductive_analyze_needs_${projectId}`, JSON.stringify(needs))
   }
   const sb = getSupabase()
   if (!sb) return
@@ -1088,7 +1088,7 @@ export async function getEvidenceItems(projectId: string, actionPlanId?: string)
   } catch (err: any) {
     console.error('[getEvidenceItems] Exception, fallback to localStorage:', err?.message || err)
     if (typeof window === 'undefined') return []
-    const all: EvidenceItem[] = JSON.parse(localStorage.getItem(`sibimkon_evidence_${projectId}`) || '[]')
+    const all: EvidenceItem[] = JSON.parse(localStorage.getItem(`smartproductive_evidence_${projectId}`) || '[]')
     return actionPlanId ? all.filter((e) => e.action_plan_id === actionPlanId) : all
   }
 }
@@ -1126,7 +1126,7 @@ export async function submitEvidence(
 
   // Simpan ke localStorage
   if (typeof window !== 'undefined') {
-    const key = `sibimkon_evidence_${projectId}`
+    const key = `smartproductive_evidence_${projectId}`
     const existing: EvidenceItem[] = JSON.parse(localStorage.getItem(key) || '[]')
     existing.unshift(newItem)
     localStorage.setItem(key, JSON.stringify(existing))
@@ -1180,7 +1180,7 @@ export async function verifyEvidence(
 
   // Update localStorage: evidence
   if (typeof window !== 'undefined') {
-    const key = `sibimkon_evidence_${projectId}`
+    const key = `smartproductive_evidence_${projectId}`
     const existing: EvidenceItem[] = JSON.parse(localStorage.getItem(key) || '[]')
     const updated = existing.map((e) =>
       e.id === evidenceId
@@ -1190,7 +1190,7 @@ export async function verifyEvidence(
     localStorage.setItem(key, JSON.stringify(updated))
 
     // Update localStorage: action plans
-    const plansKey = `sibimkon_actionPlans`
+    const plansKey = `smartproductive_actionPlans`
     const allPlans: Record<string, ActionPlan[]> = JSON.parse(localStorage.getItem(plansKey) || '{}')
     if (allPlans[projectId] && status === 'verified') {
       allPlans[projectId] = allPlans[projectId].map((a) =>
@@ -1370,7 +1370,7 @@ export async function getConsultantNotes(projectId: string): Promise<ConsultantC
   } catch (err) {
     console.warn('[getConsultantNotes] fallback to localStorage:', err)
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(`sibimkon_consultant_notes_${projectId}`)
+      const saved = localStorage.getItem(`smartproductive_consultant_notes_${projectId}`)
       return saved ? JSON.parse(saved) : []
     }
     return []
@@ -1389,7 +1389,7 @@ export async function saveConsultantNote(
 
   // Simpan ke localStorage
   if (typeof window !== 'undefined') {
-    const key = `sibimkon_consultant_notes_${projectId}`
+    const key = `smartproductive_consultant_notes_${projectId}`
     const existing: ConsultantControlNote[] = JSON.parse(localStorage.getItem(key) || '[]')
     existing.unshift(newNote)
     localStorage.setItem(key, JSON.stringify(existing))
@@ -1418,7 +1418,7 @@ export async function saveConsultantNote(
 
 export async function deleteConsultantNote(projectId: string, noteId: string): Promise<void> {
   if (typeof window !== 'undefined') {
-    const key = `sibimkon_consultant_notes_${projectId}`
+    const key = `smartproductive_consultant_notes_${projectId}`
     const existing: ConsultantControlNote[] = JSON.parse(localStorage.getItem(key) || '[]')
     localStorage.setItem(key, JSON.stringify(existing.filter((n) => n.id !== noteId)))
   }
@@ -1567,15 +1567,123 @@ export async function saveEfficiencyActuals(actuals: any[]): Promise<void> {
       efficiency_target_id: a.efficiency_target_id,
       checkpoint_number: a.checkpoint_number,
       due_date: a.due_date,
-      actual_value: a.actual_value,
+      actual_value: a.actual_value !== undefined ? a.actual_value : null,
       input_by: a.input_by || null,
       input_at: a.input_at || null,
       note: a.note || ''
     }))
 
     const { error } = await sb.from('efficiency_actuals').upsert(rows, { onConflict: 'id' })
-    if (error) handleDbError(error)
+    if (error) throw error
   } catch (err) {
     console.warn('[saveEfficiencyActuals] failed:', err)
+    throw err
+  }
+}
+
+// ── CONTROL: Change Requests (Approval Workflow) ──────────────────────────────
+
+export async function getChangeRequests(projectId: string): Promise<any[]> {
+  try {
+    const sb = getSupabase()
+    if (!sb) throw new Error('No Supabase client')
+
+    const { data, error } = await sb.from('control_change_requests')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('requested_at', { ascending: false })
+
+    if (error) handleDbError(error)
+    return data || []
+  } catch (err) {
+    console.warn('[getChangeRequests] fallback to mockDB or empty:', err)
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(`smartproductive_controlChangeRequests`)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        const projReqs = Object.values(parsed).flat().filter((r: any) => r.project_id === projectId)
+        return projReqs
+      }
+    }
+    return []
+  }
+}
+
+export async function submitChangeRequest(request: any): Promise<void> {
+  try {
+    const sb = getSupabase()
+    if (!sb) throw new Error('No Supabase client')
+
+    const { error } = await sb.from('control_change_requests').insert([request])
+    if (error) handleDbError(error)
+  } catch (err) {
+    console.warn('[submitChangeRequest] fallback to localStorage:', err)
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(`smartproductive_controlChangeRequests`)
+      const parsed = saved ? JSON.parse(saved) : {}
+      if (!parsed[request.project_id]) parsed[request.project_id] = []
+      parsed[request.project_id].push(request)
+      localStorage.setItem(`smartproductive_controlChangeRequests`, JSON.stringify(parsed))
+    }
+  }
+}
+
+export async function reviewChangeRequest(id: string, status: 'approved' | 'rejected', reviewerId: string, rejectReason?: string): Promise<void> {
+  try {
+    const sb = getSupabase()
+    if (!sb) throw new Error('No Supabase client')
+
+    const updates = {
+      status,
+      reviewed_by: reviewerId,
+      reviewed_at: new Date().toISOString(),
+      reject_reason: rejectReason || null
+    }
+
+    const { error } = await sb.from('control_change_requests').update(updates).eq('id', id)
+    if (error) handleDbError(error)
+  } catch (err) {
+    console.warn('[reviewChangeRequest] fallback to localStorage:', err)
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(`smartproductive_controlChangeRequests`)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        for (const projId in parsed) {
+          const idx = parsed[projId].findIndex((r: any) => r.id === id)
+          if (idx !== -1) {
+            parsed[projId][idx].status = status
+            parsed[projId][idx].reviewed_by = reviewerId
+            parsed[projId][idx].reviewed_at = new Date().toISOString()
+            parsed[projId][idx].reject_reason = rejectReason || null
+          }
+        }
+        localStorage.setItem(`smartproductive_controlChangeRequests`, JSON.stringify(parsed))
+      }
+    }
+  }
+}
+
+export async function cancelChangeRequest(id: string): Promise<void> {
+  try {
+    const sb = getSupabase()
+    if (!sb) throw new Error('No Supabase client')
+
+    const { error } = await sb.from('control_change_requests').update({ status: 'cancelled' }).eq('id', id)
+    if (error) handleDbError(error)
+  } catch (err) {
+    console.warn('[cancelChangeRequest] fallback to localStorage:', err)
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(`smartproductive_controlChangeRequests`)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        for (const projId in parsed) {
+          const idx = parsed[projId].findIndex((r: any) => r.id === id)
+          if (idx !== -1) {
+            parsed[projId][idx].status = 'cancelled'
+          }
+        }
+        localStorage.setItem(`smartproductive_controlChangeRequests`, JSON.stringify(parsed))
+      }
+    }
   }
 }

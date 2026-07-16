@@ -18,7 +18,7 @@ export async function updateSession(request: NextRequest) {
   )
 
   // Check demo session cookie
-  const isDemoSession = request.cookies.get('sibimkon_demo_session')?.value === 'true'
+  const isDemoSession = request.cookies.get('smartproductive_demo_session')?.value === 'true'
 
   // If no Supabase config, allow demo mode or redirect to login
   if (!supabaseUrl || !supabaseAnonKey) {

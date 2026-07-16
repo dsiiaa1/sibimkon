@@ -29,7 +29,7 @@ export default function CompaniesPage() {
 
   useEffect(() => {
     async function loadData() {
-      const localUser = localStorage.getItem('sibimkon_user')
+      const localUser = localStorage.getItem('smartproductive_user')
       if (localUser) {
         const u = JSON.parse(localUser)
         setUserRole(u.role || '')

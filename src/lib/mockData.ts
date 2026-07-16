@@ -1,7 +1,20 @@
 'use client'
 
-// Local state/localStorage database manager for SIBIMKON.
+// Local state/localStorage database manager for Smart Productive.
 // Provides realistic mockup data when Supabase connection is not fully loaded or for instant demoing.
+
+export interface ControlChangeRequest {
+  id: string
+  project_id: string
+  target_id: string
+  requested_by: string
+  requested_at: string
+  changes: any // { baseline_value?: string, target_value?: string, duration?: string, duration_unit?: string, actuals?: any[] }
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled'
+  reviewed_by?: string
+  reviewed_at?: string
+  reject_reason?: string
+}
 
 export interface Profile {
   id: string
@@ -141,7 +154,7 @@ export interface EfficiencyActual {
   efficiency_target_id: string
   checkpoint_number: number
   due_date: string
-  actual_value?: number
+  actual_value?: number | null
   input_by?: string
   input_at?: string
   note?: string
@@ -155,7 +168,7 @@ export interface EfficiencyTarget {
   project_id: string
   raw_text: string
   metric_name: string
-  baseline_value?: number
+  baseline_value?: number | null
   target_value: number
   duration: number
   duration_unit: string
@@ -240,8 +253,12 @@ export interface MeasureDataRequirement {
   file_url?: string
   /** Nama file asli yang diupload */
   file_name?: string
+  /** Hasil kalkulasi (opsional) - tidak dipakai lagi */
+  calculation_results?: any
+  /** Peringatan ringan setelah upload (mis. format tidak sesuai) */
+  upload_warning?: string
   /** Hasil perhitungan statistik (hardcoded, bukan AI) */
-  calculation_results?: {
+  calculation_results_final?: {
     method: string
     metrics: Record<string, any>
     warnings: string[]
@@ -569,14 +586,15 @@ export const getMockDB = () => {
       consultantNotes: {} as Record<string, ConsultantControlNote[]>,
       measureDataReqs: {} as Record<string, MeasureDataRequirement[]>,
       analyzeResults: {} as Record<string, AnalyzeResult>,
+      controlChangeRequests: {} as Record<string, ControlChangeRequest[]>,
     }
   }
 
   // Load from localStorage or set defaults
   const getOrSet = (key: string, defaultValue: any) => {
-    const data = localStorage.getItem(`sibimkon_${key}`)
+    const data = localStorage.getItem(`smartproductive_${key}`)
     if (data) return JSON.parse(data)
-    localStorage.setItem(`sibimkon_${key}`, JSON.stringify(defaultValue))
+    localStorage.setItem(`smartproductive_${key}`, JSON.stringify(defaultValue))
     return defaultValue
   }
 
@@ -592,11 +610,12 @@ export const getMockDB = () => {
     consultantNotes: getOrSet('consultantNotes', {}),
     measureDataReqs: getOrSet('measureDataReqs', {}),
     analyzeResults: getOrSet('analyzeResults', {}),
+    controlChangeRequests: getOrSet('controlChangeRequests', {}),
   }
 }
 
 export const updateMockDB = (key: string, data: any) => {
   if (typeof window !== 'undefined') {
-    localStorage.setItem(`sibimkon_${key}`, JSON.stringify(data))
+    localStorage.setItem(`smartproductive_${key}`, JSON.stringify(data))
   }
 }

@@ -1,63 +1,6 @@
 import { NextResponse } from 'next/server'
+import { generateWithFallback } from '@/lib/ai-providers/orchestrator'
 
-const GROQ_MODEL  = 'llama-3.1-8b-instant'
-const MAX_RETRIES = 4
-
-async function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-async function callAI(prompt: string, apiKey: string): Promise<string> {
-  const url = 'https://api.groq.com/openai/v1/chat/completions'
-
-  const body = {
-    model: GROQ_MODEL,
-    messages: [{ role: 'user', content: prompt }],
-    temperature: 0.1,
-    max_tokens: 1536,
-  }
-
-  let lastError: Error | null = null
-
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
-    })
-
-    if (res.ok) {
-      const data = await res.json()
-      const text: string | undefined = data.choices?.[0]?.message?.content
-      if (!text) throw new Error('Groq returned empty content')
-      return text
-    }
-
-    if (res.status === 429) {
-      const retryAfterSec = parseInt(res.headers.get('Retry-After') ?? '0', 10)
-      const backoffMs = retryAfterSec > 0
-        ? retryAfterSec * 1000
-        : Math.min(1000 * 2 ** attempt, 16000)
-
-      if (backoffMs > 10000) {
-        throw new Error(`Server AI sedang sibuk (Rate Limit). Silakan coba lagi nanti.`)
-      }
-
-      console.warn(`[analyze-ai] 429 rate limit, retry ${attempt + 1}/${MAX_RETRIES} in ${backoffMs}ms`)
-      lastError = new Error(`Rate limit — retry ${attempt + 1}/${MAX_RETRIES}`)
-      await sleep(backoffMs)
-      continue
-    }
-
-    const errText = await res.text().catch(() => `HTTP ${res.status}`)
-    throw new Error(`Groq API error ${res.status}: ${errText.substring(0, 300)}`)
-  }
-
-  throw new Error(`Groq API gagal setelah ${MAX_RETRIES} percobaan: ${lastError?.message ?? 'rate limit'}`)
-}
 
 function extractJson(raw: string): any {
   const trimmed = raw.trim()
@@ -227,18 +170,15 @@ export async function POST(req: Request) {
     )
   }
 
-  const apiKey = process.env.GROQ_API_KEY
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: 'Konfigurasi AI belum tersedia. Silakan tambahkan GROQ_API_KEY di berkas .env.local' },
-      { status: 503 }
-    )
-  }
-
   const prompt = buildPrompt(body)
 
   try {
-    const rawText = await callAI(prompt, apiKey)
+    const aiRes = await generateWithFallback(prompt, {
+      model: 'llama-3.1-8b-instant',
+      temperature: 0.1,
+      maxTokens: 1536
+    })
+    const rawText = aiRes.text
     let parsed = extractJson(rawText)
 
     if (!Array.isArray(parsed)) {

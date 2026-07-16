@@ -19,7 +19,7 @@ export default function ProjectsPage() {
 
   useEffect(() => {
     async function loadData() {
-      const localUser = localStorage.getItem('sibimkon_user')
+      const localUser = localStorage.getItem('smartproductive_user')
       let u: any = null
       if (localUser) {
         u = JSON.parse(localUser)
@@ -50,7 +50,7 @@ export default function ProjectsPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
             <FolderKanban className="h-6 w-6 text-indigo-400" />
-            Proyek BIMKON
+            Proyek Smart Productive
           </h1>
           <p className="text-xs text-slate-500">Kelola dan pantau seluruh pendampingan aktif perusahaan</p>
         </div>

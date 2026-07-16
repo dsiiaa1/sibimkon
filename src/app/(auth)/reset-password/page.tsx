@@ -16,7 +16,7 @@ export default function ResetPasswordPage() {
     <div className="flex min-h-screen flex-1 flex-col justify-center py-12 sm:px-6 lg:px-8 bg-gradient-to-tr from-slate-900 via-indigo-950 to-slate-950 text-white relative overflow-hidden">
       <div className="sm:mx-auto sm:w-full sm:max-w-md z-10">
         <h2 className="text-center text-3xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-200 via-white to-cyan-200">
-          Reset Password SIBIMKON
+          Reset Password Smart Productive
         </h2>
       </div>
 

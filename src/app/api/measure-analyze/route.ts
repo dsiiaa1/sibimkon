@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
+import { generateWithFallback } from '@/lib/ai-providers/orchestrator'
 
 /**
  * POST /api/measure-analyze
  *
- * Menerima teks Project Charter → Gemini AI menganalisis → return:
+ * Menerima teks Project Charter → AI menganalisis → return:
  * - Masalah-masalah utama yang teridentifikasi
  * - Dimensi PQCDSM yang tepat per masalah
  * - Rekomendasi metode yang BENAR-BENAR RELEVAN dengan konteks masalah
@@ -72,67 +73,6 @@ Kembalikan HANYA JSON berikut, tanpa teks lain, tanpa markdown, tanpa backtick:
 {"estimated_baseline_score": 65, "baseline_reasoning": "Penjelasan mengapa skor 65 diberikan...", "problems":[{"problem_text":"Deskripsi masalah spesifik","pqcdsm_dimension":"productivity","dimension_reason":"Alasan dimensi ini tepat","recommended_methods":[{"priority":1,"method":"Nama metode","reason":"Mengapa metode ini tepat untuk masalah ini secara spesifik"},{"priority":2,"method":"Nama metode 2","reason":"Alasan spesifik"},{"priority":3,"method":"Nama metode 3","reason":"Alasan spesifik"}]}]}`
 }
 
-// Groq Cloud — LPU inference super cepat, OpenAI-compatible API
-const GROQ_MODEL  = 'llama-3.1-8b-instant'
-const MAX_RETRIES = 4
-
-async function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-async function callAI(prompt: string, apiKey: string): Promise<string> {
-  const url = 'https://api.groq.com/openai/v1/chat/completions'
-
-  const body = {
-    model: GROQ_MODEL,
-    messages: [{ role: 'user', content: prompt }],
-    temperature: 0.1,
-    max_tokens: 2048,
-  }
-
-  let lastError: Error | null = null
-
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
-    })
-
-    if (res.ok) {
-      const data = await res.json()
-      const text: string | undefined = data.choices?.[0]?.message?.content
-      if (!text) throw new Error('Groq returned empty content')
-      return text
-    }
-
-    if (res.status === 429) {
-      const retryAfterSec = parseInt(res.headers.get('Retry-After') ?? '0', 10)
-      const backoffMs = retryAfterSec > 0
-        ? retryAfterSec * 1000
-        : Math.min(1000 * 2 ** attempt, 16000) // 1s, 2s, 4s, 8s
-
-      if (backoffMs > 10000) {
-        throw new Error(`Server AI sedang sibuk (Rate Limit). Silakan coba lagi nanti.`)
-      }
-
-      console.warn(`[measure-analyze] 429 rate limit, retry ${attempt + 1}/${MAX_RETRIES} dalam ${backoffMs}ms`)
-      lastError = new Error(`Rate limit — retry ${attempt + 1}/${MAX_RETRIES}`)
-      await sleep(backoffMs)
-      continue
-    }
-
-    // Error lain — langsung lempar
-    const errText = await res.text().catch(() => `HTTP ${res.status}`)
-    throw new Error(`Groq API error ${res.status}: ${errText.substring(0, 300)}`)
-  }
-
-  throw new Error(`Groq API gagal setelah ${MAX_RETRIES} percobaan: ${lastError?.message ?? 'rate limit'}`)
-}
-
 function extractJson(raw: string): any {
   // Gemini kadang return JSON di dalam backtick ```json ... ``` atau ada teks sebelumnya
   // Coba parse langsung dulu
@@ -173,20 +113,16 @@ export async function POST(req: Request) {
     )
   }
 
-  const apiKey = process.env.GROQ_API_KEY
-  if (!apiKey) {
-    console.error('[measure-analyze] GROQ_API_KEY tidak ditemukan di environment')
-    return NextResponse.json(
-      { error: 'Konfigurasi AI belum tersedia. Tambahkan GROQ_API_KEY di .env.local' },
-      { status: 503 }
-    )
-  }
-
   const prompt = buildPrompt(charter)
 
   try {
-    const rawText = await callAI(prompt, apiKey)
-    console.log('[measure-analyze] Gemini raw response (first 500):', rawText.substring(0, 500))
+    const aiRes = await generateWithFallback(prompt, {
+      model: 'llama-3.1-8b-instant',
+      temperature: 0.1,
+      maxTokens: 1536
+    })
+    const rawText = aiRes.text
+    console.log('[measure-analyze] AI raw response (first 500):', rawText.substring(0, 500))
 
     const parsed = extractJson(rawText)
 

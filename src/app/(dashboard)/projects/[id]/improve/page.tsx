@@ -313,17 +313,21 @@ export default function ImprovePage() {
     loadData()
   }, [projectId, router])
 
-  // Auto-generate AI for empty AI analysis
+  // Auto-generate AI for empty AI analysis secara antrean (menghindari rate limit)
   useEffect(() => {
     if (!mounted || actionPlans.length === 0) return;
-    actionPlans.forEach(act => {
-      if (!act.ai_analysis && !generatingAiIds[act.id] && !attemptedAiIds.has(act.id)) {
-        setAttemptedAiIds(prev => new Set(prev).add(act.id));
-        handleGenerateAiAnalysis(act);
-      }
-    });
+    
+    // Cari 1 action plan yang belum di-generate dan belum pernah dicoba
+    const actToProcess = actionPlans.find(act => 
+      !act.ai_analysis && !generatingAiIds[act.id] && !attemptedAiIds.has(act.id)
+    );
+
+    if (actToProcess) {
+      setAttemptedAiIds(prev => new Set(prev).add(actToProcess.id));
+      handleGenerateAiAnalysis(actToProcess);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actionPlans, mounted]);
+  }, [actionPlans, mounted, generatingAiIds, attemptedAiIds]);
 
   /* ── save action plans helper ── */
   const derivedRecommendations = (() => {
@@ -434,7 +438,7 @@ export default function ImprovePage() {
       act.id === actionId ? { ...act, status, progress_percentage: status === 'selesai' ? 100 : act.progress_percentage } : act
     )
     persistActionPlans(updated)
-    const localUser = localStorage.getItem('sibimkon_user')
+    const localUser = localStorage.getItem('smartproductive_user')
     const actor = localUser ? JSON.parse(localUser) : null
     saveAuditLog({ project_id: projectId, action_plan_id: actionId, actor_id: actor?.id, actor_role: actor?.role, event_type: 'status_change', detail: `Status: ${prevAct?.status} → ${status}` }).catch(console.warn)
   }
@@ -688,7 +692,7 @@ export default function ImprovePage() {
       fileUrl = 'manual://' + evidenceName
     }
 
-    const localUser   = localStorage.getItem('sibimkon_user')
+    const localUser   = localStorage.getItem('smartproductive_user')
     const uploaderInfo = localUser ? JSON.parse(localUser) : null
 
     const newEv = await submitEvidence(projectId, {
@@ -727,7 +731,7 @@ export default function ImprovePage() {
   const handleVerifyEvidence = async () => {
     if (!verifyTarget) return
     setVerifySaving(true)
-    const localUser = localStorage.getItem('sibimkon_user')
+    const localUser = localStorage.getItem('smartproductive_user')
     const actor     = localUser ? JSON.parse(localUser) : null
 
     await verifyEvidence(projectId, verifyTarget.id, verifyActionId, verifiedKpi, verifyNotes, actor?.id ?? '', verifyStatus)
@@ -793,7 +797,7 @@ export default function ImprovePage() {
       return
     }
 
-    const localUser = localStorage.getItem('sibimkon_user')
+    const localUser = localStorage.getItem('smartproductive_user')
     const uploaderInfo = localUser ? JSON.parse(localUser) : null
 
     const newEv = await submitChecklistEvidence(uploadChecklistStep.stepId, {
@@ -821,7 +825,7 @@ export default function ImprovePage() {
   const handleVerifyChecklistEvidence = async () => {
     if (!verifyChkTarget) return
     setVerifyChkSaving(true)
-    const localUser = localStorage.getItem('sibimkon_user')
+    const localUser = localStorage.getItem('smartproductive_user')
     const actor = localUser ? JSON.parse(localUser) : null
 
     await verifyChecklistEvidence(verifyChkTarget.id, verifyChkStatus, verifyChkNotes, actor?.id ?? '')
@@ -892,22 +896,22 @@ export default function ImprovePage() {
           >
             Lanjut ke CONTROL <ArrowRight className="h-3.5 w-3.5" />
           </button>
-          {isKonsultan && (
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={handleForceSyncFromAnalyze}
-                disabled={isSyncing}
-                title="Menarik ulang draft action plan dari tahap Analyze"
-                className="inline-flex items-center gap-2 px-4 py-3 bg-slate-800 hover:bg-slate-700 text-sm font-semibold rounded-xl text-slate-300 transition-colors cursor-pointer border border-slate-700 disabled:opacity-50"
-              >
-                <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} /> Sinkronkan Analyze
-              </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={handleForceSyncFromAnalyze}
+              disabled={isSyncing}
+              title="Reset dan tarik ulang action plan dari tahap Analyze"
+              className="inline-flex items-center gap-2 px-4 py-3 bg-red-500/10 hover:bg-red-500/20 text-sm font-semibold rounded-xl text-red-400 transition-colors cursor-pointer border border-red-500/30 disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} /> Reset Action Plans
+            </button>
+            {isKonsultan && (
               <button onClick={() => setShowAddModal(true)}
                 className="inline-flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold rounded-xl text-white cursor-pointer shadow-md transition-colors">
                 <Plus className="h-4 w-4" /> Tambah Action Plan
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
@@ -1218,8 +1222,14 @@ export default function ImprovePage() {
                                   </div>
                                 ) : (
                                   !generatingAiIds[act.id] && (
-                                    <div className="text-xs text-slate-500 italic p-3 bg-slate-900/40 rounded-xl border border-slate-800/80 mb-2">
-                                      Data ROI belum tersedia.
+                                    <div className="text-xs text-slate-500 italic p-3 bg-slate-900/40 rounded-xl border border-slate-800/80 mb-2 flex justify-between items-center gap-3">
+                                      <span>Data ROI belum tersedia.</span>
+                                      <button onClick={() => {
+                                        setAttemptedAiIds(prev => { const n = new Set(prev); n.delete(act.id); return n; });
+                                        handleGenerateAiAnalysis(act);
+                                      }} className="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 border border-indigo-600/40 rounded-lg text-[10px] font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5">
+                                        <Sparkles className="w-3 h-3" /> Coba Generate AI
+                                      </button>
                                     </div>
                                   )
                                 )

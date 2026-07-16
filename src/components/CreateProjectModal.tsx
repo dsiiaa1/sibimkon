@@ -112,7 +112,7 @@ export default function CreateProjectModal({
           <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
             {fixedCompanyName
               ? `Proyek Baru — ${fixedCompanyName}`
-              : 'Mulai Proyek BIMKON Baru'}
+              : 'Mulai Proyek Smart Productive Baru'}
           </h3>
           <button
             onClick={onClose}

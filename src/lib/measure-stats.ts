@@ -635,11 +635,20 @@ export function getLevelBadge(result: CalculationResult): { label: string; color
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface AggregatedResult {
-  overall_sigma_level: number
-  overall_dpmo: number
-  total_defects: number
-  total_volume: number
-  opportunities_per_unit: number
+  type: 'sigma' | 'dynamic'
+  primary_metric?: {
+    name: string
+    value: number | string
+    unit: string
+    method_used: string
+    interpretation?: any
+    metrics?: Record<string, any>
+  }
+  overall_sigma_level?: number
+  overall_dpmo?: number
+  total_defects?: number
+  total_volume?: number
+  opportunities_per_unit?: number
   supporting_kpis: { name: string; value: number; label: string }[]
   warnings: string[]
 }
@@ -655,7 +664,8 @@ export function calcAggregatedSigmaLevel(
   dataReqs: { id: string; name: string; group?: string; raw_data?: Record<string, any>[] }[],
   aggregationConfig: {
     targetCols: Record<string, string> // mapping reqId -> nama kolom target yang dipilih user
-  }
+  },
+  dynamicMetricResult?: { name: string; result: any }
 ): AggregatedResult {
   let totalDefects = 0
   let totalVolume = 0
@@ -664,7 +674,10 @@ export function calcAggregatedSigmaLevel(
   const warnings: string[] = []
   const supportingKpis: { name: string; value: number; label: string }[] = []
 
+  let firstValidDynamic: any = dynamicMetricResult || null
+
   dataReqs.forEach(req => {
+
     if (!req.raw_data || req.raw_data.length === 0) return
     const colName = aggregationConfig.targetCols[req.id]
     if (!colName) return
@@ -678,8 +691,6 @@ export function calcAggregatedSigmaLevel(
     } else if (req.group === 'primary_volume') {
       totalVolume += sum
     } else if (req.group === 'primary_ctq') {
-      // Misalkan jumlah opportunity dihitung dari jumlah unik kategori atau jumlah kolom (disimplifikasi: user memilih 1 kolom ctq, kita anggap itu mewakili jumlah opportunity atau ambil sum-nya, tergantung logika. Di sini kita ambil nilai rata-ratanya atau jumlah barisnya jika itu kategorikal. Untuk simplifikasi, jika user milih kolom numerik CTQ, kita anggap nilainya adalah jumlah opportunity, atau jika tidak ada, default 1).
-      // Mengikuti prompt: "Opportunity/Unit = jumlah kolom karakteristik CTQ dari file bergroup primary_ctq". Karena kita minta user pilih 1 kolom, asumsi kita hitung jumlah nilai uniknya atau setara.
       const uniqueVals = new Set(req.raw_data.map(r => r[colName])).size
       ctqOpportunities = Math.max(ctqOpportunities, uniqueVals)
       hasCTQData = true
@@ -697,15 +708,51 @@ export function calcAggregatedSigmaLevel(
     }
   })
 
+  // Jika tidak ada data volume, gunakan metrik dinamis jika ada
   if (totalVolume === 0) {
-    warnings.push('Total unit/volume produksi adalah 0. DPMO tidak dapat dihitung.')
-    return { overall_sigma_level: 0, overall_dpmo: 0, total_defects: totalDefects, total_volume: 0, opportunities_per_unit: ctqOpportunities, supporting_kpis: supportingKpis, warnings }
+    if (firstValidDynamic) {
+      const metrics = firstValidDynamic.result.metrics
+      let primaryVal = 0
+      let primaryUnit = ''
+      
+      if (metrics.cpk !== undefined) {
+        primaryVal = metrics.cpk
+        primaryUnit = 'Cpk'
+      } else if (metrics.dpmo !== undefined) {
+        primaryVal = metrics.sigma_level
+        primaryUnit = 'σ'
+      } else if (firstValidDynamic.result.method === 'pareto_analysis') {
+        primaryVal = metrics.categories ? metrics.categories.length : 0
+        primaryUnit = 'Kategori Masalah'
+      } else {
+        primaryVal = metrics.mean || metrics.average || metrics.total || 0
+        primaryUnit = 'Unit'
+      }
+
+      return {
+        type: 'dynamic',
+        primary_metric: {
+          name: firstValidDynamic.name,
+          value: primaryVal,
+          unit: primaryUnit,
+          method_used: firstValidDynamic.result.method,
+          interpretation: firstValidDynamic.result.ai_interpretation,
+          metrics: metrics
+        },
+        supporting_kpis: supportingKpis,
+        warnings
+      }
+    } else {
+      warnings.push('Total unit/volume produksi (Data Utama - Volume) adalah 0, dan sistem tidak dapat menemukan Data Utama lain untuk dianalisis secara dinamis. Pastikan minimal satu file "Data Utama - Volume" atau "Data Utama" lainnya sudah diupload.')
+      return { type: 'sigma', overall_sigma_level: 0, overall_dpmo: 0, total_defects: totalDefects, total_volume: 0, opportunities_per_unit: ctqOpportunities, supporting_kpis: supportingKpis, warnings }
+    }
   }
 
   const dpmo = Math.round((totalDefects / (totalVolume * ctqOpportunities)) * 1_000_000)
   const sigmaLevel = dpmoToSigmaLevel(dpmo)
 
   return {
+    type: 'sigma',
     overall_sigma_level: sigmaLevel,
     overall_dpmo: dpmo,
     total_defects: totalDefects,

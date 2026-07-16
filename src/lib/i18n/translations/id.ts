@@ -4,7 +4,7 @@ const id = {
     dashboard: 'Dashboard',
     companies: 'Daftar Perusahaan',
     profile: 'Profil Perusahaan',
-    projects: 'Proyek BIMKON',
+    projects: 'Proyek Smart Productive',
     admin: 'Nasional / Admin',
     dmaicTitle: 'Tahapan DMAIC',
     define: '1. Define (Profil & Charter)',
@@ -34,7 +34,7 @@ const id = {
     search: 'Cari',
     filter: 'Filter',
     loading: 'Memuat...',
-    loadingSibimkon: 'Memuat SIBIMKON...',
+    loadingSmartProductive: 'Memuat Smart Productive...',
     back: 'Kembali',
     next: 'Selanjutnya',
     submit: 'Kirim',
@@ -59,7 +59,7 @@ const id = {
 
   // Projects page
   projects: {
-    title: 'Daftar Proyek BIMKON',
+    title: 'Daftar Proyek Smart Productive',
     newProject: 'Mulai Proyek Baru',
     status: 'Status',
     company: 'Perusahaan',
@@ -147,8 +147,8 @@ const id = {
 
   // Admin page
   admin: {
-    titleNational: 'Panel Admin SIBIMKON',
-    titleRegional: 'Panel Admin SIBIMKON',
+    titleNational: 'Panel Admin Smart Productive',
+    titleRegional: 'Panel Admin Smart Productive',
     totalCompanies: 'Total Perusahaan Terdaftar',
     activeConsultants: 'Konsultan Aktif',
     avgProductivity: 'Rata-rata Produktivitas',

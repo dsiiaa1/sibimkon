@@ -1,63 +1,6 @@
 import { NextResponse } from 'next/server'
+import { generateWithFallback } from '@/lib/ai-providers/orchestrator'
 
-const GROQ_MODEL  = 'llama-3.1-8b-instant'
-const MAX_RETRIES = 4
-
-async function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-async function callAI(prompt: string, apiKey: string): Promise<string> {
-  const url = 'https://api.groq.com/openai/v1/chat/completions'
-
-  const body = {
-    model: GROQ_MODEL,
-    messages: [{ role: 'user', content: prompt }],
-    temperature: 0.2, // Slightly higher for variation but still structured
-    max_tokens: 1024,
-  }
-
-  let lastError: Error | null = null
-
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
-    })
-
-    if (res.ok) {
-      const data = await res.json()
-      const text: string | undefined = data.choices?.[0]?.message?.content
-      if (!text) throw new Error('Groq returned empty content')
-      return text
-    }
-
-    if (res.status === 429) {
-      const retryAfterSec = parseInt(res.headers.get('Retry-After') ?? '0', 10)
-      const backoffMs = retryAfterSec > 0
-        ? retryAfterSec * 1000
-        : Math.min(1000 * 2 ** attempt, 16000)
-
-      if (backoffMs > 10000) {
-        throw new Error(`Server AI sedang sibuk (Rate Limit). Silakan coba lagi nanti.`)
-      }
-
-      console.warn(`[generate-action-steps] 429 rate limit, retry ${attempt + 1}/${MAX_RETRIES} in ${backoffMs}ms`)
-      lastError = new Error(`Rate limit — retry ${attempt + 1}/${MAX_RETRIES}`)
-      await sleep(backoffMs)
-      continue
-    }
-
-    const errText = await res.text().catch(() => `HTTP ${res.status}`)
-    throw new Error(`Groq API error ${res.status}: ${errText.substring(0, 300)}`)
-  }
-
-  throw new Error(`Groq API gagal setelah ${MAX_RETRIES} percobaan: ${lastError?.message ?? 'rate limit'}`)
-}
 
 function extractJson(raw: string): any {
   const trimmed = raw.trim()
@@ -109,7 +52,12 @@ CONTOH FORMAT OUTPUT (harus valid JSON array of objects dengan key "description"
   { "description": "Langkah 3: ..." }
 ]`
 
-    const rawResponse = await callAI(prompt, apiKey)
+    const aiRes = await generateWithFallback(prompt, {
+      model: 'llama-3.1-8b-instant',
+      temperature: 0.2,
+      maxTokens: 1024
+    })
+    const rawResponse = aiRes.text
     const result = extractJson(rawResponse)
 
     if (!Array.isArray(result)) {

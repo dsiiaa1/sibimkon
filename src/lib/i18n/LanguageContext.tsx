@@ -23,7 +23,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [locale, setLocaleState] = useState<Locale>('id')
 
   useEffect(() => {
-    const savedLang = localStorage.getItem('sibimkon_lang') as Locale
+    const savedLang = localStorage.getItem('smartproductive_lang') as Locale
     if (savedLang === 'id' || savedLang === 'en') {
       setLocaleState(savedLang)
       document.documentElement.lang = savedLang
@@ -34,7 +34,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const setLocale = (newLocale: Locale) => {
     setLocaleState(newLocale)
-    localStorage.setItem('sibimkon_lang', newLocale)
+    localStorage.setItem('smartproductive_lang', newLocale)
     document.documentElement.lang = newLocale
   }
 

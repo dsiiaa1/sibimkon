@@ -1,63 +1,6 @@
 import { NextResponse } from 'next/server'
+import { generateWithFallback } from '@/lib/ai-providers/orchestrator'
 
-const GROQ_MODEL  = 'llama-3.3-70b-versatile'
-const MAX_RETRIES = 4
-
-async function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-async function callAI(prompt: string, apiKey: string): Promise<string> {
-  const url = 'https://api.groq.com/openai/v1/chat/completions'
-
-  const body = {
-    model: GROQ_MODEL,
-    messages: [{ role: 'user', content: prompt }],
-    temperature: 0.1,
-    max_tokens: 2048,
-  }
-
-  let lastError: Error | null = null
-
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
-    })
-
-    if (res.ok) {
-      const data = await res.json()
-      const text: string | undefined = data.choices?.[0]?.message?.content
-      if (!text) throw new Error('Groq returned empty content')
-      return text
-    }
-
-    if (res.status === 429) {
-      const retryAfterSec = parseInt(res.headers.get('Retry-After') ?? '0', 10)
-      const backoffMs = retryAfterSec > 0
-        ? retryAfterSec * 1000
-        : Math.min(1000 * 2 ** attempt, 16000)
-
-      if (backoffMs > 10000) {
-        throw new Error(`Server AI sedang sibuk (Rate Limit). Silakan coba lagi nanti.`)
-      }
-
-      console.warn(`[control-efficiency] 429 rate limit, retry ${attempt + 1}/${MAX_RETRIES} in ${backoffMs}ms`)
-      lastError = new Error(`Rate limit — retry ${attempt + 1}/${MAX_RETRIES}`)
-      await sleep(backoffMs)
-      continue
-    }
-
-    const errText = await res.text().catch(() => `HTTP ${res.status}`)
-    throw new Error(`Groq API error ${res.status}: ${errText.substring(0, 300)}`)
-  }
-
-  throw new Error(`Groq API gagal setelah ${MAX_RETRIES} percobaan: ${lastError?.message ?? 'rate limit'}`)
-}
 
 function extractJson(raw: string): any {
   const trimmed = raw.trim()
@@ -115,13 +58,13 @@ export async function POST(req: Request) {
        return NextResponse.json({ targets: [] })
     }
 
-    const prompt = `Anda adalah sistem ekstraksi data otomatis untuk aplikasi SIBIMKON.
+    const prompt = `Anda adalah sistem ekstraksi data otomatis untuk aplikasi Smart Productive.
 Anda diberikan sekumpulan "Target Efisiensi" (dalam bentuk kalimat natural) yang diambil dari tiap-tiap Action Plan dari tahap Improve.
 Tugas Anda adalah mengekstrak data berikut dari masing-masing kalimat:
 - metric_name (String): Nama metrik yang akan diukur (misal: "Efisiensi penggunaan bahan baku", "Waktu siklus produksi").
 - target_value (Number): Angka target pencapaian (misal jika "sebesar 15%", maka 15).
 - duration (Number): Lama waktu target harus dicapai.
-- duration_unit (String): Satuan waktu (hanya boleh "minggu" atau "bulan").
+- duration_unit (String): Satuan waktu (hanya boleh "minggu", "bulan", atau "tahun").
 
 Jika Anda tidak dapat menemukan baseline_value di dalam teks, berikan nilai null (tidak apa-apa).
 Jika Anda merasa teks target sangat tidak spesifik atau tidak menyebutkan target angka sama sekali, set "needs_manual_review": true.
@@ -141,14 +84,19 @@ PENTING: DILARANG KERAS menambahkan teks seperti "Berikut adalah...", DILARANG m
     "baseline_value": null,
     "target_value": <number_persentase>,
     "duration": <number_durasi>,
-    "duration_unit": "<minggu/bulan>",
+    "duration_unit": "<minggu/bulan/tahun>",
     "needs_manual_review": <true/false>
   },
   ...
 ]
 `
 
-    const rawResponse = await callAI(prompt, apiKey)
+    const aiRes = await generateWithFallback(prompt, {
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.1,
+      maxTokens: 2048
+    })
+    const rawResponse = aiRes.text
     let extracted = extractJson(rawResponse)
     
     console.log('[control-efficiency] extracted:', extracted);
@@ -167,7 +115,7 @@ PENTING: DILARANG KERAS menambahkan teks seperti "Berikut adalah...", DILARANG m
       baseline_value: item.baseline_value ?? null,
       target_value: Number(item.target_value) || 0,
       duration: Number(item.duration) || 1,
-      duration_unit: (item.duration_unit || 'bulan').toLowerCase().includes('minggu') ? 'minggu' : 'bulan',
+      duration_unit: (item.duration_unit || 'bulan').toLowerCase().includes('minggu') ? 'minggu' : (item.duration_unit || 'bulan').toLowerCase().includes('tahun') ? 'tahun' : 'bulan',
       needs_manual_review: Boolean(item.needs_manual_review)
     }))
 

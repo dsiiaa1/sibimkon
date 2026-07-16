@@ -77,7 +77,7 @@ export default function AdminPanelPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
             <Globe className="h-6 w-6 text-indigo-400" />
-            Panel Admin SIBIMKON
+            Panel Admin Smart Productive
           </h1>
           <p className="text-xs text-slate-500">
             Monitoring program bimbingan konsultansi peningkatan produktivitas

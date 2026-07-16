@@ -21,12 +21,12 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "SIBIMKON — Sistem Informasi Bimbingan Konsultansi Peningkatan Produktivitas",
-  description: "Platform terpadu digitalisasi program BIMKON. Pendampingan produktivitas perusahaan berbasis metodologi DMAIC dengan AI Consultant.",
-  keywords: "BIMKON, produktivitas, DMAIC, konsultansi, peningkatan produktivitas, SIBIMKON",
-  authors: [{ name: "SIBIMKON" }],
+  title: "Smart Productive LinkPro® — Enterprise Productivity Management System",
+  description: "Platform terpadu digitalisasi program Smart Productive. Pendampingan produktivitas perusahaan berbasis metodologi DMAIC dengan AI Consultant.",
+  keywords: "Smart Productive, produktivitas, DMAIC, konsultansi, peningkatan produktivitas, Smart Productive",
+  authors: [{ name: "Smart Productive" }],
   openGraph: {
-    title: "SIBIMKON — Link Productive",
+    title: "Smart Productive — Link Productive",
     description: "Platform digitalisasi program Bimbingan Konsultansi Peningkatan Produktivitas",
     type: "website",
     locale: "id_ID",

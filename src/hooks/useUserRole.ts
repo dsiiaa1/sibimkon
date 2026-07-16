@@ -23,7 +23,7 @@ interface UseUserRoleResult {
  *
  * Mengambil role user dengan urutan keamanan:
  *   1. Fetch GET /api/auth/me  → role dari Supabase session (server-side JWT, tidak bisa dimanipulasi)
- *   2. Fallback ke localStorage['sibimkon_user'] → untuk demo/offline mode
+ *   2. Fallback ke localStorage['smartproductive_user'] → untuk demo/offline mode
  *
  * `verified` = true hanya jika sumber adalah server (/api/auth/me).
  * Komponen yang memerlukan keamanan tinggi harus mengecek `verified` sebelum
@@ -32,7 +32,7 @@ interface UseUserRoleResult {
 export function useUserRole(): UseUserRoleResult {
   const [userInfo, setUserInfo] = useState<UserInfo | null>(() => {
     if (typeof window !== 'undefined') {
-      const local = localStorage.getItem('sibimkon_user')
+      const local = localStorage.getItem('smartproductive_user')
       if (local) {
         try {
           const parsed = JSON.parse(local)
@@ -63,7 +63,7 @@ export function useUserRole(): UseUserRoleResult {
           // 401 = tidak login; 503 = demo mode (Supabase belum dikonfig)
           // Fallback ke localStorage jika gagal auth di server
           if (typeof window !== 'undefined') {
-            const local = localStorage.getItem('sibimkon_user')
+            const local = localStorage.getItem('smartproductive_user')
             if (local) {
               try {
                 const parsed = JSON.parse(local)
@@ -83,10 +83,10 @@ export function useUserRole(): UseUserRoleResult {
 
         // Sync balik ke localStorage agar sesi berikutnya up-to-date
         if (typeof window !== 'undefined') {
-          const existing = localStorage.getItem('sibimkon_user')
+          const existing = localStorage.getItem('smartproductive_user')
           const parsed = existing ? JSON.parse(existing) : {}
           localStorage.setItem(
-            'sibimkon_user',
+            'smartproductive_user',
             JSON.stringify({ ...parsed, ...data })
           )
         }
@@ -98,7 +98,7 @@ export function useUserRole(): UseUserRoleResult {
         if (err?.name !== 'AbortError') {
           console.warn('[useUserRole] /api/auth/me fetch failed, using localStorage:', err)
           if (typeof window !== 'undefined') {
-            const local = localStorage.getItem('sibimkon_user')
+            const local = localStorage.getItem('smartproductive_user')
             if (local) {
               try {
                 const parsed = JSON.parse(local)

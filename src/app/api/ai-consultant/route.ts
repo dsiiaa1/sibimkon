@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { generateWithFallback } from '@/lib/ai-providers/orchestrator'
 
 // ── Simple in-memory rate limiter (resets per deployment/restart) ────────────
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
@@ -168,17 +169,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const groqKey = process.env.GROQ_API_KEY
-
-  // No key → return error
-  if (!groqKey) {
-    console.warn('GROQ_API_KEY not set')
-    return NextResponse.json(
-      { error: 'Konfigurasi AI belum tersedia. Tambahkan GROQ_API_KEY di .env.local' },
-      { status: 503 },
-    )
-  }
-
   // Build prompt
   const prompt = `Anda adalah Konsultan Produktivitas Industri Senior pada platform SIBIMKON.
 Analisa data berikut dan berikan rekomendasi terstruktur untuk perbaikan produktivitas perusahaan klien.
@@ -215,85 +205,40 @@ Berikan respon dalam format JSON yang valid dengan struktur berikut:
 }
 Kembalikan HANYA JSON di atas tanpa markdown formatting lainnya.`
 
-  // Call Groq — OpenAI-compatible, retry dengan exponential backoff jika 429
-  const GROQ_MODEL = 'llama-3.3-70b-versatile'
-  const MAX_RETRIES = 4
-  const groqUrl = 'https://api.groq.com/openai/v1/chat/completions'
+  try {
+    const aiRes = await generateWithFallback(prompt, {
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.1,
+      maxTokens: 2048,
+    });
 
-  let lastErr: Error | null = null
+    const textResult = aiRes.text;
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const groqRes = await fetch(groqUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${groqKey}`,
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.1,
-        max_tokens: 2048,
-      }),
-    })
-
-    if (groqRes.ok) {
-      const data = await groqRes.json()
-      const textResult: string | undefined = data.choices?.[0]?.message?.content
-
-      if (!textResult) {
-        return NextResponse.json(
-          { error: 'Groq tidak mengembalikan konten. Coba lagi dalam beberapa saat.' },
-          { status: 502 },
-        )
+    // Parse JSON dari teks (Groq mungkin bungkus dalam ```json ... ```)
+    const cleaned = textResult.trim()
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim()
+    try {
+      return NextResponse.json(JSON.parse(cleaned))
+    } catch {
+      // Coba cari kurung kurawal pertama
+      const start = cleaned.indexOf('{')
+      const end   = cleaned.lastIndexOf('}')
+      if (start !== -1 && end > start) {
+        try {
+          return NextResponse.json(JSON.parse(cleaned.substring(start, end + 1)))
+        } catch { /* lanjut */ }
       }
-
-      // Parse JSON dari teks (Groq mungkin bungkus dalam ```json ... ```)
-      const cleaned = textResult.trim()
-        .replace(/^```(?:json)?\s*/i, '')
-        .replace(/\s*```$/i, '')
-        .trim()
-      try {
-        return NextResponse.json(JSON.parse(cleaned))
-      } catch {
-        // Coba cari kurung kurawal pertama
-        const start = cleaned.indexOf('{')
-        const end   = cleaned.lastIndexOf('}')
-        if (start !== -1 && end > start) {
-          try {
-            return NextResponse.json(JSON.parse(cleaned.substring(start, end + 1)))
-          } catch { /* lanjut */ }
-        }
-        return NextResponse.json(
-          { error: 'Groq mengembalikan format tidak valid. Coba lagi.' },
-          { status: 502 },
-        )
-      }
+      return NextResponse.json(
+        { error: 'AI mengembalikan format tidak valid. Coba lagi.' },
+        { status: 502 },
+      )
     }
-
-    if (groqRes.status === 429) {
-      const retryAfterSec = parseInt(groqRes.headers.get('Retry-After') ?? '0', 10)
-      const backoffMs = retryAfterSec > 0
-        ? retryAfterSec * 1000
-        : Math.min(1000 * 2 ** attempt, 16000)
-
-      console.warn(`[ai-consultant] 429 rate limit, retry ${attempt + 1}/${MAX_RETRIES} dalam ${backoffMs}ms`)
-      lastErr = new Error(`Rate limit — retry ${attempt + 1}/${MAX_RETRIES}`)
-      await new Promise((r) => setTimeout(r, backoffMs))
-      continue
-    }
-
-    // Error lain — lempar langsung
-    const errBody = await groqRes.text().catch(() => '')
+  } catch (error: any) {
     return NextResponse.json(
-      { error: `Groq API error ${groqRes.status}: ${errBody.substring(0, 200)}` },
+      { error: error.message || 'Semua provider AI gagal.' },
       { status: 502 },
     )
   }
-
-  // Semua retry habis
-  return NextResponse.json(
-    { error: `Groq API gagal setelah ${MAX_RETRIES} percobaan karena rate limit. Tunggu 1 menit lalu coba lagi.` },
-    { status: 429 },
-  )
 }

@@ -6,7 +6,7 @@ const en: TranslationKeys = {
     dashboard: 'Dashboard',
     companies: 'Client Companies',
     profile: 'Company Profile',
-    projects: 'BIMKON Projects',
+    projects: 'Smart Productive Projects',
     admin: 'National / Admin',
     dmaicTitle: 'DMAIC Stages',
     define: '1. Define (Profile & Charter)',
@@ -36,7 +36,7 @@ const en: TranslationKeys = {
     search: 'Search',
     filter: 'Filter',
     loading: 'Loading...',
-    loadingSibimkon: 'Loading SIBIMKON...',
+    loadingSmartProductive: 'Loading Smart Productive...',
     back: 'Back',
     next: 'Next',
     submit: 'Submit',
@@ -61,7 +61,7 @@ const en: TranslationKeys = {
 
   // Projects page
   projects: {
-    title: 'BIMKON Project List',
+    title: 'Smart Productive Project List',
     newProject: 'Start New Project',
     status: 'Status',
     company: 'Company',
@@ -149,8 +149,8 @@ const en: TranslationKeys = {
 
   // Admin page
   admin: {
-    titleNational: 'SIBIMKON Admin Panel',
-    titleRegional: 'SIBIMKON Admin Panel',
+    titleNational: 'Smart Productive Admin Panel',
+    titleRegional: 'Smart Productive Admin Panel',
     totalCompanies: 'Total Registered Companies',
     activeConsultants: 'Active Consultants',
     avgProductivity: 'Average Productivity',

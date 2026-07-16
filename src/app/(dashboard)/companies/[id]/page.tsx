@@ -22,7 +22,7 @@ export default function CompanyDetailPage() {
 
   useEffect(() => {
     async function loadData() {
-      const localUser = localStorage.getItem('sibimkon_user')
+      const localUser = localStorage.getItem('smartproductive_user')
       if (localUser) {
         const u = JSON.parse(localUser)
         setCurrentUserId(u.id || 'unknown')
@@ -112,7 +112,7 @@ export default function CompanyDetailPage() {
         <div className="flex items-center justify-between border-b border-slate-850 pb-4">
           <div>
             <h2 className="text-lg font-bold text-slate-200">Daftar Proyek Pendampingan</h2>
-            <p className="text-xs text-slate-500">Seluruh proyek BIMKON aktif dan selesai untuk perusahaan ini</p>
+            <p className="text-xs text-slate-500">Seluruh proyek Smart Productive aktif dan selesai untuk perusahaan ini</p>
           </div>
           <button 
             onClick={() => setShowNewProjectModal(true)}

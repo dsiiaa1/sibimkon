@@ -46,7 +46,7 @@ function LoginForm() {
         throw new Error('Gagal mendapatkan data pengguna. Silakan coba lagi.')
       }
 
-      let fullName = user.user_metadata?.full_name || 'Pengguna SIBIMKON'
+      let fullName = user.user_metadata?.full_name || 'Pengguna Smart Productive'
       let userRole = user.user_metadata?.role || 'perusahaan'
       let org = user.user_metadata?.company_name || ''
 
@@ -70,7 +70,7 @@ function LoginForm() {
       }
 
       localStorage.setItem(
-        'sibimkon_user',
+        'smartproductive_user',
         JSON.stringify({
           id: user.id,
           email: user.email,
@@ -99,10 +99,10 @@ function LoginForm() {
       <div className="lg:hidden flex flex-col items-center mb-8">
         <img src="/sibimkonicon.png" alt="Logo" className="h-14 w-14 object-contain" />
         <h2 className="mt-3 text-center text-2xl font-black tracking-tight text-[#0a1628]">
-          SIBIMKON
+          Smart Productive
         </h2>
         <p className="mt-1.5 text-center text-xs text-slate-500 leading-relaxed max-w-xs">
-          Sistem Informasi Bimbingan Konsultansi Peningkatan Produktivitas
+          Enterprise Productivity Management System
         </p>
       </div>
 
@@ -140,7 +140,7 @@ function LoginForm() {
           }`}
         >
           <User className="h-3.5 w-3.5" />
-          Konsultan BIMKON
+          Konsultan Smart Productive
         </button>
       </div>
 
@@ -307,7 +307,7 @@ export default function LoginPage() {
           <img src="/sibimkonicon.png" alt="Logo" className="h-10 w-10 object-contain" />
           <div>
             <h1 className="text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-200">
-              SIBIMKON
+              Smart Productive
             </h1>
             <p className="text-[10px] uppercase tracking-widest text-slate-400">
               Link Productive
@@ -332,7 +332,7 @@ export default function LoginPage() {
           {/* Premium illustration box */}
           <div className="glass-card rounded-2xl p-6 border border-amber-500/15 relative overflow-hidden" style={{ background: 'rgba(10,22,40,0.4)', backdropFilter: 'blur(10px)' }}>
             <div className="flex justify-between items-center mb-4">
-              <span className="text-xs font-bold text-slate-350">PROYEK BIMKON AKTIF</span>
+              <span className="text-xs font-bold text-slate-350">PROYEK Smart Productive AKTIF</span>
               <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">FASE IMPROVE</span>
             </div>
             
@@ -370,7 +370,7 @@ export default function LoginPage() {
 
         {/* Footer Brand Info */}
         <div className="flex items-center justify-between text-xs text-slate-400 border-t border-slate-800/40 pt-6 z-10">
-          <span>SIBIMKON — Link Productive</span>
+          <span>Smart Productive — Link Productive</span>
           <span>© 2026 Link Productive</span>
         </div>
       </div>

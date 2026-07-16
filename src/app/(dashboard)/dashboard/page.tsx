@@ -129,7 +129,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function loadData() {
-      const localUser = localStorage.getItem('sibimkon_user')
+      const localUser = localStorage.getItem('smartproductive_user')
       let u: any = null
       if (localUser) {
         u = JSON.parse(localUser)

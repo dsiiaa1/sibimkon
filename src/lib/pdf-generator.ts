@@ -152,10 +152,10 @@ export async function generateFinalReport(
 
   // Logo / brand text
   setC(C_GOLD); setB(24)
-  doc.text('SIBIMKON', margin, 24)
+  doc.text('Smart Productive', margin, 24)
   setC(C_LIGHT); setN(8.5)
-  doc.text('Sistem Informasi Bimbingan Konsultansi Peningkatan Produktivitas', margin, 33)
-  doc.text('Platform SIBIMKON — Link Productive', margin, 40)
+  doc.text('Enterprise Productivity Management System', margin, 33)
+  doc.text('Platform Smart Productive — Link Productive', margin, 40)
 
   // Thin gold accent line below header
   setD(C_GOLD); doc.setLineWidth(0.8)
@@ -163,7 +163,7 @@ export async function generateFinalReport(
 
   // Report title block
   setC(C_NAVY); setB(15)
-  doc.text('LAPORAN AKHIR PROGRAM BIMKON', pageW / 2, 72, { align: 'center' })
+  doc.text('LAPORAN AKHIR PROGRAM Smart Productive', pageW / 2, 72, { align: 'center' })
   setC(C_MUTED); setN(10.5)
   doc.text(project.title, pageW / 2, 81, { align: 'center', maxWidth: contentW })
 
@@ -292,7 +292,7 @@ export async function generateFinalReport(
   // ----------------------------------------------------------
   doc.addPage(); y = 25
 
-  drawChapterHeader('BAB 1 - LATAR BELAKANG', 'Identitas Proyek dan Program BIMKON')
+  drawChapterHeader('BAB 1 - LATAR BELAKANG', 'Identitas Proyek dan Program Smart Productive')
 
   drawSectionTitle('1.1 Identitas Proyek')
   drawInfoRow('Kode Proyek',     project.project_code)
@@ -304,7 +304,7 @@ export async function generateFinalReport(
 
   drawSectionTitle('1.2 Latar Belakang Program')
   drawText(
-    'Program Bimbingan Konsultansi Peningkatan Produktivitas (BIMKON) merupakan program ' +
+    'Program Bimbingan Konsultansi Peningkatan Produktivitas (Smart Productive) merupakan program ' +
     'pendampingan konsultan produktivitas terlatih yang bertujuan meningkatkan kinerja operasional ' +
     'perusahaan secara terstruktur dan berkelanjutan.'
   )
@@ -469,15 +469,13 @@ export async function generateFinalReport(
 
         const stepsData = ap.steps.map((step: any, sIdx: number) => [
           String(sIdx + 1),
-          step.action || '-',
-          step.pic || '-',
-          step.timeline || '-',
+          step.description || step.action || '-',
           step.is_completed ? 'Selesai (Verif)' : 'Belum Selesai'
         ])
 
         autoTable(doc, {
           startY: y,
-          head: [['No', 'Langkah/Deskripsi', 'PIC', 'Timeline', 'Status']],
+          head: [['No', 'Langkah/Deskripsi', 'Status']],
           body: stepsData,
           margin: { left: margin, right: margin },
           tableWidth: contentW,
@@ -485,13 +483,11 @@ export async function generateFinalReport(
           headStyles: { fillColor: [240, 245, 250], textColor: C_NAVY, fontStyle: 'bold', font: FB, fontSize: 7 },
           columnStyles: {
             0: { cellWidth: 8, halign: 'center' },
-            1: { cellWidth: contentW - 98 },
-            2: { cellWidth: 35 },
-            3: { cellWidth: 30 },
-            4: { cellWidth: 25, halign: 'center' }
+            1: { cellWidth: contentW - 38 },
+            2: { cellWidth: 30, halign: 'center' }
           },
           didParseCell(data) {
-            if (data.section === 'body' && data.column.index === 4) {
+            if (data.section === 'body' && data.column.index === 2) {
               const val = String(data.cell.raw)
               if (val.includes('Selesai')) data.cell.styles.textColor = [34, 139, 34]
               else data.cell.styles.textColor = [180, 40, 40]
@@ -534,20 +530,33 @@ export async function generateFinalReport(
     roi = investment > 0 ? (costSaving / investment).toFixed(1) : '0'
     noteStr = 'Catatan: Angka cost saving dan investasi merupakan nilai riil/estimasi yang telah diinput dan divalidasi oleh konsultan.'
   } else {
-    costSaving = actionPlans.reduce((acc, act) => {
-      const kpiActual = act.verified_kpi_actual ?? act.kpi_actual
-      if (kpiActual === undefined) return acc
-      const achieved =
-        act.kpi_target > act.kpi_baseline
-          ? Math.max(0, (kpiActual as number) - act.kpi_baseline)
-          : Math.max(0, act.kpi_baseline - (kpiActual as number))
-      return acc + achieved * 500000
-    }, 0)
-    investment = actionPlans.filter(a => a.status !== 'belum_mulai').length * 2500000
-    roi = investment > 0 ? (costSaving / investment).toFixed(1) : '0'
-    noteStr = 'Catatan: Estimasi cost saving dihitung berdasarkan selisih KPI aktual terhadap baseline, ' +
-      'dikalikan nilai unit perbaikan Rp 500.000 per unit. Investasi program dihitung sebesar ' +
-      'Rp 2.500.000 per action plan yang sudah berjalan. Angka merupakan estimasi indikatif.'
+    // Fallback 1: Gunakan estimasi dari AI (tahap Improve) jika ada
+    const totalAiSaving = actionPlans.reduce((acc, act) => acc + Number(((act as any).ai_analysis?.roi as any)?.estimasi_penghematan_tahunan || 0), 0)
+    const totalAiInvestment = actionPlans.reduce((acc, act) => acc + Number(((act as any).ai_analysis?.biaya as any)?.estimasi || 0), 0)
+    const hasAiData = totalAiSaving > 0 || totalAiInvestment > 0
+
+    if (hasAiData) {
+      costSaving = totalAiSaving
+      investment = totalAiInvestment
+      roi = investment > 0 ? (costSaving / investment).toFixed(1) : '0'
+      noteStr = 'Catatan: Angka cost saving dan investasi merupakan estimasi prediktif otomatis yang di-generate oleh AI.'
+    } else {
+      // Fallback 2: estimasi otomatis dari perbaikan KPI
+      costSaving = actionPlans.reduce((acc, act) => {
+        const kpiActual = act.verified_kpi_actual ?? act.kpi_actual
+        if (kpiActual === undefined) return acc
+        const achieved =
+          act.kpi_target > act.kpi_baseline
+            ? Math.max(0, (kpiActual as number) - act.kpi_baseline)
+            : Math.max(0, act.kpi_baseline - (kpiActual as number))
+        return acc + achieved * 500000
+      }, 0)
+      investment = actionPlans.filter(a => a.status !== 'belum_mulai').length * 2500000
+      roi = investment > 0 ? (costSaving / investment).toFixed(1) : '0'
+      noteStr = 'Catatan: Estimasi cost saving dihitung berdasarkan selisih KPI aktual terhadap baseline, ' +
+        'dikalikan nilai unit perbaikan Rp 500.000 per unit. Investasi program dihitung sebesar ' +
+        'Rp 2.500.000 per action plan yang sudah berjalan. Angka merupakan estimasi indikatif.'
+    }
   }
 
   autoTable(doc, {
@@ -607,7 +616,7 @@ export async function generateFinalReport(
   drawChapterHeader('BAB 5 - LEMBAR PENGESAHAN', 'Tanda Tangan Digital Pihak Terkait')
 
   drawText(
-    'Laporan Akhir Program BIMKON ini telah disusun berdasarkan data yang dikumpulkan ' +
+    'Laporan Akhir Program Smart Productive ini telah disusun berdasarkan data yang dikumpulkan ' +
     'selama masa pendampingan dan disahkan oleh pihak-pihak berikut:'
   )
   y += 4
@@ -653,7 +662,7 @@ async function processSignatureForReport(base64: string): Promise<string> {
 }
 
   const signatories = [
-    { role: 'Konsultan Pendamping',  org: 'SIBIMKON — Link Productive' },
+    { role: 'Konsultan Pendamping',  org: 'Smart Productive — Link Productive' },
     { role: 'PIC Perusahaan Klien',  org: project.company_name },
   ]
 
@@ -729,12 +738,12 @@ async function processSignatureForReport(base64: string): Promise<string> {
     if (i === 1) {
       // Cover: only show generation info, no "Halaman X"
       doc.text(
-        `SIBIMKON — Laporan Akhir ${project.project_code}`,
+        `Smart Productive — Laporan Akhir ${project.project_code}`,
         pageW / 2, pageH - 7, { align: 'center' }
       )
     } else {
       doc.text(
-        `SIBIMKON  |  ${project.company_name}  |  ${project.project_code}`,
+        `Smart Productive  |  ${project.company_name}  |  ${project.project_code}`,
         margin, pageH - 7
       )
       doc.text(
@@ -784,7 +793,7 @@ export async function generateCertificate(
   // LAYOUT GRID  (semua Y absolut, landscape 297 × 210 mm)
   //
   //  20  ┌─ border luar
-  //  22  │  SIBIMKON  (brand)
+  //  22  │  Smart Productive  (brand)
   //  29  │  Link Productive
   //  36  │  subtitle kecil
   //  43  ── garis emas
@@ -823,14 +832,14 @@ export async function generateCertificate(
 
   // ── BRAND HEADER  (Y = 22–42) ──────────────────────────────
   doc.setTextColor(...C_GOLD as [number,number,number]); setB(13)
-  doc.text('SIBIMKON', cx, 27, { align: 'center' })
+  doc.text('Smart Productive', cx, 27, { align: 'center' })
 
   doc.setTextColor(160, 165, 175); setN(8)
   doc.text('Link Productive', cx, 34, { align: 'center' })
 
   doc.setTextColor(100, 105, 115); setN(7)
   doc.text(
-    'Program Bimbingan Konsultansi Peningkatan Produktivitas (BIMKON)',
+    'Program Bimbingan Konsultansi Peningkatan Produktivitas (Smart Productive)',
     cx, 41, { align: 'center' }
   )
 
@@ -899,7 +908,7 @@ export async function generateCertificate(
   const companySigned    = signatures?.company?.signed
 
   const qrText = [
-    'SIBIMKON VERIFIED',
+    'Smart Productive VERIFIED',
     `Proyek  : ${project.project_code}`,
     `Perusahaan: ${project.company_name}`,
     `Konsultan : ${consultantSigned ? `${signatures!.consultant.signerName} (${signatures!.consultant.signedAt})` : 'Belum TTD'}`,
@@ -941,7 +950,7 @@ export async function generateCertificate(
   doc.line(28, 183, 115, 183)
 
   doc.setTextColor(135, 140, 152); setN(7.5)
-  doc.text('Direktur Program SIBIMKON', 28, 189)
+  doc.text('Direktur Program Smart Productive', 28, 189)
   doc.setTextColor(...C_GOLD as [number,number,number]); setB(8)
   doc.text('Link Productive', 28, 194)
 

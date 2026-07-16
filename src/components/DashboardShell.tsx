@@ -59,7 +59,7 @@ export default function DashboardShell({
   // Load sidebar collapse preference on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sibimkon_sidebar_collapsed')
+      const saved = localStorage.getItem('smartproductive_sidebar_collapsed')
       if (saved === 'true') {
         setIsCollapsed(true)
       }
@@ -69,13 +69,13 @@ export default function DashboardShell({
   const toggleSidebarCollapse = () => {
     const nextState = !isCollapsed
     setIsCollapsed(nextState)
-    localStorage.setItem('sibimkon_sidebar_collapsed', String(nextState))
+    localStorage.setItem('smartproductive_sidebar_collapsed', String(nextState))
   }
 
   // Auth checking and load mock data
   useEffect(() => {
     async function checkAuth() {
-      const localUser = localStorage.getItem('sibimkon_user')
+      const localUser = localStorage.getItem('smartproductive_user')
       let currentUser = null
 
       if (localUser) {
@@ -88,9 +88,9 @@ export default function DashboardShell({
           const { data: { user: sbUser } } = await supabase.auth.getUser()
 
           if (sbUser) {
-            let fullName = sbUser.user_metadata?.full_name || 'User SIBIMKON'
+            let fullName = sbUser.user_metadata?.full_name || 'User Smart Productive'
             let userRole = sbUser.user_metadata?.role || 'konsultan'
-            let org = sbUser.user_metadata?.company_name || 'SIBIMKON'
+            let org = sbUser.user_metadata?.company_name || 'Smart Productive'
 
             try {
               const { data: profile } = await supabase
@@ -114,7 +114,7 @@ export default function DashboardShell({
               role: userRole,
               organization: org,
             }
-            localStorage.setItem('sibimkon_user', JSON.stringify(currentUser))
+            localStorage.setItem('smartproductive_user', JSON.stringify(currentUser))
           }
         } catch (err) {
           console.error('Error verifying Supabase session in layout:', err)
@@ -130,7 +130,7 @@ export default function DashboardShell({
         const baseNotifications: any[] = []
 
         // Load local mock notifications
-        const localMock = localStorage.getItem(`sibimkon_mock_notifications_${currentUser.id}`)
+        const localMock = localStorage.getItem(`smartproductive_mock_notifications_${currentUser.id}`)
         const mockNotifs = localMock ? JSON.parse(localMock).map((n: any) => ({
           ...n,
           time: getRelativeTime(n.created_at),
@@ -183,7 +183,7 @@ export default function DashboardShell({
     } catch (err) {
       console.warn('Supabase signOut error (non-critical):', err)
     }
-    localStorage.removeItem('sibimkon_user')
+    localStorage.removeItem('smartproductive_user')
     router.push('/login')
   }
 
@@ -192,7 +192,7 @@ export default function DashboardShell({
     if (!user) return
 
     // Update local mock notifications to read
-    const localMockKey = `sibimkon_mock_notifications_${user.id}`
+    const localMockKey = `smartproductive_mock_notifications_${user.id}`
     const localMock = localStorage.getItem(localMockKey)
     if (localMock) {
       const parsed = JSON.parse(localMock)
@@ -217,7 +217,7 @@ export default function DashboardShell({
       <div className="flex h-screen w-screen items-center justify-center text-white" style={{background: 'var(--navy-950)'}}>
         <div className="flex flex-col items-center gap-4">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-t-transparent" style={{borderColor: 'var(--gold-400)', borderTopColor: 'transparent'}} />
-          <span className="text-sm" style={{color: 'var(--text-muted)'}}>{t('common.loadingSibimkon')}</span>
+          <span className="text-sm" style={{color: 'var(--text-muted)'}}>{t('common.loadingSmartProductive')}</span>
         </div>
       </div>
     )
@@ -268,7 +268,7 @@ export default function DashboardShell({
                 <img src="/sibimkonicon.png" alt="Logo" className="h-9 w-9 object-contain" />
                 <div className="flex flex-col">
                   <span className="text-sm font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-200 leading-tight">
-                    SIBIMKON
+                    Smart Productive
                   </span>
                   <span className="text-[9px] uppercase tracking-widest text-slate-400 leading-none">
                     Link Productive

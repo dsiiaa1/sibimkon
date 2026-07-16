@@ -56,7 +56,7 @@ export default function ReportsPage() {
   const [actionPlans, setActionPlans] = useState<ActionPlan[]>([])
   const [assessments, setAssessments] = useState<Assessment[]>([])
   const [measureProblems, setMeasureProblems] = useState<MeasureProblem[]>([])
-  const [consultantName, setConsultantName] = useState('Konsultan SIBIMKON')
+  const [consultantName, setConsultantName] = useState('Konsultan Smart Productive')
   const [computedKpiAkhir, setComputedKpiAkhir] = useState<number>(0)
 
   // Role diverifikasi dari server — tidak bisa dimanipulasi via DevTools
@@ -64,7 +64,7 @@ export default function ReportsPage() {
 
   // Tanda tangan — primary: Supabase, fallback: localStorage
   // SIG_KEY di-memoize agar tidak berubah setiap render (mencegah useCallback infinite loop)
-  const SIG_KEY = useMemo(() => `sibimkon_signatures_${projectId}`, [projectId])
+  const SIG_KEY = useMemo(() => `smartproductive_signatures_${projectId}`, [projectId])
   const [consultantSig, setConsultantSig] = useState<SignatureRecord>(EMPTY_SIG)
   const [companySig, setCompanySig] = useState<SignatureRecord>(EMPTY_SIG)
   const [sigSaving, setSigSaving] = useState<'consultant' | 'company' | null>(null)
@@ -121,9 +121,9 @@ export default function ReportsPage() {
         setConsultantName(userInfo.full_name)
       } else {
         // fallback saat hook masih loading
-        const local = localStorage.getItem('sibimkon_user')
+        const local = localStorage.getItem('smartproductive_user')
         if (local) {
-          try { setConsultantName(JSON.parse(local)?.full_name || 'Konsultan SIBIMKON') } catch { /* noop */ }
+          try { setConsultantName(JSON.parse(local)?.full_name || 'Konsultan Smart Productive') } catch { /* noop */ }
         }
       }
 
@@ -138,13 +138,27 @@ export default function ReportsPage() {
         getMeasureProblems(projectId),
         loadSignatures(),
       ])
-      setActionPlans(plans)
+      // Hitung otomatis KPI Akhir dari persentase poin checklist yang disetujui
+      const allStepIds = plans.flatMap(a => (a.steps || []).map(s => s.id))
+      const allChecklistEvidences = await getChecklistEvidences(allStepIds)
+      
+      const updatedPlans = plans.map(plan => {
+        if (!plan.steps) return plan
+        return {
+          ...plan,
+          steps: plan.steps.map(step => {
+            const evs = allChecklistEvidences.filter(e => e.step_id === step.id)
+            const isApp = evs.some(e => e.verification_status === 'approved')
+            return { ...step, is_completed: isApp }
+          })
+        }
+      })
+      
+      setActionPlans(updatedPlans)
       setAssessments(assess)
       setMeasureProblems(mProblems)
 
       // Hitung otomatis KPI Akhir dari persentase poin checklist yang disetujui
-      const allStepIds = plans.flatMap(a => (a.steps || []).map(s => s.id))
-      const allChecklistEvidences = await getChecklistEvidences(allStepIds)
       let approvedCount = 0
       allChecklistEvidences.forEach(ev => {
         if (ev.verification_status === 'approved') approvedCount++
@@ -167,7 +181,7 @@ export default function ReportsPage() {
     // Prioritas: gunakan userInfo dari server (verified). Jika belum verified (masih
     // loading atau Supabase offline), fallback ke localStorage tetapi tampilkan peringatan.
     const effectiveUser = userInfo ?? (() => {
-      const local = localStorage.getItem('sibimkon_user')
+      const local = localStorage.getItem('smartproductive_user')
       return local ? JSON.parse(local) : {}
     })()
 
@@ -232,7 +246,17 @@ export default function ReportsPage() {
       return { costSaving: totalManualSaving, investment: totalManualInvestment, roi, isManual: true }
     }
 
-    // Fallback: estimasi otomatis dari perbaikan KPI
+    // Fallback 1: Gunakan estimasi dari AI (tahap Improve) jika ada
+    const totalAiSaving = actionPlans.reduce((acc, act) => acc + Number((act.ai_analysis?.roi as any)?.estimasi_penghematan_tahunan || 0), 0)
+    const totalAiInvestment = actionPlans.reduce((acc, act) => acc + Number((act.ai_analysis?.biaya as any)?.estimasi || 0), 0)
+    const hasAiData = totalAiSaving > 0 || totalAiInvestment > 0
+    
+    if (hasAiData) {
+      const roi = totalAiInvestment > 0 ? totalAiSaving / totalAiInvestment : 0
+      return { costSaving: totalAiSaving, investment: totalAiInvestment, roi, isManual: false }
+    }
+
+    // Fallback 2: estimasi otomatis dari perbaikan KPI
     const costSaving = actionPlans.reduce((acc, act) => {
       if (act.kpi_actual === undefined) return acc
       const achieved = act.kpi_target > act.kpi_baseline
@@ -537,7 +561,7 @@ export default function ReportsPage() {
               <FileText className="h-5 w-5 text-indigo-400" /> Laporan Produktivitas Akhir
             </h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Auto-generate dokumen laporan BIMKON lengkap sesuai format standar SIBIMKON.
+              Auto-generate dokumen laporan Smart Productive lengkap sesuai format standar Smart Productive.
             </p>
             <div className="grid grid-cols-3 gap-2 bg-slate-950 border border-slate-850 p-4 rounded-2xl">
               <div className="text-center">
@@ -576,7 +600,7 @@ export default function ReportsPage() {
                 <span className="text-[10px] uppercase font-bold tracking-widest text-amber-500">Sertifikat Penghargaan</span>
                 <h4 className="text-sm font-extrabold text-slate-200 uppercase">{project.company_name}</h4>
                 <p className="text-[10px] text-slate-400 leading-normal max-w-xs mx-auto">
-                  Telah menyelesaikan Program Bimbingan Konsultansi Peningkatan Produktivitas SIBIMKON
+                  Telah menyelesaikan Program Bimbingan Konsultansi Peningkatan Produktivitas Smart Productive
                 </p>
                 <div className="flex justify-center pt-2">
                   <div className="h-12 w-12 bg-white p-1 rounded flex items-center justify-center">
