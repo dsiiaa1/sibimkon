@@ -1,7 +1,7 @@
 'use client'
 
 import { createClient } from './supabase/client'
-import { getMockDB, updateMockDB, Project, Company, ProjectCharter, Assessment, ActionPlan, MeasureProblem, AnalyzeNeed, EvidenceItem, ConsultantControlNote, MeasureDataRequirement, AnalyzeResult } from './mockData'
+import { getMockDB, updateMockDB, Project, Company, ProjectCharter, Assessment, ActionPlan, MeasureProblem, AnalyzeNeed, EvidenceItem, ConsultantControlNote, MeasureDataRequirement, AnalyzeResult, CompanyBaselineAssessment, AiIdentifiedProblem } from './mockData'
 
 function handleDbError(error: any): never {
   console.error('[DB Error]', error)
@@ -166,7 +166,9 @@ export async function saveProjectCharter(charter: ProjectCharter): Promise<void>
     project_id: charter.project_id, problem_statement: charter.problem_statement,
     objectives: charter.objectives, productivity_target: charter.productivity_target,
     scope: charter.scope, team_members: charter.team_members,
-    measure_summary: charter.measure_summary ?? null
+    measure_summary: charter.measure_summary ?? null,
+    source: charter.source || 'manual',
+    source_problem_id: charter.source_problem_id || null
   }, { onConflict: 'project_id' })
   if (error) handleDbError(error)
 }
@@ -252,11 +254,30 @@ export async function getMeasureDataRequirements(projectId: string): Promise<Mea
     if (!sb) throw new Error('No Supabase client')
     const { data, error } = await sb.from('measure_data_requirements').select('*').eq('project_id', projectId).order('created_at', { ascending: true })
     if (error) throw error
+    
+    const localData = getMockDB().measureDataReqs[projectId] || []
+    
     // Map DB column data_group → group in TypeScript
-    return (data || []).map((row: any) => ({
-      ...row,
-      group: row.data_group ?? row.group ?? 'context',
-    })) as MeasureDataRequirement[]
+    const result = (data || []).map((row: any) => {
+      const localItem = localData.find((l: MeasureDataRequirement) => l.id === row.id)
+      const ps = row.parsed_summary || {}
+      return {
+        ...row,
+        group: row.data_group ?? row.group ?? 'context',
+        raw_data: localItem?.raw_data || undefined,
+        file_name: ps._file_name ?? localItem?.file_name ?? row.file_name,
+        calculation_results_final: ps._calculation_results_final ?? localItem?.calculation_results_final ?? row.calculation_results_final,
+        calculation_results: ps._calculation_results ?? localItem?.calculation_results ?? row.calculation_results,
+        upload_warning: ps._upload_warning ?? localItem?.upload_warning ?? row.upload_warning,
+      }
+    }) as MeasureDataRequirement[]
+    
+    // Update mockDB / localStorage to stay in sync
+    const db = getMockDB()
+    db.measureDataReqs[projectId] = result
+    updateMockDB('measureDataReqs', db.measureDataReqs)
+    
+    return result
   } catch (err) {
     console.warn('[getMeasureDataRequirements] fallback to mockDB:', err)
     return getMockDB().measureDataReqs[projectId] || []
@@ -290,7 +311,13 @@ export async function saveMeasureDataRequirements(projectId: string, reqs: Measu
       expected_format: r.expected_format,
       example_columns: r.example_columns,
       status: r.status,
-      parsed_summary: r.parsed_summary ?? null,
+      parsed_summary: {
+        ...(r.parsed_summary || {}),
+        _file_name: r.file_name,
+        _calculation_results_final: r.calculation_results_final,
+        _calculation_results: r.calculation_results,
+        _upload_warning: r.upload_warning
+      },
       recommended_methods: r.recommended_methods ?? null,
       source: r.source,
       file_url: r.file_url ?? null,
@@ -1144,10 +1171,7 @@ export async function submitEvidence(
       file_name:        record.file_name,
       file_url:         record.file_url,
       kpi_actual_value: record.kpi_submitted_value ?? null,
-      kpi_unit:         record.kpi_unit ?? null,
       uploaded_by:      record.uploaded_by_id ?? null,
-      uploaded_by_name: record.uploaded_by_name ?? null,
-      uploaded_by_role: record.uploaded_by_role ?? null,
       evidence_status:  'pending',
     }).select('id').single()
     if (error) {
@@ -1683,6 +1707,140 @@ export async function cancelChangeRequest(id: string): Promise<void> {
           }
         }
         localStorage.setItem(`smartproductive_controlChangeRequests`, JSON.stringify(parsed))
+      }
+    }
+  }
+}
+
+// ── ONBOARDING & AI PROBLEM IDENTIFICATION ────────────────────────────────────
+
+export async function getCompanyBaselineAssessment(companyId: string): Promise<CompanyBaselineAssessment | null> {
+  try {
+    const sb = getSupabase()
+    if (!sb) throw new Error('No Supabase client')
+    const { data, error } = await sb.from('company_baseline_assessments').select('*').eq('company_id', companyId).maybeSingle()
+    if (error) handleDbError(error)
+    return data
+  } catch (err) {
+    console.warn('[getCompanyBaselineAssessment] fallback to mockDB:', err)
+    const local = getMockDB().companyBaselineAssessments[companyId]
+    return local || null
+  }
+}
+
+export async function getAllCompanyBaselineAssessments(): Promise<CompanyBaselineAssessment[]> {
+  try {
+    const sb = getSupabase()
+    if (!sb) throw new Error('No Supabase client')
+    const { data, error } = await sb.from('company_baseline_assessments').select('*')
+    if (error) handleDbError(error)
+    return data || []
+  } catch (err) {
+    console.warn('[getAllCompanyBaselineAssessments] fallback to mockDB:', err)
+    return Object.values(getMockDB().companyBaselineAssessments)
+  }
+}
+
+export async function saveCompanyBaselineAssessment(assessment: CompanyBaselineAssessment): Promise<void> {
+  try {
+    const sb = getSupabase()
+    if (!sb) throw new Error('No Supabase client')
+    const { error } = await sb.from('company_baseline_assessments').upsert(assessment)
+    if (error) handleDbError(error)
+    
+    // Sinkronisasi jumlah_tenaga_kerja ke tabel companies saat di-submit
+    if (assessment.status === 'submitted' && assessment.struktur_staf) {
+      let totalKaryawan = 0
+      const staf = assessment.struktur_staf
+      if (staf.karyawan_tetap?.jumlah) totalKaryawan += Number(staf.karyawan_tetap.jumlah)
+      if (staf.manajer?.jumlah) totalKaryawan += Number(staf.manajer.jumlah)
+      if (staf.supervisor?.jumlah) totalKaryawan += Number(staf.supervisor.jumlah)
+      if (staf.karyawan_tetap_lain?.jumlah) totalKaryawan += Number(staf.karyawan_tetap_lain.jumlah)
+      if (staf.karyawan_kontrak?.jumlah) totalKaryawan += Number(staf.karyawan_kontrak.jumlah)
+      
+      await sb.from('companies').update({ jumlah_tenaga_kerja: totalKaryawan }).eq('id', assessment.company_id)
+    }
+  } catch (err) {
+    console.warn('[saveCompanyBaselineAssessment] fallback to mockDB:', err)
+    const db = getMockDB()
+    db.companyBaselineAssessments[assessment.company_id] = assessment
+    
+    if (assessment.status === 'submitted' && assessment.struktur_staf) {
+      let totalKaryawan = 0
+      const staf = assessment.struktur_staf
+      if (staf.karyawan_tetap?.jumlah) totalKaryawan += Number(staf.karyawan_tetap.jumlah)
+      if (staf.manajer?.jumlah) totalKaryawan += Number(staf.manajer.jumlah)
+      if (staf.supervisor?.jumlah) totalKaryawan += Number(staf.supervisor.jumlah)
+      if (staf.karyawan_tetap_lain?.jumlah) totalKaryawan += Number(staf.karyawan_tetap_lain.jumlah)
+      if (staf.karyawan_kontrak?.jumlah) totalKaryawan += Number(staf.karyawan_kontrak.jumlah)
+      
+      const compIdx = db.companies.findIndex((c: any) => c.id === assessment.company_id)
+      if (compIdx >= 0) {
+        db.companies[compIdx].jumlah_tenaga_kerja = totalKaryawan
+        updateMockDB('companies', db.companies)
+      }
+    }
+    
+    updateMockDB('companyBaselineAssessments', db.companyBaselineAssessments)
+  }
+}
+
+export async function getAiIdentifiedProblems(companyId: string): Promise<AiIdentifiedProblem[]> {
+  try {
+    const sb = getSupabase()
+    if (!sb) throw new Error('No Supabase client')
+    const { data, error } = await sb.from('ai_identified_problems').select('*').eq('company_id', companyId)
+    if (error) handleDbError(error)
+    return data || []
+  } catch (err) {
+    console.warn('[getAiIdentifiedProblems] fallback to mockDB:', err)
+    return getMockDB().aiIdentifiedProblems[companyId] || []
+  }
+}
+
+export async function saveAiIdentifiedProblems(problems: AiIdentifiedProblem[]): Promise<void> {
+  if (problems.length === 0) return
+  const companyId = problems[0].company_id
+  try {
+    const sb = getSupabase()
+    if (!sb) throw new Error('No Supabase client')
+    const { error } = await sb.from('ai_identified_problems').upsert(problems)
+    if (error) handleDbError(error)
+  } catch (err) {
+    console.warn('[saveAiIdentifiedProblems] fallback to mockDB:', err)
+    const db = getMockDB()
+    const existing = db.aiIdentifiedProblems[companyId] || []
+    
+    // Merge updates
+    const existingMap = new Map(existing.map((p: any) => [p.id, p]))
+    problems.forEach((p: any) => existingMap.set(p.id, p))
+    
+    db.aiIdentifiedProblems[companyId] = Array.from(existingMap.values())
+    updateMockDB('aiIdentifiedProblems', db.aiIdentifiedProblems)
+  }
+}
+
+export async function updateAiIdentifiedProblemStatus(id: string, status: string, projectId?: string, companyId?: string): Promise<void> {
+  try {
+    const sb = getSupabase()
+    if (!sb) throw new Error('No Supabase client')
+    const updates: any = { status }
+    if (projectId) updates.project_id = projectId
+    if (status === 'approved') updates.approved_at = new Date().toISOString()
+    
+    const { error } = await sb.from('ai_identified_problems').update(updates).eq('id', id)
+    if (error) handleDbError(error)
+  } catch (err) {
+    console.warn('[updateAiIdentifiedProblemStatus] fallback to mockDB:', err)
+    if (companyId) {
+      const db = getMockDB()
+      const list = db.aiIdentifiedProblems[companyId] || []
+      const idx = list.findIndex((p: any) => p.id === id)
+      if (idx !== -1) {
+        list[idx].status = status as any
+        if (projectId) list[idx].project_id = projectId
+        db.aiIdentifiedProblems[companyId] = list
+        updateMockDB('aiIdentifiedProblems', db.aiIdentifiedProblems)
       }
     }
   }

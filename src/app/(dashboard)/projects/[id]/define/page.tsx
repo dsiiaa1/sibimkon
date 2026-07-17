@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { getProjects, getCompanies, getProjectCharter, saveProjectCharter, updateProjectPhase, updateCompany } from '@/lib/db'
 import { Project, Company, ProjectCharter } from '@/lib/mockData'
-import { FileCheck, Building2, Save, ArrowRight } from 'lucide-react'
+import { FileCheck, Building2, Save, ArrowRight, BrainCircuit } from 'lucide-react'
 
 export default function DefinePage() {
   const router = useRouter()
@@ -38,6 +38,7 @@ export default function DefinePage() {
   const [newMemberName, setNewMemberName] = useState('')
   const [newMemberPos, setNewMemberPos] = useState('')
   const [newMemberRole, setNewMemberRole] = useState('')
+  const [charterSource, setCharterSource] = useState<'manual'|'ai_generated'>('manual')
 
   useEffect(() => {
     async function loadData() {
@@ -67,6 +68,7 @@ export default function DefinePage() {
         setCharterTarget(chart.productivity_target)
         setCharterScope(chart.scope)
         setTeamMembers(chart.team_members || [])
+        setCharterSource(chart.source || 'manual')
       }
     }
     loadData()
@@ -109,6 +111,7 @@ export default function DefinePage() {
         productivity_target: charterTarget,
         scope: charterScope,
         team_members: teamMembers,
+        source: charterSource,
       }
       await saveProjectCharter(updatedCharter)
       showSave('Project Charter berhasil disimpan!')
@@ -317,7 +320,14 @@ export default function DefinePage() {
         {/* ── TAB: PROJECT CHARTER ── */}
         {activeTab === 'charter' && (
           <div className="space-y-6">
-            <h2 className="text-lg font-bold text-slate-200 border-b border-slate-850 pb-3">Productivity Project Charter</h2>
+            <div className="flex items-center justify-between border-b border-slate-850 pb-3">
+              <h2 className="text-lg font-bold text-slate-200">Productivity Project Charter</h2>
+              {charterSource === 'ai_generated' && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-bold">
+                  <BrainCircuit className="h-3.5 w-3.5" /> Drafted by AI
+                </span>
+              )}
+            </div>
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Pernyataan Masalah (Problem Statement)</label>

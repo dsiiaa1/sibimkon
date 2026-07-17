@@ -44,6 +44,61 @@ export interface Company {
   pkb_status?: string            // 'tidak_ada' | 'ada_aktif' | 'proses_perpanjangan'
 }
 
+export interface CompanyBaselineAssessment {
+  id: string
+  company_id: string
+  status: 'draft' | 'submitted' | 'locked'
+  
+  // Field unik kuesioner
+  tahun_pendirian?: string
+  kepemilikan?: string
+  pemilik_gender?: string
+  asal_investasi?: string
+  konsumen_utama?: string
+  ekspor?: boolean
+  ekspor_persen_produksi?: number
+  
+  // Struktur Staf
+  struktur_staf?: any
+  jam_kerja_keseluruhan?: string
+  upah_digital?: boolean
+  upah_digital_persen?: number
+  
+  // 6 dimensi PQCDSM
+  dimensi_production?: any
+  dimensi_quality?: any
+  dimensi_cost?: any
+  dimensi_delivery?: any
+  dimensi_safety?: any
+  dimensi_morale?: any
+  
+  // Ringkasan penilaian
+  ringkasan_masalah_utama?: string
+  ringkasan_rencana_program?: string
+  ringkasan_kegiatan_training?: string
+  bagan_organisasi?: string
+  proses_produksi?: string
+  
+  submitted_at?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export interface AiIdentifiedProblem {
+  id: string
+  assessment_id: string
+  company_id: string
+  title: string
+  description: string
+  pqcdsm_dimensions: string[]
+  urgency_indicator: string
+  status: 'pending' | 'approved' | 'dismissed'
+  reviewed_by?: string
+  approved_at?: string
+  project_charter_id?: string
+  created_at?: string
+}
+
 export interface Project {
   id: string
   project_code: string
@@ -68,6 +123,8 @@ export interface ProjectCharter {
   scope: string
   team_members: Array<{ name: string; position: string; role: string }>
   measure_summary?: any
+  source?: 'manual' | 'ai_generated'
+  source_problem_id?: string
 }
 
 export interface AssessmentResponse {
@@ -587,6 +644,8 @@ export const getMockDB = () => {
       measureDataReqs: {} as Record<string, MeasureDataRequirement[]>,
       analyzeResults: {} as Record<string, AnalyzeResult>,
       controlChangeRequests: {} as Record<string, ControlChangeRequest[]>,
+      companyBaselineAssessments: {} as Record<string, CompanyBaselineAssessment>,
+      aiIdentifiedProblems: {} as Record<string, AiIdentifiedProblem[]>,
     }
   }
 
@@ -611,6 +670,8 @@ export const getMockDB = () => {
     measureDataReqs: getOrSet('measureDataReqs', {}),
     analyzeResults: getOrSet('analyzeResults', {}),
     controlChangeRequests: getOrSet('controlChangeRequests', {}),
+    companyBaselineAssessments: getOrSet('companyBaselineAssessments', {}),
+    aiIdentifiedProblems: getOrSet('aiIdentifiedProblems', {}),
   }
 }
 

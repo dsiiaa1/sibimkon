@@ -298,9 +298,9 @@ export default function DashboardPage() {
               </span>
               <span className="text-lg font-bold text-[rgba(61,217,176,0.6)]">%</span>
             </div>
-            <p className="text-[11px] mt-2 text-slate-400">
-              Indikator utama kesehatan produktivitas — mencerminkan dampak nyata bimbingan konsultansi pada operasional perusahaan
-            </p>
+            <p className="text-xs text-slate-500 mt-3 leading-relaxed">
+            Indikator utama produktivitas — diakumulasi dari skor awal kuesioner Baseline Assessment (PQCDSM) ditambah pencapaian target proyek aktual perusahaan.
+          </p>
           </div>
         </div>
 

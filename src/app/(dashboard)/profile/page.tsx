@@ -1,12 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getCompanies, createCompany, updateCompany } from '@/lib/db'
-import { Company } from '@/lib/mockData'
+import { getCompanies, createCompany, updateCompany, getCompanyBaselineAssessment } from '@/lib/db'
+import { Company, CompanyBaselineAssessment } from '@/lib/mockData'
+import Link from 'next/link'
 import { Building, Save, User, Phone, Mail } from 'lucide-react'
 
 export default function CompanyProfilePage() {
   const [company, setCompany] = useState<Company | null>(null)
+  const [assessment, setAssessment] = useState<CompanyBaselineAssessment | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
 
@@ -71,6 +73,9 @@ export default function CompanyProfilePage() {
       setPicPosition(comp.pic_position || '')
       setPicPhone(comp.pic_phone || '')
       setPicEmail(comp.pic_email || '')
+
+      const existingAssessment = await getCompanyBaselineAssessment(comp.id)
+      setAssessment(existingAssessment)
     }
     loadCompany()
   }, [])
@@ -168,9 +173,21 @@ export default function CompanyProfilePage() {
         
         {/* Section 1: Profil Perusahaan */}
         <div className="glass-card rounded-3xl border border-slate-800 bg-slate-950/20 p-6 md:p-8 space-y-6">
-          <h2 className="text-lg font-bold text-slate-200 border-b border-slate-850 pb-3 flex items-center gap-2">
-            <Building className="h-5 w-5 text-indigo-400" /> Data Profil Perusahaan
-          </h2>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-850 pb-4">
+            <h2 className="text-lg font-bold text-slate-200 flex items-center gap-2">
+              <Building className="h-5 w-5 text-indigo-400" /> Data Profil Perusahaan
+            </h2>
+            <Link 
+              href={`/companies/${company.id}/onboarding`}
+              className="inline-flex items-center gap-2 rounded-xl px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-colors"
+            >
+              📝 {assessment?.status === 'submitted' || assessment?.status === 'locked' 
+                ? 'Lihat Kuesioner (Terkunci)' 
+                : assessment?.status === 'draft' 
+                ? 'Lanjutkan Draft' 
+                : 'Isi Kuesioner Onboarding'}
+            </Link>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>

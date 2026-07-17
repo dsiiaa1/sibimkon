@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { getCompanies, getProjects } from '@/lib/db'
-import { Company, Project } from '@/lib/mockData'
-import { Building, ArrowLeft, Plus, User, Phone, Mail, ArrowRight } from 'lucide-react'
+import { getCompanies, getProjects, getCompanyBaselineAssessment, getAiIdentifiedProblems, saveAiIdentifiedProblems, updateAiIdentifiedProblemStatus, createProject, saveProjectCharter } from '@/lib/db'
+import { Company, Project, CompanyBaselineAssessment, AiIdentifiedProblem } from '@/lib/mockData'
+import { Building, ArrowLeft, Plus, User, Phone, Mail, ArrowRight, BrainCircuit, FileText, CheckCircle2 } from 'lucide-react'
 import { PROJECT_STATUS_LABELS } from '@/lib/utils'
 import CreateProjectModal from '@/components/CreateProjectModal'
 
@@ -19,6 +19,9 @@ export default function CompanyDetailPage() {
   const [showNewProjectModal, setShowNewProjectModal] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string>('unknown')
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const [assessment, setAssessment] = useState<CompanyBaselineAssessment | null>(null)
+  const [aiProblems, setAiProblems] = useState<AiIdentifiedProblem[]>([])
+  const [aiAnalyzing, setAiAnalyzing] = useState(false)
 
   useEffect(() => {
     async function loadData() {
@@ -39,9 +42,93 @@ export default function CompanyDetailPage() {
       const allProjects = await getProjects()
       const compProjects = allProjects.filter(p => p.company_id === companyId)
       setProjects(compProjects)
+
+      const [ass, probs] = await Promise.all([
+        getCompanyBaselineAssessment(companyId),
+        getAiIdentifiedProblems(companyId)
+      ])
+      setAssessment(ass)
+      setAiProblems(probs)
     }
     loadData()
   }, [companyId, router])
+
+  const isKonsultan = currentUser?.role !== 'perusahaan'
+
+  const handleRunAi = async () => {
+    if (!assessment) return
+    setAiAnalyzing(true)
+    try {
+      const res = await fetch('/api/onboarding-analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_role: currentUser?.role,
+          company_name: company?.name,
+          business_field: company?.business_field,
+          total_employees: company?.total_employees,
+          assessment_data: assessment
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Gagal analisis AI')
+      
+      const newProblems = data.map((d: any, i: number) => ({
+        id: `prob-${Date.now()}-${i}`,
+        assessment_id: assessment.id,
+        company_id: companyId,
+        title: d.title,
+        description: d.description,
+        pqcdsm_dimension: d.pqcdsm_dimension,
+        urgency: d.urgency,
+        status: 'pending'
+      }))
+      
+      await saveAiIdentifiedProblems(newProblems)
+      setAiProblems(prev => [...prev, ...newProblems])
+      alert('Analisis selesai! Menemukan ' + newProblems.length + ' masalah potensial.')
+    } catch (err: any) {
+      alert(err.message)
+    } finally {
+      setAiAnalyzing(false)
+    }
+  }
+
+  const handleApproveProblem = async (prob: AiIdentifiedProblem) => {
+    if (!confirm('Buat proyek baru dari masalah ini?')) return
+    
+    // Create new Project
+    const newProj = await createProject({
+      title: prob.title,
+      description: prob.description,
+      company_id: companyId,
+      company_name: company?.name || '',
+      consultant_id: currentUser?.id || 'unknown',
+      status: 'define',
+      start_date: new Date().toISOString().split('T')[0],
+      target_end_date: new Date(Date.now() + 90*24*60*60*1000).toISOString().split('T')[0],
+      baseline_score: 0,
+      current_score: 0
+    })
+    
+    // Create Draft Charter
+    await saveProjectCharter({
+      project_id: newProj.id,
+      problem_statement: prob.description,
+      objectives: '',
+      productivity_target: '',
+      scope: '',
+      team_members: [],
+      source: 'ai_generated',
+      source_problem_id: prob.id
+    })
+    
+    await updateAiIdentifiedProblemStatus(prob.id, 'approved', newProj.id, companyId)
+    setAiProblems(prev => prev.map(p => p.id === prob.id ? { ...p, status: 'approved', project_id: newProj.id } : p))
+    setProjects(prev => [...prev, newProj])
+    
+    router.push(`/projects/${newProj.id}/define`)
+  }
 
   if (!company) {
     return <div className="text-center py-20 text-slate-400 text-sm">Memuat profil perusahaan...</div>
@@ -105,6 +192,75 @@ export default function CompanyDetailPage() {
             <p className="text-slate-500 italic">Belum ada data kontak PIC.</p>
           )}
         </div>
+      </div>
+
+      {/* Onboarding & AI Panel */}
+      <div className="rounded-3xl border border-slate-850 bg-slate-950/20 p-6 md:p-8 space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-850 pb-4">
+          <div>
+            <h2 className="text-lg font-bold text-slate-200">Baseline Assessment (Onboarding)</h2>
+            <p className="text-xs text-slate-500">
+              {assessment?.status === 'submitted' || assessment?.status === 'locked' 
+                ? 'Kuesioner profil awal perusahaan telah diisi.' 
+                : 'Kuesioner belum lengkap.'}
+            </p>
+          </div>
+          {(!isKonsultan) && (
+            <Link 
+              href={`/companies/${companyId}/onboarding`}
+              className="inline-flex items-center gap-2 rounded-xl px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-colors"
+            >
+              <FileText className="h-4 w-4" /> Buka Kuesioner
+            </Link>
+          )}
+          {(isKonsultan && assessment && (assessment.status === 'submitted' || assessment.status === 'locked')) && (
+            <button 
+              onClick={handleRunAi}
+              disabled={aiAnalyzing}
+              className="inline-flex items-center gap-2 rounded-xl px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-bold transition-colors shadow-[0_0_15px_rgba(147,51,234,0.3)]"
+            >
+              <BrainCircuit className="h-4 w-4" /> {aiAnalyzing ? 'Menganalisis...' : 'Jalankan Analisa AI'}
+            </button>
+          )}
+        </div>
+
+        {isKonsultan && aiProblems.length > 0 && (
+          <div className="space-y-3 pt-2">
+            <h3 className="text-sm font-bold text-slate-300">Rekomendasi AI (Kandidat Masalah)</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {aiProblems.map(prob => (
+                <div key={prob.id} className="p-4 rounded-xl border border-slate-800 bg-slate-900/50 space-y-3">
+                  <div className="flex justify-between items-start">
+                    <h4 className="font-bold text-slate-200 text-sm">{prob.title}</h4>
+                    {prob.status === 'approved' && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">Approved</span>
+                    )}
+                    {prob.status === 'pending' && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-400">Menunggu Review</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400 line-clamp-3">{prob.description}</p>
+                  <div className="flex items-center gap-2 text-[10px]">
+                    <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 capitalize">Dimensi: {prob.pqcdsm_dimensions?.join(', ') || '-'}</span>
+                    <span className={`px-2 py-0.5 rounded font-bold ${prob.urgency_indicator?.toLowerCase() === 'tinggi' ? 'bg-red-500/20 text-red-400' : 'bg-slate-800 text-slate-300'}`}>
+                      Urgensi: {prob.urgency_indicator}
+                    </span>
+                  </div>
+                  {prob.status === 'pending' && (
+                    <div className="pt-3 border-t border-slate-800 flex justify-end">
+                      <button 
+                        onClick={() => handleApproveProblem(prob)}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors flex items-center gap-1.5"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Approve & Buat Proyek
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Projects List Panel */}
