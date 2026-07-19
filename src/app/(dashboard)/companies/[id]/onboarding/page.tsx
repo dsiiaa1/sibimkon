@@ -207,7 +207,7 @@ export default function OnboardingPage() {
 
   const handleSave = async (status: 'draft' | 'submitted') => {
     const updated: any = {
-      id: assessment?.id || `onb-${Date.now()}`,
+      ...(assessment?.id ? { id: assessment.id } : {}),
       company_id: companyId,
       status,
       tahun_pendirian: tahunPendirian,
@@ -335,8 +335,14 @@ export default function OnboardingPage() {
 
       {/* Forms Area */}
       <form 
+        noValidate
         onSubmit={(e) => {
           e.preventDefault();
+          const form = e.currentTarget;
+          if (!form.checkValidity()) {
+            alert('Mohon lengkapi semua field yang wajib diisi (bertanda *). Silakan periksa kembali semua tab.');
+            return;
+          }
           if (confirm('Anda yakin ingin mensubmit Kuesioner ini? Setelah dikirim, form akan TERKUNCI dan tidak dapat diubah lagi.')) {
             handleSave('submitted')
           }
@@ -840,16 +846,7 @@ export default function OnboardingPage() {
               <>
                 <button 
                   type="button"
-                  onClick={() => {
-                    const form = document.querySelector('form');
-                    if (form) {
-                      const elements = form.elements as any;
-                      for (let i = 0; i < elements.length; i++) {
-                        elements[i].required = false;
-                      }
-                      handleSave('draft');
-                    }
-                  }}
+                  onClick={() => handleSave('draft')}
                   className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold transition-colors"
                 >
                   <Save className="h-4 w-4" /> Simpan Draft

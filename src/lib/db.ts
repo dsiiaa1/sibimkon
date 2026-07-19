@@ -1745,7 +1745,7 @@ export async function saveCompanyBaselineAssessment(assessment: CompanyBaselineA
   try {
     const sb = getSupabase()
     if (!sb) throw new Error('No Supabase client')
-    const { error } = await sb.from('company_baseline_assessments').upsert(assessment)
+    const { error } = await sb.from('company_baseline_assessments').upsert(assessment, { onConflict: 'company_id' })
     if (error) handleDbError(error)
     
     // Sinkronisasi jumlah_tenaga_kerja ke tabel companies saat di-submit
