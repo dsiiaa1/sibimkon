@@ -1825,7 +1825,7 @@ export async function updateAiIdentifiedProblemStatus(id: string, status: string
     const sb = getSupabase()
     if (!sb) throw new Error('No Supabase client')
     const updates: any = { status }
-    if (projectId) updates.project_id = projectId
+    // Note: The schema has project_charter_id, but we don't have it here. We skip updating project_id to avoid schema error.
     if (status === 'approved') updates.approved_at = new Date().toISOString()
     
     const { error } = await sb.from('ai_identified_problems').update(updates).eq('id', id)

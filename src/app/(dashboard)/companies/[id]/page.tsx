@@ -74,13 +74,13 @@ export default function CompanyDetailPage() {
       if (!res.ok) throw new Error(data.error || 'Gagal analisis AI')
       
       const newProblems = data.map((d: any, i: number) => ({
-        id: `prob-${Date.now()}-${i}`,
+        id: crypto.randomUUID(),
         assessment_id: assessment.id,
         company_id: companyId,
         title: d.title,
         description: d.description,
-        pqcdsm_dimension: d.pqcdsm_dimension,
-        urgency: d.urgency,
+        pqcdsm_dimensions: [d.pqcdsm_dimension],
+        urgency_indicator: d.urgency,
         status: 'pending'
       }))
       
