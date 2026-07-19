@@ -216,7 +216,7 @@ export default function OnboardingPage() {
       asal_investasi: asalInvestasi,
       konsumen_utama: konsumenUtama,
       ekspor,
-      ekspor_persen_produksi: eksporPersen,
+      ekspor_persen_produksi: eksporPersen === '' ? null : Number(eksporPersen),
       
       kadin_member: kadin,
       kadin_nama: kadinNama,
@@ -228,7 +228,7 @@ export default function OnboardingPage() {
       struktur_staf: strukturStaf,
       jam_kerja_keseluruhan: jamKerja,
       upah_digital: upahDigital,
-      upah_digital_persen: upahDigitalPersen,
+      upah_digital_persen: upahDigitalPersen === '' ? null : Number(upahDigitalPersen),
       
       dimensi_production: dimensiProduction,
       dimensi_quality: dimensiQuality,
