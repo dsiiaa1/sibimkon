@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { getProjects, getCompanies } from '@/lib/db'
 import { Project, Company } from '@/lib/mockData'
 import {
@@ -119,6 +120,7 @@ function Tooltip({ children, text }: { children: React.ReactNode; text: string }
 }
 
 export default function DashboardPage() {
+  const router = useRouter()
   const [projects, setProjects] = useState<Project[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [searchQuery, setSearchQuery] = useState('')
@@ -221,7 +223,13 @@ export default function DashboardPage() {
               </div>
             </div>
             <button
-              onClick={() => setShowModal(true)}
+              onClick={() => {
+                if (currentUser?.role === 'perusahaan' && userCompany) {
+                  router.push(`/companies/${userCompany.id}/onboarding`)
+                } else {
+                  setShowModal(true)
+                }
+              }}
               className="inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all cursor-pointer hover:-translate-y-0.5 w-full sm:w-auto"
               style={{
                 background: 'rgba(245,185,66,0.12)',
@@ -230,7 +238,7 @@ export default function DashboardPage() {
               }}
             >
               <Plus className="h-3.5 w-3.5" />
-              Proyek Baru
+              {currentUser?.role === 'perusahaan' ? 'Isi Kuesioner' : 'Buat Proyek'}
             </button>
           </div>
 
@@ -416,11 +424,17 @@ export default function DashboardPage() {
                     Mulai perjalanan peningkatan produktivitas dengan membuat proyek DMAIC pertama Anda.
                   </p>
                   <button
-                    onClick={() => setShowModal(true)}
+                    onClick={() => {
+                      if (currentUser?.role === 'perusahaan' && userCompany) {
+                        router.push(`/companies/${userCompany.id}/onboarding`)
+                      } else {
+                        setShowModal(true)
+                      }
+                    }}
                     className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold cursor-pointer"
                     style={{background: 'linear-gradient(135deg, #b8860b, #d4a017, #F5B942)', color: 'var(--navy-950)'}}
                   >
-                    <Plus className="h-4 w-4" /> Buat Proyek Pertama
+                    <Plus className="h-4 w-4" /> {currentUser?.role === 'perusahaan' ? 'Isi Kuesioner Pertama' : 'Buat Proyek Pertama'}
                   </button>
                 </div>
               ) : (

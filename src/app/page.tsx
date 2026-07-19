@@ -19,7 +19,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
             <div className="flex items-center gap-3">
-              <img src="/sibimkonicon.png" alt="Smart Productive Logo" className="h-10 w-10 object-contain" />
+              <img src="/sibimkonicon.png" alt="Smart Productive Logo" className="h-10 w-10 object-contain" style={{ width: '40px', height: '40px' }} />
               <div className="flex flex-col">
                 <span className="font-bold text-xl tracking-tight leading-tight">SMART PRODUCTIVE</span>
                 <span className="text-[10px] text-slate-400 tracking-[0.2em] font-medium uppercase">Link Productive</span>

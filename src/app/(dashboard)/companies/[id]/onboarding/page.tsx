@@ -833,36 +833,36 @@ export default function OnboardingPage() {
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Submit Buttons Always Visible */}
-        <div className="pt-8 mt-8 border-t border-slate-800 flex justify-end gap-4">
-          {!isLocked && (
-            <>
-              <button 
-                type="button"
-                onClick={() => {
-                  const form = document.querySelector('form');
-                  if (form) {
-                    const elements = form.elements as any;
-                    for (let i = 0; i < elements.length; i++) {
-                      elements[i].required = false;
+          {/* Submit Buttons Inside Tab 4 */}
+          <div className="pt-8 mt-8 border-t border-slate-800 flex justify-end gap-4">
+            {!isLocked && (
+              <>
+                <button 
+                  type="button"
+                  onClick={() => {
+                    const form = document.querySelector('form');
+                    if (form) {
+                      const elements = form.elements as any;
+                      for (let i = 0; i < elements.length; i++) {
+                        elements[i].required = false;
+                      }
+                      handleSave('draft');
                     }
-                    handleSave('draft');
-                  }
-                }}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold transition-colors"
-              >
-                <Save className="h-4 w-4" /> Simpan Draft
-              </button>
-              <button 
-                type="submit"
-                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-all shadow-lg shadow-indigo-500/20"
-              >
-                <Send className="h-4 w-4" /> Submit & Kunci Permanen
-              </button>
-            </>
-          )}
+                  }}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold transition-colors"
+                >
+                  <Save className="h-4 w-4" /> Simpan Draft
+                </button>
+                <button 
+                  type="submit"
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-all shadow-lg shadow-indigo-500/20"
+                >
+                  <Send className="h-4 w-4" /> Submit & Kunci Permanen
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
       </form>
