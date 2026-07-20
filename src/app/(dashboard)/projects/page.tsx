@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { getProjects, getCompanies } from '@/lib/db'
 import { Project, Company } from '@/lib/mockData'
 import { FolderKanban, Search, Plus, ArrowRight } from 'lucide-react'
@@ -9,6 +10,7 @@ import { PROJECT_STATUS_LABELS } from '@/lib/utils'
 import CreateProjectModal from '@/components/CreateProjectModal'
 
 export default function ProjectsPage() {
+  const router = useRouter()
   const [projects, setProjects] = useState<Project[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [searchQuery, setSearchQuery] = useState('')
@@ -44,6 +46,10 @@ export default function ProjectsPage() {
     return matchesSearch && matchesStatus
   })
 
+  const userCompany = currentUser?.role === 'perusahaan' 
+    ? companies.find(c => c.name.toLowerCase() === currentUser?.organization?.toLowerCase())
+    : null
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -56,12 +62,18 @@ export default function ProjectsPage() {
         </div>
         <div className="sm:ml-auto">
           <button
-            onClick={() => setShowModal(true)}
+            onClick={() => {
+              if (currentUser?.role === 'perusahaan' && userCompany) {
+                router.push(`/companies/${userCompany.id}/onboarding`)
+              } else {
+                setShowModal(true)
+              }
+            }}
             className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all cursor-pointer transform hover:-translate-y-0.5"
             style={{ background: 'linear-gradient(135deg, #b8860b, #d4a017, #f4c430)', color: 'var(--navy-950)', boxShadow: '0 6px 20px rgba(212,160,23,0.20)' }}
           >
             <Plus className="h-4 w-4" />
-            Mulai Proyek Baru
+            {currentUser?.role === 'perusahaan' ? 'Pengisian Onboarding' : 'Mulai Proyek Baru'}
           </button>
         </div>
       </div>
@@ -109,7 +121,7 @@ export default function ProjectsPage() {
             <p className="text-xs text-slate-600 mt-1">
               {searchQuery || statusFilter !== 'all'
                 ? 'Coba ubah filter atau kata kunci pencarian'
-                : 'Klik "Mulai Proyek Baru" untuk membuat proyek pertama'}
+                : `Klik "${currentUser?.role === 'perusahaan' ? 'Pengisian Onboarding' : 'Mulai Proyek Baru'}" untuk membuat proyek pertama`}
             </p>
           </div>
         ) : filteredProjects.map(proj => {

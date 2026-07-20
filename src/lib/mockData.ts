@@ -42,6 +42,10 @@ export interface Company {
   kadin_membership?: string      // 'tidak_aktif' | 'kadin' | 'apindo' | 'keduanya'
   labor_union?: string           // nama serikat pekerja
   pkb_status?: string            // 'tidak_ada' | 'ada_aktif' | 'proses_perpanjangan'
+  tier?: 'simple' | 'menengah' | 'besar'
+  tier_source?: 'auto' | 'manual'
+  classification_answers?: any
+  jumlah_tenaga_kerja?: number
 }
 
 export interface CompanyBaselineAssessment {
@@ -123,6 +127,8 @@ export interface ProjectCharter {
   scope: string
   team_members: Array<{ name: string; position: string; role: string }>
   measure_summary?: any
+  field_sources?: Record<string, string>
+  ai_drafted_at?: string
   source?: 'manual' | 'ai_generated'
   source_problem_id?: string
 }
@@ -314,6 +320,10 @@ export interface MeasureDataRequirement {
   calculation_results?: any
   /** Peringatan ringan setelah upload (mis. format tidak sesuai) */
   upload_warning?: string
+  /** Relevansi data pendukung KPI untuk perusahaan ini */
+  is_relevant?: boolean
+  /** Data manual yang dimasukkan jika tier simple */
+  manual_data?: string
   /** Hasil perhitungan statistik (hardcoded, bukan AI) */
   calculation_results_final?: {
     method: string

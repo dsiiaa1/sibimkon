@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { getCompanies, getProjects, createCompany } from '@/lib/db'
+import { getCompanies, getProjects, createCompany, syncAllTiers } from '@/lib/db'
 import { Company, Project } from '@/lib/mockData'
 import { Building, Search, Plus, User, Phone, Mail, ArrowRight } from 'lucide-react'
 
@@ -11,6 +11,7 @@ export default function CompaniesPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
   const [userRole, setUserRole] = useState<string>('')
 
   // New Company Form state
@@ -78,6 +79,21 @@ export default function CompaniesPage() {
     setPicEmail('')
   }
 
+  const handleSyncTiers = async () => {
+    setIsSyncing(true)
+    try {
+      const data = await syncAllTiers()
+      alert(`Berhasil menyinkronkan tier untuk ${data.updatedCount} perusahaan.`)
+      // Refresh data
+      const comps = await getCompanies()
+      setCompanies(comps)
+    } catch (err: any) {
+      alert(err.message || 'Gagal menyinkronkan tier')
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
   const filteredCompanies = companies.filter(c =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.business_field.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -94,7 +110,17 @@ export default function CompaniesPage() {
           </h1>
           <p className="text-xs text-slate-500">Kelola profil perusahaan dan data kontak PIC terdaftar</p>
         </div>
-        <div className="sm:ml-auto">
+        <div className="sm:ml-auto flex items-center gap-2">
+          {canRegisterCompany && (
+            <button 
+              onClick={handleSyncTiers}
+              disabled={isSyncing}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-bold rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <Building className="h-4 w-4 text-slate-400" />
+              {isSyncing ? 'Menyinkronkan...' : 'Sinkronisasi Tier'}
+            </button>
+          )}
           {canRegisterCompany && (
             <button 
               onClick={() => setShowAddModal(true)}
@@ -144,11 +170,22 @@ export default function CompaniesPage() {
             <div key={comp.id} className="glass-card rounded-2xl border border-slate-800/60 bg-slate-950/30 p-6 flex flex-col justify-between hover:border-slate-700 transition-all group hover:-translate-y-0.5">
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-900 border border-slate-850 px-2.5 py-0.5 rounded text-indigo-400">
-                    {comp.business_field || 'Umum'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-900 border border-slate-850 px-2.5 py-0.5 rounded text-indigo-400">
+                      {comp.business_field || 'Umum'}
+                    </span>
+                    {comp.tier && (
+                      <span className={`text-[10px] font-bold uppercase tracking-wider border px-2.5 py-0.5 rounded ${
+                        comp.tier === 'simple' ? 'bg-emerald-900/30 border-emerald-800 text-emerald-400' :
+                        comp.tier === 'besar' ? 'bg-rose-900/30 border-rose-800 text-rose-400' :
+                        'bg-amber-900/30 border-amber-800 text-amber-400'
+                      }`}>
+                        Tier {comp.tier}
+                      </span>
+                    )}
+                  </div>
                   <span className="text-xs text-slate-500">
-                    👥 {comp.total_employees} Tenaga Kerja
+                    👥 {comp.jumlah_tenaga_kerja || comp.total_employees || 0} Tenaga Kerja
                   </span>
                 </div>
 

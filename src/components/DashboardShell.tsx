@@ -55,6 +55,28 @@ export default function DashboardShell({
   const [notifications, setNotifications] = useState<any[]>([])
   const [showNotifDropdown, setShowNotifDropdown] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [activeCompanyTier, setActiveCompanyTier] = useState<string>('menengah')
+  
+  const activeProjectMatch = pathname.match(/\/projects\/([^/]+)/)
+  const activeProjectId = activeProjectMatch ? activeProjectMatch[1] : null
+
+  // Fetch company tier for active project
+  useEffect(() => {
+    async function loadTier() {
+      if (!activeProjectId) return
+      try {
+        const { getProjects, getCompanies } = await import('@/lib/db')
+        const projects = await getProjects()
+        const proj = projects.find((p: any) => p.id === activeProjectId)
+        if (proj?.company_id) {
+          const companies = await getCompanies()
+          const comp = companies.find((c: any) => c.id === proj.company_id)
+          if (comp?.tier) setActiveCompanyTier(comp.tier)
+        }
+      } catch (err) { }
+    }
+    loadTier()
+  }, [activeProjectId])
 
   // Load sidebar collapse preference on mount
   useEffect(() => {
@@ -234,18 +256,27 @@ export default function DashboardShell({
     { name: t('nav.admin'), href: '/admin', icon: Activity, roles: ['admin'] },
   ]
 
-  const activeProjectMatch = pathname.match(/\/projects\/([^/]+)/)
-  const activeProjectId = activeProjectMatch ? activeProjectMatch[1] : null
-
   // If a project is active, display the DMAIC stages in sidebar
-  const dmaicStages = activeProjectId ? [
-    { name: t('nav.define'), href: `/projects/${activeProjectId}/define`, icon: FileCheck },
-    { name: t('nav.measure'), href: `/projects/${activeProjectId}/measure`, icon: TrendingUp },
-    { name: t('nav.analyze'), href: `/projects/${activeProjectId}/analyze`, icon: Sparkles },
-    { name: t('nav.improve'), href: `/projects/${activeProjectId}/improve`, icon: LineChart },
-    { name: t('nav.control'), href: `/projects/${activeProjectId}/control`, icon: Activity },
-    { name: t('nav.reports'), href: `/projects/${activeProjectId}/reports`, icon: FileText }
-  ] : []
+  let dmaicStages: any[] = []
+  if (activeProjectId) {
+    if (activeCompanyTier === 'simple') {
+      dmaicStages = [
+        { name: 'Perencanaan & Baseline', href: `/projects/${activeProjectId}/define`, icon: FileCheck },
+        { name: 'Analisis & Rencana Solusi', href: `/projects/${activeProjectId}/analyze`, icon: Sparkles },
+        { name: 'Monitoring', href: `/projects/${activeProjectId}/control`, icon: Activity },
+        { name: t('nav.reports'), href: `/projects/${activeProjectId}/reports`, icon: FileText }
+      ]
+    } else {
+      dmaicStages = [
+        { name: t('nav.define'), href: `/projects/${activeProjectId}/define`, icon: FileCheck },
+        { name: t('nav.measure'), href: `/projects/${activeProjectId}/measure`, icon: TrendingUp },
+        { name: t('nav.analyze'), href: `/projects/${activeProjectId}/analyze`, icon: Sparkles },
+        { name: t('nav.improve'), href: `/projects/${activeProjectId}/improve`, icon: LineChart },
+        { name: t('nav.control'), href: `/projects/${activeProjectId}/control`, icon: Activity },
+        { name: t('nav.reports'), href: `/projects/${activeProjectId}/reports`, icon: FileText }
+      ]
+    }
+  }
 
   const unreadCount = notifications.filter(n => n.unread).length
 

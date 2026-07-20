@@ -168,7 +168,9 @@ export async function saveProjectCharter(charter: ProjectCharter): Promise<void>
     scope: charter.scope, team_members: charter.team_members,
     measure_summary: charter.measure_summary ?? null,
     source: charter.source || 'manual',
-    source_problem_id: charter.source_problem_id || null
+    source_problem_id: charter.source_problem_id || null,
+    field_sources: charter.field_sources || {},
+    ai_drafted_at: charter.ai_drafted_at || null
   }, { onConflict: 'project_id' })
   if (error) handleDbError(error)
 }
@@ -269,6 +271,8 @@ export async function getMeasureDataRequirements(projectId: string): Promise<Mea
         calculation_results_final: ps._calculation_results_final ?? localItem?.calculation_results_final ?? row.calculation_results_final,
         calculation_results: ps._calculation_results ?? localItem?.calculation_results ?? row.calculation_results,
         upload_warning: ps._upload_warning ?? localItem?.upload_warning ?? row.upload_warning,
+        is_relevant: row.is_relevant ?? localItem?.is_relevant ?? true,
+        manual_data: ps._manual_data ?? localItem?.manual_data ?? row.manual_data,
       }
     }) as MeasureDataRequirement[]
     
@@ -323,6 +327,8 @@ export async function saveMeasureDataRequirements(projectId: string, reqs: Measu
       file_url: r.file_url ?? null,
       data_group: r.group ?? 'context',
       role_note: r.role_note ?? null,
+      is_relevant: r.is_relevant ?? true,
+      manual_data: r.manual_data ?? null,
     }))
 
     const { data: inserted, error } = await sb
@@ -1758,7 +1764,15 @@ export async function saveCompanyBaselineAssessment(assessment: CompanyBaselineA
       if (staf.karyawan_tetap_lain?.jumlah) totalKaryawan += Number(staf.karyawan_tetap_lain.jumlah)
       if (staf.karyawan_kontrak?.jumlah) totalKaryawan += Number(staf.karyawan_kontrak.jumlah)
       
-      await sb.from('companies').update({ jumlah_tenaga_kerja: totalKaryawan }).eq('id', assessment.company_id)
+      let calculatedTier = 'menengah'
+      if (totalKaryawan < 30) calculatedTier = 'simple'
+      else if (totalKaryawan > 150) calculatedTier = 'besar'
+
+      await sb.from('companies').update({ 
+        jumlah_tenaga_kerja: totalKaryawan,
+        tier: calculatedTier,
+        tier_source: 'auto_calculated'
+      }).eq('id', assessment.company_id)
     }
   } catch (err) {
     console.warn('[saveCompanyBaselineAssessment] fallback to mockDB:', err)
@@ -1774,9 +1788,15 @@ export async function saveCompanyBaselineAssessment(assessment: CompanyBaselineA
       if (staf.karyawan_tetap_lain?.jumlah) totalKaryawan += Number(staf.karyawan_tetap_lain.jumlah)
       if (staf.karyawan_kontrak?.jumlah) totalKaryawan += Number(staf.karyawan_kontrak.jumlah)
       
+      let calculatedTier = 'menengah'
+      if (totalKaryawan < 30) calculatedTier = 'simple'
+      else if (totalKaryawan > 150) calculatedTier = 'besar'
+
       const compIdx = db.companies.findIndex((c: any) => c.id === assessment.company_id)
       if (compIdx >= 0) {
         db.companies[compIdx].jumlah_tenaga_kerja = totalKaryawan
+        db.companies[compIdx].tier = calculatedTier
+        db.companies[compIdx].tier_source = 'auto_calculated'
         updateMockDB('companies', db.companies)
       }
     }
@@ -1843,5 +1863,52 @@ export async function updateAiIdentifiedProblemStatus(id: string, status: string
         updateMockDB('aiIdentifiedProblems', db.aiIdentifiedProblems)
       }
     }
+  }
+}
+
+export async function syncAllTiers(): Promise<{ updatedCount: number }> {
+  try {
+    const sb = getSupabase()
+    if (sb) {
+      // Panggil API atau lakukan langsung di client
+      const res = await fetch('/api/sync-tiers', { method: 'POST' })
+      const data = await res.json()
+      if (res.ok) return { updatedCount: data.updatedCount }
+      throw new Error(data.error)
+    } else {
+      // Jalankan logika sinkronisasi di sisi klien untuk MockDB (localStorage)
+      const db = getMockDB()
+      let updatedCount = 0
+      const assessments = Object.values(db.companyBaselineAssessments).filter((a: any) => a.status === 'submitted')
+      
+      for (const assessment of assessments as any[]) {
+        if (!assessment.struktur_staf) continue
+        
+        const staf = assessment.struktur_staf
+        let totalKaryawan = 0
+        if (staf.karyawan_tetap?.jumlah) totalKaryawan += Number(staf.karyawan_tetap.jumlah)
+        if (staf.manajer?.jumlah) totalKaryawan += Number(staf.manajer.jumlah)
+        if (staf.supervisor?.jumlah) totalKaryawan += Number(staf.supervisor.jumlah)
+        if (staf.karyawan_tetap_lain?.jumlah) totalKaryawan += Number(staf.karyawan_tetap_lain.jumlah)
+        if (staf.karyawan_kontrak?.jumlah) totalKaryawan += Number(staf.karyawan_kontrak.jumlah)
+        
+        let calculatedTier = 'menengah'
+        if (totalKaryawan < 30) calculatedTier = 'simple'
+        else if (totalKaryawan > 150) calculatedTier = 'besar'
+
+        const compIdx = db.companies.findIndex((c: any) => c.id === assessment.company_id)
+        if (compIdx >= 0) {
+          db.companies[compIdx].jumlah_tenaga_kerja = totalKaryawan
+          db.companies[compIdx].tier = calculatedTier
+          db.companies[compIdx].tier_source = 'auto_calculated'
+          updatedCount++
+        }
+      }
+      updateMockDB('companies', db.companies)
+      return { updatedCount }
+    }
+  } catch (err: any) {
+    console.error('syncAllTiers error:', err)
+    throw err
   }
 }

@@ -31,7 +31,27 @@ export default function ControlPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
   const [changeRequests, setChangeRequests] = useState<ControlChangeRequest[]>([])
+  const [openNotes, setOpenNotes] = useState<Set<string>>(new Set())
+  const [expandedRequests, setExpandedRequests] = useState<Set<string>>(new Set())
   const fetchTriggered = useRef(false)
+
+  const toggleRequest = (reqId: string) => {
+    setExpandedRequests(prev => {
+      const next = new Set(prev)
+      if (next.has(reqId)) next.delete(reqId)
+      else next.add(reqId)
+      return next
+    })
+  }
+
+  const toggleNote = (actId: string) => {
+    setOpenNotes(prev => {
+      const next = new Set(prev)
+      if (next.has(actId)) next.delete(actId)
+      else next.add(actId)
+      return next
+    })
+  }
 
   /* ── load ── */
   useEffect(() => {
@@ -442,70 +462,78 @@ export default function ControlPage() {
                 const relatedAp = actionPlans.find(ap => ap.id === relatedTarget?.action_plan_id)
                 return (
                   <div key={req.id} className="bg-slate-900 border border-amber-500/20 p-4 rounded-xl shadow-lg">
-                    <p className="text-sm font-semibold text-white mb-1">Target: {relatedTarget?.metric_name}</p>
-                    <p className="text-xs text-slate-400 mb-3">Action Plan: {relatedAp?.title}</p>
-                    
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                      {req.changes.baseline_value !== undefined && (
-                        <div className="bg-slate-950 p-2 rounded">
-                          <p className="text-[10px] text-slate-500 uppercase">Baseline</p>
-                          <p className="text-sm text-amber-400 line-through opacity-70">{relatedTarget?.baseline_value ?? '-'}</p>
-                          <p className="text-sm text-emerald-400 font-bold">{req.changes.baseline_value}</p>
-                        </div>
-                      )}
-                      {req.changes.target_value !== undefined && (
-                        <div className="bg-slate-950 p-2 rounded">
-                          <p className="text-[10px] text-slate-500 uppercase">Target</p>
-                          <p className="text-sm text-amber-400 line-through opacity-70">{relatedTarget?.target_value ?? '-'}</p>
-                          <p className="text-sm text-emerald-400 font-bold">{req.changes.target_value}</p>
-                        </div>
-                      )}
-                      {req.changes.duration !== undefined && (
-                        <div className="bg-slate-950 p-2 rounded">
-                          <p className="text-[10px] text-slate-500 uppercase">Durasi</p>
-                          <p className="text-sm text-amber-400 line-through opacity-70">{relatedTarget?.duration} {relatedTarget?.duration_unit}</p>
-                          <p className="text-sm text-emerald-400 font-bold">{req.changes.duration} {req.changes.duration_unit}</p>
-                        </div>
-                      )}
-                      {req.changes.actuals && req.changes.actuals.length > 0 && (
-                        <div className="bg-slate-950 p-2 rounded col-span-2 md:col-span-4">
-                          <p className="text-[10px] text-slate-500 uppercase mb-2">Pembaruan Nilai Aktual</p>
-                          {req.changes.actuals.map((actChange: any) => {
-                             const originalAct = relatedTarget?.actuals?.find((a:any) => a.id === actChange.id)
-                             return (
-                               <div key={actChange.id} className="flex gap-4 text-xs">
-                                 <span className="font-semibold text-slate-300">CP {originalAct?.checkpoint_number}:</span>
-                                 {actChange.actual_value !== undefined && (
-                                   <span>
-                                     Aktual: <span className="text-amber-400 line-through opacity-70">{originalAct?.actual_value ?? '-'}</span> <span className="text-emerald-400 font-bold">{actChange.actual_value}</span>
-                                   </span>
-                                 )}
-                                 {actChange.note !== undefined && (
-                                   <span>
-                                     Catatan: <span className="text-amber-400 line-through opacity-70">{originalAct?.note || '-'}</span> <span className="text-emerald-400 font-bold">{actChange.note}</span>
-                                   </span>
-                                 )}
-                               </div>
-                             )
-                          })}
-                        </div>
-                      )}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold text-white mb-1">Target: {relatedTarget?.metric_name}</p>
+                        <p className="text-xs text-slate-400 mb-2">Action Plan: {relatedAp?.title}</p>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button onClick={() => toggleRequest(req.id)} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded shadow flex items-center gap-1">
+                           {expandedRequests.has(req.id) ? 'Sembunyikan Detail' : 'Lihat Detail'}
+                        </button>
+                        <button onClick={() => handleReviewRequest(req, 'approved')} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded shadow">
+                          Setujui
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const note = window.prompt("Alasan penolakan (opsional):")
+                            if (note !== null) handleReviewRequest(req, 'rejected', note)
+                          }} 
+                          className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-semibold rounded shadow">
+                          Tolak
+                        </button>
+                      </div>
                     </div>
+
+                    {expandedRequests.has(req.id) && (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 pt-4 border-t border-slate-800">
+                        {req.changes.baseline_value !== undefined && (
+                          <div className="bg-slate-950 p-2 rounded">
+                            <p className="text-[10px] text-slate-500 uppercase">Baseline</p>
+                            <p className="text-sm text-amber-400 line-through opacity-70">{relatedTarget?.baseline_value ?? '-'}</p>
+                            <p className="text-sm text-emerald-400 font-bold">{req.changes.baseline_value}</p>
+                          </div>
+                        )}
+                        {req.changes.target_value !== undefined && (
+                          <div className="bg-slate-950 p-2 rounded">
+                            <p className="text-[10px] text-slate-500 uppercase">Target</p>
+                            <p className="text-sm text-amber-400 line-through opacity-70">{relatedTarget?.target_value ?? '-'}</p>
+                            <p className="text-sm text-emerald-400 font-bold">{req.changes.target_value}</p>
+                          </div>
+                        )}
+                        {req.changes.duration !== undefined && (
+                          <div className="bg-slate-950 p-2 rounded">
+                            <p className="text-[10px] text-slate-500 uppercase">Durasi</p>
+                            <p className="text-sm text-amber-400 line-through opacity-70">{relatedTarget?.duration} {relatedTarget?.duration_unit}</p>
+                            <p className="text-sm text-emerald-400 font-bold">{req.changes.duration} {req.changes.duration_unit}</p>
+                          </div>
+                        )}
+                        {req.changes.actuals && req.changes.actuals.length > 0 && (
+                          <div className="bg-slate-950 p-2 rounded col-span-2 md:col-span-4">
+                            <p className="text-[10px] text-slate-500 uppercase mb-2">Pembaruan Nilai Aktual</p>
+                            {req.changes.actuals.map((actChange: any) => {
+                               const originalAct = relatedTarget?.actuals?.find((a:any) => a.id === actChange.id)
+                               return (
+                                 <div key={actChange.id} className="flex flex-wrap gap-4 text-xs mt-1">
+                                   <span className="font-semibold text-slate-300">CP {originalAct?.checkpoint_number}:</span>
+                                   {actChange.actual_value !== undefined && (
+                                     <span>
+                                       Aktual: <span className="text-amber-400 line-through opacity-70">{originalAct?.actual_value ?? '-'}</span> <span className="text-emerald-400 font-bold">{actChange.actual_value}</span>
+                                     </span>
+                                   )}
+                                   {actChange.note !== undefined && (
+                                     <span>
+                                       Catatan: <span className="text-amber-400 line-through opacity-70">{originalAct?.note || '-'}</span> <span className="text-emerald-400 font-bold">{actChange.note}</span>
+                                     </span>
+                                   )}
+                                 </div>
+                               )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
                     
-                    <div className="flex gap-2">
-                      <button onClick={() => handleReviewRequest(req, 'approved')} className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded shadow">
-                        Setujui
-                      </button>
-                      <button 
-                        onClick={() => {
-                           const reason = prompt('Masukkan alasan penolakan:')
-                           if (reason) handleReviewRequest(req, 'rejected', reason)
-                        }} 
-                        className="px-4 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-semibold rounded shadow"
-                      >
-                        Tolak
-                      </button>
-                    </div>
                   </div>
                 )
               })}
@@ -767,22 +795,35 @@ export default function ControlPage() {
                               
                               {/* Catatan */}
                               <div>
-                                <input 
-                                  type="text"
-                                  placeholder="Catatan (opsional)"
-                                  disabled={(!isFilled && !isUnlocked)}
-                                  className={`w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white focus:border-indigo-500/50 outline-none placeholder:text-slate-600 mt-1 md:mt-0 ${(!isFilled && !isUnlocked) ? 'cursor-not-allowed bg-slate-900/50' : ''}`}
-                                  value={actualNoteDisplay}
-                                  onChange={(e) => {
-                                      const updatedTargets = targets.map(tgt => 
-                                        tgt.id === t.id 
-                                          ? { ...tgt, actuals: tgt.actuals?.map(a => a.id === act.id ? { ...a, note: e.target.value } : a) }
-                                          : tgt
-                                      )
-                                      setTargets(updatedTargets)
-                                  }}
-                                  onBlur={(e) => handleUpdateActual(t.id, act.id, { note: e.target.value })}
-                                />
+                                {openNotes.has(act.id) || actualNoteDisplay ? (
+                                  <div className="flex items-start gap-2">
+                                    <input 
+                                      type="text"
+                                      placeholder="Catatan (opsional)"
+                                      disabled={(!isFilled && !isUnlocked)}
+                                      className={`w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white focus:border-indigo-500/50 outline-none placeholder:text-slate-600 mt-1 md:mt-0 ${(!isFilled && !isUnlocked) ? 'cursor-not-allowed bg-slate-900/50' : ''}`}
+                                      value={actualNoteDisplay}
+                                      onChange={(e) => {
+                                          const updatedTargets = targets.map(tgt => 
+                                            tgt.id === t.id 
+                                              ? { ...tgt, actuals: tgt.actuals?.map(a => a.id === act.id ? { ...a, note: e.target.value } : a) }
+                                              : tgt
+                                          )
+                                          setTargets(updatedTargets)
+                                      }}
+                                      onBlur={(e) => handleUpdateActual(t.id, act.id, { note: e.target.value })}
+                                    />
+                                    {openNotes.has(act.id) && !actualNoteDisplay && (
+                                      <button onClick={() => toggleNote(act.id)} className="text-slate-500 hover:text-slate-300 mt-3 md:mt-2">
+                                        Batal
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <button onClick={() => toggleNote(act.id)} disabled={!isFilled && !isUnlocked} className="text-xs text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1 mt-2 md:mt-0 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <Plus className="w-3 h-3" /> Tambah Catatan
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </div>

@@ -60,8 +60,11 @@ export default function MeasurePage() {
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [companyName, setCompanyName] = useState('')
+  const [companyTier, setCompanyTier] = useState<string>('menengah')
   const [uploadingId, setUploadingId] = useState<string | null>(null)
   const [calculatingId, setCalculatingId] = useState<string | null>(null)
+  const [showContext, setShowContext] = useState(false)
+  const [showIrrelevant, setShowIrrelevant] = useState(false)
 
   /* ── form tambah data manual ── */
   const [showForm, setShowForm] = useState(false)
@@ -144,6 +147,7 @@ export default function MeasurePage() {
         const comp = companies.find((c: any) => c.id === proj.company_id)
         cName = comp?.name ?? ''
         if (cName) setCompanyName(cName)
+        if (comp?.tier) setCompanyTier(comp.tier)
       }
 
       const [ch, saved] = await Promise.all([
@@ -178,6 +182,20 @@ export default function MeasurePage() {
     } catch { /* ignore */ }
     setDataReqs([])
     await runAiDataNeedAnalysis(charter, project.title, companyName)
+  }
+
+  const handleToggleRelevant = async (reqId: string, current: boolean | undefined) => {
+    const updated = dataReqs.map(r => r.id === reqId ? { ...r, is_relevant: !(current ?? true) } : r)
+    setDataReqs(updated)
+    await saveMeasureDataRequirements(projectId, updated)
+    showToast('Preferensi relevansi disimpan')
+  }
+
+  const handleSaveManualData = async (reqId: string, manualData: string) => {
+    const updated = dataReqs.map(r => r.id === reqId ? { ...r, manual_data: manualData, status: (manualData ? 'Sudah diupload' : 'Belum diupload') as 'Sudah diupload' | 'Belum diupload' } : r)
+    setDataReqs(updated)
+    await saveMeasureDataRequirements(projectId, updated)
+    showToast('Data manual tersimpan (autosave)')
   }
 
   const handleSave = async () => {
@@ -629,171 +647,212 @@ export default function MeasurePage() {
             <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Kebutuhan Data (Data Collection Plan)</span>
           </div>
 
-          {dataReqs.map((req, idx) => {
-            const isExpanded = expandedId === req.id
-            const isUploaded = req.status === 'Sudah diupload' || req.status === 'Tervalidasi'
-            
-            // Hitung kebutuhan dinamis berdasarkan metode yang direkomendasikan AI
-            let minRows = 10;
-            let reqNumeric = true;
-            if (req.recommended_methods && req.recommended_methods.length > 0) {
-              minRows = 1;
-              reqNumeric = false;
-              req.recommended_methods.forEach(m => {
-                const key = matchMethodToWhitelist(m.method);
-                if (key && SUPPORTED_METHODS[key]) {
-                  const stats = SUPPORTED_METHODS[key];
-                  if (stats.minSamples > minRows) minRows = stats.minSamples;
-                  if (stats.requiresNumeric) reqNumeric = true;
-                }
-              });
-            }
+          {(() => {
+            const relevantReqs = dataReqs.filter(r => r.is_relevant !== false && r.group !== 'context');
+            const contextReqs = dataReqs.filter(r => r.is_relevant !== false && r.group === 'context');
+            const irrelevantReqs = dataReqs.filter(r => r.is_relevant === false);
 
-            return (
-              <div key={req.id} className={`rounded-2xl border ${isUploaded ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-slate-800 bg-slate-950/30'} overflow-hidden transition-all`}>
+            const renderReqCard = (req: MeasureDataRequirement, idx: number) => {
+              const isExpanded = expandedId === req.id
+              const isUploaded = req.status === 'Sudah diupload' || req.status === 'Tervalidasi'
+              
+              let minRows = 10;
+              let reqNumeric = true;
+              if (req.recommended_methods && req.recommended_methods.length > 0) {
+                minRows = 1;
+                reqNumeric = false;
+                req.recommended_methods.forEach(m => {
+                  const key = matchMethodToWhitelist(m.method);
+                  if (key && SUPPORTED_METHODS[key]) {
+                    const stats = SUPPORTED_METHODS[key];
+                    if (stats.minSamples > minRows) minRows = stats.minSamples;
+                    if (stats.requiresNumeric) reqNumeric = true;
+                  }
+                });
+              }
 
-                {/* ── Card Header ── */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-5">
-                  <div className="flex-1 space-y-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-bold text-slate-200">{idx + 1}. {req.name}</span>
-                      {req.source === 'ai' && <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400 text-[10px] font-bold">AI</span>}
-                      {req.group && GROUP_BADGES[req.group] && (
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${GROUP_BADGES[req.group].style}`}>
-                          {GROUP_BADGES[req.group].label}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-400">{req.description}</p>
-                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500 bg-slate-900/50 p-2 rounded-lg border border-slate-800 inline-flex">
-                      <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
-                      <span><strong>Alasan:</strong> {req.reason}</span>
-                    </div>
-                    {req.example_columns?.length > 0 && (
-                      <p className="text-[10px] text-slate-500 mt-1 mb-2">Kolom disarankan: {req.example_columns.join(', ')}</p>
-                    )}
-                    
-                    <div className="mt-2 text-[10px] text-emerald-400/90 bg-emerald-500/10 p-2.5 rounded-lg border border-emerald-500/20">
-                      <span className="font-bold flex items-center gap-1.5 mb-1"><CheckCircle2 className="w-3.5 h-3.5" /> Standar Isi File {req.recommended_methods?.length ? '(Berdasarkan Metode AI)' : ''}:</span>
-                      <ul className="list-disc list-inside space-y-1 ml-1 text-emerald-400/70">
-                        <li><strong>Format Tabel:</strong> (.csv / .xlsx) persis seperti urutan kolom di template.</li>
-                        <li><strong>Minimal Baris:</strong> Siapkan minimal {minRows} baris data (sampel).</li>
-                        {reqNumeric ? (
-                          <li><strong>Tipe Data:</strong> Pastikan terdapat minimal 1 kolom nilai/pengukuran yang berisi <strong>angka numerik murni</strong>.</li>
-                        ) : (
-                          <li><strong>Tipe Data:</strong> Boleh berupa teks (kategorikal) ataupun angka.</li>
+              return (
+                <div key={req.id} className={`rounded-2xl border ${isUploaded ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-slate-800 bg-slate-950/30'} overflow-hidden transition-all`}>
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-5">
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-slate-200">{idx + 1}. {req.name}</span>
+                        {req.source === 'ai' && <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400 text-[10px] font-bold">AI</span>}
+                        {req.group && GROUP_BADGES[req.group] && (
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${GROUP_BADGES[req.group].style}`}>
+                            {GROUP_BADGES[req.group].label}
+                          </span>
                         )}
-                      </ul>
+                        {req.group === 'supporting' && req.is_relevant !== false && (
+                          <button onClick={() => handleToggleRelevant(req.id, req.is_relevant)} className="ml-2 px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] rounded border border-slate-700 text-slate-400">
+                            Tandai Tidak Relevan
+                          </button>
+                        )}
+                        {req.is_relevant === false && (
+                          <button onClick={() => handleToggleRelevant(req.id, req.is_relevant)} className="ml-2 px-2 py-1 bg-emerald-900/50 hover:bg-emerald-800 text-[10px] rounded border border-emerald-800 text-emerald-400">
+                            Tandai Relevan
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-400">{req.description}</p>
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 bg-slate-900/50 p-2 rounded-lg border border-slate-800 inline-flex">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                        <span><strong>Alasan:</strong> {req.reason}</span>
+                      </div>
+                      {req.example_columns?.length > 0 && (
+                        <p className="text-[10px] text-slate-500 mt-1 mb-2">Kolom disarankan: {req.example_columns.join(', ')}</p>
+                      )}
+                      
+                      <div className="mt-2 text-[10px] text-emerald-400/90 bg-emerald-500/10 p-2.5 rounded-lg border border-emerald-500/20">
+                        <span className="font-bold flex items-center gap-1.5 mb-1"><CheckCircle2 className="w-3.5 h-3.5" /> Standar Isi File {req.recommended_methods?.length ? '(Berdasarkan Metode AI)' : ''}:</span>
+                        <ul className="list-disc list-inside space-y-1 ml-1 text-emerald-400/70">
+                          <li><strong>Format Tabel:</strong> (.csv / .xlsx) persis seperti urutan kolom di template.</li>
+                          <li><strong>Minimal Baris:</strong> Siapkan minimal {minRows} baris data (sampel).</li>
+                          {reqNumeric ? (
+                            <li><strong>Tipe Data:</strong> Pastikan terdapat minimal 1 kolom nilai/pengukuran yang berisi <strong>angka numerik murni</strong>.</li>
+                          ) : (
+                            <li><strong>Tipe Data:</strong> Boleh berupa teks (kategorikal) ataupun angka.</li>
+                          )}
+                        </ul>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* ── Actions ── */}
-                  <div className="flex flex-col items-end gap-2 shrink-0">
-                    <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold ${isUploaded ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
-                      {req.status}
-                    </span>
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                      <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold ${isUploaded ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
+                        {req.status}
+                      </span>
 
-                    <div className="flex items-center gap-2">
-                      {req.example_columns && req.example_columns.length > 0 && (
-                        <button onClick={() => handleDownloadTemplate(req)}
-                          className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-slate-400 bg-slate-900 border border-slate-700 hover:text-slate-200 hover:bg-slate-800 transition-all">
-                          <Download className="w-4 h-4" />
-                          Unduh Template
+                      <div className="flex items-center gap-2">
+                        {companyTier === 'simple' && (
+                           <div className="flex items-center gap-2">
+                             <input type="text" placeholder="Input Nilai / Data Manual" value={req.manual_data || ''}
+                               onChange={(e) => handleSaveManualData(req.id, e.target.value)}
+                               className="bg-slate-900 border border-slate-700 text-xs px-3 py-2 rounded-xl text-slate-200"
+                             />
+                           </div>
+                        )}
+                        {req.example_columns && req.example_columns.length > 0 && (
+                          <button onClick={() => handleDownloadTemplate(req)}
+                            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-slate-400 bg-slate-900 border border-slate-700 hover:text-slate-200 hover:bg-slate-800 transition-all">
+                            <Download className="w-4 h-4" />
+                            Unduh Template
+                          </button>
+                        )}
+                        <button onClick={() => handleUploadClick(req.id)} disabled={uploadingId === req.id}
+                          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${isUploaded ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-indigo-600 text-white hover:bg-indigo-500'}`}>
+                          {uploadingId === req.id ? <Loader2 className="w-4 h-4 animate-spin" /> : (isUploaded ? <RefreshCw className="w-4 h-4" /> : <UploadCloud className="w-4 h-4" />)}
+                          {isUploaded ? 'Upload Ulang' : 'Upload File'}
+                        </button>
+                      </div>
+
+                      {isUploaded && (
+                        <button onClick={() => setExpandedId(isExpanded ? null : req.id)} className="text-[10px] text-indigo-400 hover:text-indigo-300 mt-1 flex items-center gap-1">
+                          Detail {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                         </button>
                       )}
-                      <button onClick={() => handleUploadClick(req.id)} disabled={uploadingId === req.id}
-                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${isUploaded ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-indigo-600 text-white hover:bg-indigo-500'}`}>
-                        {uploadingId === req.id ? <Loader2 className="w-4 h-4 animate-spin" /> : (isUploaded ? <RefreshCw className="w-4 h-4" /> : <UploadCloud className="w-4 h-4" />)}
-                        {isUploaded ? 'Upload Ulang' : 'Upload (.csv/.xlsx)'}
-                      </button>
                     </div>
 
-                    {/* Tombol dihapus sesuai desain agregasi */}
-
-                    {isUploaded && (
-                      <button onClick={() => setExpandedId(isExpanded ? null : req.id)} className="text-[10px] text-indigo-400 hover:text-indigo-300 mt-1 flex items-center gap-1">
-                        Detail {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                    {isKonsultan && (
+                      <button onClick={() => handleDelete(req.id)} className="p-2 text-slate-700 hover:text-red-400 hover:bg-red-500/10 rounded-lg shrink-0 mt-auto sm:mt-0">
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     )}
                   </div>
 
-                  {isKonsultan && (
-                    <button onClick={() => handleDelete(req.id)} className="p-2 text-slate-700 hover:text-red-400 hover:bg-red-500/10 rounded-lg shrink-0 mt-auto sm:mt-0">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
+                  {isExpanded && (
+                    <div className="border-t border-slate-800/50 p-5 bg-slate-900/30 space-y-5">
+                      {req.upload_warning && (
+                        <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl text-xs text-amber-400">
+                          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                          <p>{req.upload_warning}</p>
+                        </div>
+                      )}
 
-                {/* ══════════════════════════════════════════════════════════════ */}
-                {/* EXPANDED PANEL                                                */}
-                {/* ══════════════════════════════════════════════════════════════ */}
-                {isExpanded && (
-                  <div className="border-t border-slate-800/50 p-5 bg-slate-900/30 space-y-5">
-                    
-                    {req.upload_warning && (
-                      <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl text-xs text-amber-400">
-                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                        <p>{req.upload_warning}</p>
-                      </div>
-                    )}
-
-                    {/* ── Parsed Summary ── */}
-                    {req.parsed_summary && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <h4 className="text-xs font-bold text-slate-300 uppercase flex items-center gap-1.5"><FileSpreadsheet className="w-4 h-4 text-emerald-400" /> Ringkasan Data</h4>
-                          <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-[10px] text-slate-400 font-mono space-y-1">
-                            <p>Total Baris: <span className="text-emerald-400 font-bold">{req.parsed_summary.total_rows}</span></p>
-                            <p>Total Kolom: <span className="text-indigo-400 font-bold">{req.parsed_summary.columns?.length}</span></p>
-                            <div className="pt-2 mt-2 border-t border-slate-800/50 max-h-32 overflow-y-auto">
-                              {req.parsed_summary.columns?.map((c: string) => (
-                                <div key={c} className="flex justify-between items-center py-0.5">
-                                  <span>{c}</span>
-                                  <span className="text-[9px] text-slate-500 bg-slate-900 px-1 rounded">{req.parsed_summary.stats?.[c]?.type || 'unknown'}</span>
-                                </div>
-                              ))}
+                      {req.parsed_summary && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <h4 className="text-xs font-bold text-slate-300 uppercase flex items-center gap-1.5"><FileSpreadsheet className="w-4 h-4 text-emerald-400" /> Ringkasan Data</h4>
+                            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-[10px] text-slate-400 font-mono space-y-1">
+                              <p>Total Baris: <span className="text-emerald-400 font-bold">{req.parsed_summary.total_rows}</span></p>
+                              <p>Total Kolom: <span className="text-indigo-400 font-bold">{req.parsed_summary.columns?.length}</span></p>
+                              <div className="pt-2 mt-2 border-t border-slate-800/50 max-h-32 overflow-y-auto">
+                                {req.parsed_summary.columns?.map((c: string) => (
+                                  <div key={c} className="flex justify-between items-center py-0.5">
+                                    <span>{c}</span>
+                                    <span className="text-[9px] text-slate-500 bg-slate-900 px-1 rounded">{req.parsed_summary.stats?.[c]?.type || 'unknown'}</span>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="space-y-2">
-                          <h4 className="text-xs font-bold text-amber-400 uppercase flex items-center gap-1.5"><Sparkles className="w-4 h-4" /> Rekomendasi Metode AI</h4>
-                          {req.recommended_methods?.length ? (
-                            <div className="space-y-2">
-                              {req.recommended_methods.map((m: any, i: number) => {
-                                const matchedMethodKey = matchMethodToWhitelist(m.method)
-                                return (
-                                  <div key={i} className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl space-y-2">
-                                    <div className="flex items-center gap-1.5">
-                                      <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />
-                                      <span className="text-xs font-bold text-amber-400">{m.method}</span>
+                          <div className="space-y-2">
+                            <h4 className="text-xs font-bold text-amber-400 uppercase flex items-center gap-1.5"><Sparkles className="w-4 h-4" /> Rekomendasi Metode AI</h4>
+                            {req.recommended_methods?.length ? (
+                              <div className="space-y-2">
+                                {req.recommended_methods.map((m: any, i: number) => {
+                                  const matchedMethodKey = matchMethodToWhitelist(m.method)
+                                  return (
+                                    <div key={i} className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl space-y-2">
+                                      <div className="flex items-center gap-1.5">
+                                        <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />
+                                        <span className="text-xs font-bold text-amber-400">{m.method}</span>
+                                        {matchedMethodKey && (
+                                          <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">✓ Didukung</span>
+                                        )}
+                                      </div>
+                                      <p className="text-[10px] text-slate-400 leading-relaxed">{m.reason}</p>
+                                      
                                       {matchedMethodKey && (
-                                        <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded">✓ Didukung</span>
+                                        <p className="text-[10px] text-emerald-400 mt-2 bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
+                                          💡 Metode ini akan diterapkan otomatis saat Anda klik 'Hitung Metrik Utama Proyek' di bagian bawah halaman.
+                                        </p>
                                       )}
                                     </div>
-                                    <p className="text-[10px] text-slate-400 leading-relaxed">{m.reason}</p>
-                                    
-                                    {matchedMethodKey && (
-                                      <p className="text-[10px] text-emerald-400 mt-2 bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
-                                        💡 Metode ini akan diterapkan otomatis saat Anda klik 'Hitung Metrik Utama Proyek' di bagian bawah halaman.
-                                      </p>
-                                    )}
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          ) : (
-                            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs text-slate-500 italic">Belum ada rekomendasi.</div>
-                          )}
+                                  )
+                                })}
+                              </div>
+                            ) : (
+                              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs text-slate-500 italic">Belum ada rekomendasi.</div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            };
 
+            return (
+              <>
+                {/* RELEVANT REQS */}
+                {relevantReqs.map((req, idx) => renderReqCard(req, idx))}
+
+                {/* CONTEXT REQS */}
+                {contextReqs.length > 0 && (
+                  <div className="mt-6 border-t border-slate-800/50 pt-4 space-y-4">
+                    <button onClick={() => setShowContext(!showContext)} className="flex items-center gap-2 text-slate-400 hover:text-slate-200 text-sm font-bold bg-slate-900/50 hover:bg-slate-800 px-4 py-2 rounded-xl transition-all w-full text-left">
+                      {showContext ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      + Tambah Detail / Catatan ({contextReqs.length} Data Konteks Tersedia)
+                    </button>
+                    {showContext && contextReqs.map((req, idx) => renderReqCard(req, idx + relevantReqs.length))}
                   </div>
                 )}
-              </div>
-            )
-          })}
+
+                {/* IRRELEVANT REQS */}
+                {irrelevantReqs.length > 0 && (
+                  <div className="mt-6 border-t border-slate-800/50 pt-4 space-y-4">
+                    <button onClick={() => setShowIrrelevant(!showIrrelevant)} className="flex items-center gap-2 text-slate-500 hover:text-slate-300 text-sm font-bold bg-slate-900/30 hover:bg-slate-800/50 px-4 py-2 rounded-xl transition-all w-full text-left">
+                      {showIrrelevant ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      Kategori Tidak Relevan ({irrelevantReqs.length} Item)
+                    </button>
+                    {showIrrelevant && irrelevantReqs.map((req, idx) => renderReqCard(req, idx + relevantReqs.length + contextReqs.length))}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
 
