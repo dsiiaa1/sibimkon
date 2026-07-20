@@ -4,16 +4,18 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import {
   getProjects, getProjectCharter, getCompanies,
-  getMeasureDataRequirements, saveMeasureDataRequirements, updateProjectPhase, saveProjectCharter
+  getMeasureDataRequirements, saveMeasureDataRequirements, updateProjectPhase, saveProjectCharter,
+  setProjectPhaseLock, submitApprovalRequest, cancelApprovalRequest, getApprovalRequests
 } from '@/lib/db'
-import { Project, ProjectCharter, MeasureDataRequirement } from '@/lib/mockData'
+import { Project, ProjectCharter, MeasureDataRequirement, GenericApprovalRequest } from '@/lib/mockData'
 import {
   ArrowRight, Sparkles, AlertCircle, CheckCircle2,
   ChevronDown, ChevronUp, Plus, Trash2, RefreshCw, Loader2,
   UploadCloud, FileSpreadsheet, Check, Calculator, AlertTriangle,
-  Gauge, BarChart3, TrendingDown, Download
+  Gauge, BarChart3, TrendingDown, Download, Lock, Unlock
 } from 'lucide-react'
 import { useUserRole } from '@/hooks/useUserRole'
+import { useDialog } from '@/hooks/useDialog'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { Tooltip } from '@/components/Tooltip'
@@ -48,6 +50,7 @@ const GROUP_BADGES: Record<string, { label: string; style: string }> = {
 export default function MeasurePage() {
   const router = useRouter()
   const params = useParams()
+  const { showAlert, showConfirm } = useDialog()
   const projectId = params.id as string
 
   const { userInfo } = useUserRole()
@@ -74,7 +77,7 @@ export default function MeasurePage() {
   const [formReason, setFormReason] = useState('')
   const [formGroup, setFormGroup] = useState('')
 
-
+  const [approvalRequests, setApprovalRequests] = useState<GenericApprovalRequest[]>([])
 
   const aiTriggered = useRef(false)
 
@@ -163,6 +166,9 @@ export default function MeasurePage() {
         aiTriggered.current = true
         await runAiDataNeedAnalysis(ch, proj.title, cName)
       }
+      
+      const reqs = await getApprovalRequests(projectId)
+      setApprovalRequests(reqs)
     }
     loadData()
   }, [projectId, router, runAiDataNeedAnalysis])
@@ -175,7 +181,7 @@ export default function MeasurePage() {
 
   const handleReanalyze = async () => {
     if (!charter || !project) return
-    if (!window.confirm('Analisis ulang akan menghapus semua data saat ini. Lanjutkan?')) return
+    if (!await showConfirm('Analisis ulang akan menghapus semua data saat ini. Lanjutkan?')) return
     try {
       const { createClient } = await import('@/lib/supabase/client')
       const sb = createClient()
@@ -222,14 +228,20 @@ export default function MeasurePage() {
     try {
       const synced = await saveMeasureDataRequirements(projectId, dataReqs)
       setDataReqs(synced)
+      
+      if (!project?.measure_is_locked) {
+        await setProjectPhaseLock(projectId, 'measure', true)
+        setProject(prev => prev ? { ...prev, measure_is_locked: true } : null)
+      }
+      
       showToast('✅ Data berhasil disimpan!')
     } finally { setSaving(false) }
   }
 
   const handleAdvance = async () => {
-    if (dataReqs.length === 0) { alert('Belum ada data yang dikumpulkan.'); return }
+    if (dataReqs.length === 0) { await showAlert('Belum ada data yang dikumpulkan.'); return }
     const uploaded = dataReqs.filter(r => r.status !== 'Belum diupload').length
-    if (uploaded === 0 && !window.confirm('Belum ada satupun file data yang diupload. Yakin?')) return
+    if (uploaded === 0 && !await showConfirm('Belum ada satupun file data yang diupload. Yakin?')) return
     setSaving(true)
     try {
       const synced = await saveMeasureDataRequirements(projectId, dataReqs)
@@ -262,8 +274,8 @@ export default function MeasurePage() {
     showToast('✅ Data tambahan berhasil ditambahkan!')
   }
 
-  const handleDelete = (id: string) => {
-    if (!window.confirm('Hapus kebutuhan data ini?')) return
+  const handleDelete = async (id: string) => {
+    if (!await showConfirm('Hapus kebutuhan data ini?')) return
     const updated = dataReqs.filter(p => p.id !== id)
     setDataReqs(updated)
     saveMeasureDataRequirements(projectId, updated).then(synced => setDataReqs(synced)).catch(console.error)
@@ -414,7 +426,7 @@ export default function MeasurePage() {
       setDataReqs(synced)
       showToast('✅ File berhasil diupload dan diproses!')
     } catch (err: any) {
-      alert(`Gagal memproses file: ${err.message}`)
+      await showAlert(`Gagal memproses file: ${err.message}`)
     } finally {
       setUploadingId(null)
       setActiveUploadId(null)
@@ -544,6 +556,7 @@ export default function MeasurePage() {
             method: 'Aggregated Sigma Level',
             calculation_results: result,
             data_name: 'Keseluruhan Data (Gabungan)',
+            is_simple: companyTier === 'simple'
           }),
         })
         const data = await res.json()
@@ -560,7 +573,7 @@ export default function MeasurePage() {
       
       showToast('✅ Kalkulasi Keseluruhan Selesai!')
     } catch (err: any) {
-      alert(`Gagal menghitung agregasi: ${err.message}`)
+      await showAlert(`Gagal menghitung agregasi: ${err.message}`)
     } finally {
       setCalculatingId(null)
     }
@@ -574,6 +587,36 @@ export default function MeasurePage() {
 
   const uploadedCount = dataReqs.filter(r => r.status !== 'Belum diupload').length
   const calculatedCount = dataReqs.filter(r => r.calculation_results).length
+
+  const isLocked = project.measure_is_locked
+  const pendingUnlockReq = approvalRequests.find(r => r.entity_type === 'phase_unlock' && r.entity_id === 'measure' && r.status === 'pending')
+
+  const handleRequestUnlock = async () => {
+    if (pendingUnlockReq) {
+      if (await showConfirm('Batalkan pengajuan buka kunci?')) {
+        await cancelApprovalRequest(pendingUnlockReq.id)
+        setApprovalRequests(approvalRequests.filter(r => r.id !== pendingUnlockReq.id))
+      }
+      return
+    }
+    if (await showConfirm('Minta akses edit ke Konsultan?')) {
+      const req: GenericApprovalRequest = {
+        id: crypto.randomUUID(), project_id: projectId, entity_type: 'phase_unlock', entity_id: 'measure',
+        requested_by: userInfo?.id || 'unknown', requested_at: new Date().toISOString(),
+        changes: { phase: 'measure' }, status: 'pending'
+      }
+      await submitApprovalRequest(req)
+      setApprovalRequests([req, ...approvalRequests])
+      showToast('Permintaan akses edit terkirim.')
+    }
+  }
+
+  const handleToggleLock = async (lock: boolean) => {
+    if (!isKonsultan) return
+    await setProjectPhaseLock(projectId, 'measure', lock)
+    setProject({ ...project, measure_is_locked: lock })
+    showToast(lock ? 'Fase dikunci.' : 'Kunci fase dibuka.')
+  }
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -595,12 +638,34 @@ export default function MeasurePage() {
               Analisis Ulang
             </button>
           )}
+          {isLocked && (
+            <div className="flex items-center gap-3 bg-slate-900 px-4 py-2 rounded-xl border border-slate-800">
+              <Lock className="h-4 w-4 text-amber-500" />
+              <span className="text-xs font-semibold text-slate-300">Data Terkunci</span>
+              {!isKonsultan ? (
+                <button onClick={handleRequestUnlock} className="ml-2 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-amber-400 text-[10px] font-bold rounded-lg transition-colors">
+                  {pendingUnlockReq ? 'Menunggu Persetujuan' : 'Minta Akses Edit'}
+                </button>
+              ) : (
+                <button onClick={() => handleToggleLock(false)} className="ml-2 px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-[10px] font-bold rounded-lg transition-colors">
+                  Buka Kunci
+                </button>
+              )}
+            </div>
+          )}
+          {!isLocked && isKonsultan && (
+            <button onClick={() => handleToggleLock(true)} className="flex items-center gap-2 px-4 py-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 text-xs font-bold rounded-xl transition-colors">
+              <Unlock className="h-3.5 w-3.5" /> Kunci Manual
+            </button>
+          )}
           <span className="text-[10px] bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl text-slate-400 font-mono">
             {uploadedCount}/{dataReqs.length} uploaded · {calculatedCount} dihitung
           </span>
         </div>
       </div>
 
+      <fieldset disabled={isLocked && !isKonsultan} className="group disabled:opacity-80">
+      
       <input type="file" ref={fileInputRef} className="hidden" accept=".csv,.xls,.xlsx" onChange={processFile} />
 
       {saveMsg && (
@@ -1066,7 +1131,7 @@ export default function MeasurePage() {
                         <Sparkles className="w-4 h-4" /> Interpretasi Sistem
                       </h5>
                       <div className="space-y-2 text-[11px] text-slate-300 leading-relaxed">
-                        {interpretation.level_assessment && (
+                        {interpretation.level_assessment && companyTier !== 'simple' && (
                           <div>
                             <span className="font-bold text-slate-500 uppercase">Level:</span>
                             <p className="mt-0.5">{interpretation.level_assessment}</p>
@@ -1117,6 +1182,7 @@ export default function MeasurePage() {
           </button>
         )}
       </div>
+      </fieldset>
     </div>
   )
 }

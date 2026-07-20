@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { 
   LayoutDashboard, 
   FolderKanban, 
@@ -208,7 +209,7 @@ export default function DashboardShell({
     }
 
     checkAuth()
-  }, [router])
+  }, [router, pathname])
 
   const handleLogout = async () => {
     try {
@@ -310,7 +311,7 @@ export default function DashboardShell({
           {!isCollapsed ? (
             <>
               <Link href="/dashboard" className="flex items-center gap-3 py-1 animate-fade-in">
-                <img src="/sibimkonicon.png" alt="Logo" className="h-9 w-9 object-contain" style={{ width: '36px', height: '36px' }} />
+                <Image src="/sibimkonicon.png" alt="Logo" width={36} height={36} className="h-9 w-9 object-contain" />
                 <div className="flex flex-col">
                   <span className="text-sm font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-200 leading-tight">
                     Smart Productive
@@ -339,7 +340,7 @@ export default function DashboardShell({
                 style={{color: 'var(--text-muted)'}} 
                 title="Tampilkan Sidebar"
               >
-                <img src="/sibimkonicon.png" alt="Logo" className="h-8 w-8 object-contain animate-fade-in" style={{ width: '32px', height: '32px' }} />
+                <Image src="/sibimkonicon.png" alt="Logo" width={32} height={32} className="h-8 w-8 object-contain animate-fade-in" />
               </button>
             </div>
           )}

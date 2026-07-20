@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { LanguageProvider } from "@/lib/i18n/LanguageContext";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { DialogProvider } from "@/components/DialogProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -56,9 +57,11 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <ThemeProvider attribute="class" defaultTheme="dark">
-          <LanguageProvider>
-            {children}
-          </LanguageProvider>
+          <DialogProvider>
+            <LanguageProvider>
+              {children}
+            </LanguageProvider>
+          </DialogProvider>
         </ThemeProvider>
       </body>
     </html>

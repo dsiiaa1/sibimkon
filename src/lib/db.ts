@@ -34,7 +34,12 @@ export async function getProjects(): Promise<Project[]> {
       status: p.status, start_date: p.start_date, target_end_date: p.target_end_date,
       baseline_score: Number(p.baseline_productivity_index || 0),
       baseline_reasoning: p.baseline_reasoning,
-      current_score: Number(p.current_productivity_index || 0)
+      current_score: Number(p.current_productivity_index || 0),
+      define_is_locked: !!p.define_is_locked,
+      measure_is_locked: !!p.measure_is_locked,
+      analyze_is_locked: !!p.analyze_is_locked,
+      improve_is_locked: !!p.improve_is_locked,
+      control_is_locked: !!p.control_is_locked
     }))
   } catch (err) {
     console.warn('[getProjects] fallback to mockDB:', err)
@@ -75,6 +80,22 @@ export async function createProject(project: Omit<Project, 'id' | 'project_code'
     updateMockDB('projects', [...db.projects, newProj])
     return newProj
   }
+}
+
+export async function setProjectPhaseLock(projectId: string, phase: 'define' | 'measure' | 'analyze' | 'improve' | 'control', isLocked: boolean): Promise<void> {
+  const db = getMockDB()
+  const key = `${phase}_is_locked` as keyof Project
+  updateMockDB('projects', db.projects.map((p: Project) => p.id === projectId ? { ...p, [key]: isLocked } : p))
+  
+  const sb = getSupabase()
+  if (!sb) return
+  
+  const { error } = await sb.from('bimkon_projects').update({
+    [key]: isLocked,
+    updated_at: new Date().toISOString()
+  }).eq('id', projectId)
+  
+  if (error) handleDbError(error)
 }
 
 // ── COMPANIES ────────────────────────────────────────────────────────────────
@@ -135,6 +156,11 @@ export async function updateCompany(companyId: string, fields: Partial<Company> 
     ...(fields.pic_position !== undefined && { pic_position: fields.pic_position }),
     ...(fields.pic_phone !== undefined && { pic_phone: fields.pic_phone }),
     ...(fields.pic_email !== undefined && { pic_email: fields.pic_email }),
+    ...(fields.onboarding_completed !== undefined && { onboarding_completed: fields.onboarding_completed }),
+    ...(fields.onboarding_completed_at !== undefined && { onboarding_completed_at: fields.onboarding_completed_at }),
+    ...(fields.tier !== undefined && { tier: fields.tier }),
+    ...(fields.tier_source !== undefined && { tier_source: fields.tier_source }),
+    ...(fields.tier_set_at !== undefined && { tier_set_at: fields.tier_set_at }),
     updated_at: new Date().toISOString(),
   }).eq('id', companyId)
   if (error) handleDbError(error)
@@ -166,7 +192,8 @@ export async function saveProjectCharter(charter: ProjectCharter): Promise<void>
   const { error } = await sb.from('project_charters').upsert({
     project_id: charter.project_id, problem_statement: charter.problem_statement,
     objectives: charter.objectives, productivity_target: charter.productivity_target,
-    scope: charter.scope, team_members: charter.team_members,
+    scope: charter.scope, business_case: charter.business_case ?? null,
+    timeline: charter.timeline ?? null, team_members: charter.team_members,
     measure_summary: charter.measure_summary ?? null,
     source: charter.source || 'manual',
     source_problem_id: charter.source_problem_id || null,
@@ -439,7 +466,7 @@ export async function getActionPlans(projectId: string): Promise<ActionPlan[]> {
       investment_manual: d.investment_manual != null ? Number(d.investment_manual) : undefined,
       pic_name: d.pic_name, start_date: d.start_date,
       end_date: d.end_date, status: d.status, progress_percentage: d.progress_percentage,
-      ai_analysis: typeof d.ai_analysis === 'string' ? JSON.parse(d.ai_analysis) : d.ai_analysis,
+      ai_analysis: typeof d.ai_analysis === 'string' ? (function(){ try { return JSON.parse(d.ai_analysis) } catch { return d.ai_analysis } })() : d.ai_analysis,
       steps: hasSteps ? (d.steps || []) : []
     }))
   } catch (err) {
@@ -479,7 +506,7 @@ export async function saveActionPlans(projectId: string, actions: ActionPlan[]):
       pic_name: act.pic_name, problem_title: act.problem_title || null,
       start_date: act.start_date, end_date: act.end_date,
       status: act.status, progress_percentage: act.progress_percentage,
-      ai_analysis: act.ai_analysis ? JSON.stringify(act.ai_analysis) : null
+      ai_analysis: act.ai_analysis || null
     }).eq('id', act.id)
     if (error) handleDbError(error)
   }
@@ -496,7 +523,7 @@ export async function saveActionPlans(projectId: string, actions: ActionPlan[]):
       pic_name: act.pic_name, problem_title: act.problem_title || null,
       start_date: act.start_date, end_date: act.end_date,
       status: act.status, progress_percentage: act.progress_percentage,
-      ai_analysis: act.ai_analysis ? JSON.stringify(act.ai_analysis) : null
+      ai_analysis: act.ai_analysis || null
     }))
     const { error } = await sb.from('improve_actions').insert(rows)
     if (error) handleDbError(error)

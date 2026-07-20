@@ -2,21 +2,23 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { Project, ActionPlan, EfficiencyTarget, EfficiencyActual, ControlChangeRequest } from '@/lib/mockData'
+import { Project, ActionPlan, EfficiencyTarget, EfficiencyActual, GenericApprovalRequest } from '@/lib/mockData'
 import {
   AlertTriangle, CheckCircle2, ShieldAlert, FileCheck, Save,
   Check, ArrowRight, Plus, Trash2, DollarSign, TrendingUp,
-  Edit3, MessageSquare, Send, Lock, ChevronDown, ChevronRight, ChevronUp, Sparkles
+  Edit3, MessageSquare, Send, Lock, Unlock, ChevronDown, ChevronRight, ChevronUp, Sparkles
 } from 'lucide-react'
 import { Tooltip } from '@/components/Tooltip'
+import { useDialog } from '@/hooks/useDialog'
 import {
-  updateProjectPhase, getProjects, getActionPlans,
+  updateProjectPhase, getProjects, getCompanies, getActionPlans,
   getEfficiencyTargets, saveEfficiencyTargets, saveEfficiencyActuals,
-  getApprovalRequests, submitApprovalRequest, reviewChangeRequest, cancelChangeRequest
+  getApprovalRequests, submitApprovalRequest, reviewApprovalRequest, cancelApprovalRequest, setProjectPhaseLock
 } from '@/lib/db'
 import { useUserRole } from '@/hooks/useUserRole'
 
 export default function ControlPage() {
+  const { showAlert, showConfirm, showPrompt } = useDialog()
   const router    = useRouter()
   const params    = useParams()
   const projectId = params.id as string
@@ -26,12 +28,13 @@ export default function ControlPage() {
 
   /* ── core ── */
   const [project,     setProject]     = useState<Project | null>(null)
+  const [company,     setCompany]     = useState<any>(null)
   const [actionPlans, setActionPlans] = useState<ActionPlan[]>([])
   
   const [targets, setTargets] = useState<EfficiencyTarget[]>([])
   const [isGenerating, setIsGenerating] = useState(false)
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
-  const [changeRequests, setChangeRequests] = useState<ControlChangeRequest[]>([])
+  const [changeRequests, setChangeRequests] = useState<GenericApprovalRequest[]>([])
   const [openNotes, setOpenNotes] = useState<Set<string>>(new Set())
   const [expandedRequests, setExpandedRequests] = useState<Set<string>>(new Set())
   const fetchTriggered = useRef(false)
@@ -54,13 +57,28 @@ export default function ControlPage() {
     })
   }
 
+  /* ── SOP MOCK STATE ── */
+  const [sopUploaded, setSopUploaded] = useState<{name: string, timestamp: string} | null>(null)
+  
+  const handleSopUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setSopUploaded({
+        name: e.target.files[0].name,
+        timestamp: new Date().toLocaleString('id-ID')
+      })
+      showSave('Dokumen SOP berhasil diunggah!')
+    }
+  }
+
   /* ── load ── */
   useEffect(() => {
     async function loadData() {
-      const [projects, actions] = await Promise.all([getProjects(), getActionPlans(projectId)])
+      const [projects, companies, actions] = await Promise.all([getProjects(), getCompanies(), getActionPlans(projectId)])
       const proj = projects.find((p: Project) => p.id === projectId)
       if (!proj) { router.push('/dashboard'); return }
       setProject(proj)
+      const comp = companies.find(c => c.id === proj.company_id)
+      if (comp) setCompany(comp)
       setActionPlans(actions)
 
       let dbTargets = await getEfficiencyTargets(projectId)
@@ -174,7 +192,7 @@ export default function ControlPage() {
         await saveEfficiencyActuals([theActual])
         showSave('Checkpoint disimpan')
       } catch (err: any) {
-        alert(err.message || 'Gagal menyimpan checkpoint. Pastikan syarat terpenuhi.')
+        await showAlert(err.message || 'Gagal menyimpan checkpoint. Pastikan syarat terpenuhi.')
         // revert local state
         setTargets(targets)
       }
@@ -192,7 +210,7 @@ export default function ControlPage() {
         await saveEfficiencyTargets(projectId, [theTarget])
         showSave('Baseline disimpan')
       } catch (err: any) {
-        alert(err.message || 'Gagal menyimpan baseline.')
+        await showAlert(err.message || 'Gagal menyimpan baseline.')
         setTargets(targets)
       }
     }
@@ -216,7 +234,7 @@ export default function ControlPage() {
     const req = {
       id: crypto.randomUUID(),
       project_id: projectId,
-      entity_type: 'efficiency_target',
+      entity_type: 'efficiency_target' as const,
       entity_id: editingTarget.id,
       requested_by: userInfo?.id || 'unknown',
       requested_at: new Date().toISOString(),
@@ -250,13 +268,13 @@ export default function ControlPage() {
       setEditingTarget(null)
       showSave('Perubahan diajukan, menunggu persetujuan Konsultan')
     } catch (err: any) {
-      alert(err.message || 'Gagal mengajukan perubahan')
+      await showAlert(err.message || 'Gagal mengajukan perubahan')
     }
   }
 
   const handleReviewRequest = async (req: any, status: 'approved' | 'rejected', rejectReason?: string) => {
     try {
-      await reviewChangeRequest(req.id, status, userInfo?.id || 'unknown', rejectReason)
+      await reviewApprovalRequest(req.id, status, userInfo?.id || 'unknown', rejectReason)
       setChangeRequests(changeRequests.map(r => r.id === req.id ? { ...r, status, reject_reason: rejectReason } : r))
       showSave(`Pengajuan ${status === 'approved' ? 'disetujui' : 'ditolak'}`)
       
@@ -349,18 +367,18 @@ export default function ControlPage() {
         }
       }
     } catch (err: any) {
-      alert(err.message || 'Gagal memproses review')
+      await showAlert(err.message || 'Gagal memproses review')
     }
   }
 
   const handleCancelRequest = async (reqId: string) => {
-    if (!confirm('Batalkan pengajuan ini?')) return
+    if (!await showConfirm('Batalkan pengajuan ini?')) return
     try {
-      await cancelChangeRequest(reqId)
+      await cancelApprovalRequest(reqId)
       setChangeRequests(changeRequests.filter(r => r.id !== reqId))
       showSave('Pengajuan dibatalkan')
     } catch (err: any) {
-      alert(err.message || 'Gagal membatalkan pengajuan')
+      await showAlert(err.message || 'Gagal membatalkan pengajuan')
     }
   }
 
@@ -377,11 +395,11 @@ export default function ControlPage() {
     })
 
     if (!allFilled) {
-      alert('Terdapat Checkpoint Target Efisiensi yang belum diisi. Mohon lengkapi terlebih dahulu.')
+      await showAlert('Terdapat Checkpoint Target Efisiensi yang belum diisi. Mohon lengkapi terlebih dahulu.')
       return
     }
 
-    if (confirm('Fase Control (Pencapaian Target) telah selesai dan akan dibuatkan Laporan Akhir. Lanjutkan?')) {
+    if (await showConfirm('Fase Control (Pencapaian Target) telah selesai dan akan dibuatkan Laporan Akhir. Lanjutkan?')) {
       await updateProjectPhase(projectId, 'completed')
       router.push(`/projects/${projectId}/reports`)
     }
@@ -399,6 +417,36 @@ export default function ControlPage() {
 
   if (!project) return null
 
+  const isLocked = project.control_is_locked
+  const pendingUnlockReq = changeRequests.find(r => r.entity_type === 'phase_unlock' && r.entity_id === 'control' && r.status === 'pending')
+
+  const handleRequestUnlock = async () => {
+    if (pendingUnlockReq) {
+      if (await showConfirm('Batalkan pengajuan buka kunci?')) {
+        await cancelApprovalRequest(pendingUnlockReq.id)
+        setChangeRequests(changeRequests.filter(r => r.id !== pendingUnlockReq.id))
+      }
+      return
+    }
+    if (await showConfirm('Minta akses edit ke Konsultan?')) {
+      const req = {
+        id: crypto.randomUUID(), project_id: projectId, entity_type: 'phase_unlock' as const, entity_id: 'control',
+        requested_by: userInfo?.id || 'unknown', requested_at: new Date().toISOString(),
+        changes: { phase: 'control' }, status: 'pending' as const
+      }
+      await submitApprovalRequest(req)
+      setChangeRequests([req, ...changeRequests])
+      showSave('Permintaan akses edit terkirim.')
+    }
+  }
+
+  const handleToggleLock = async (lock: boolean) => {
+    if (!isKonsultan) return
+    await setProjectPhaseLock(projectId, 'control', lock)
+    setProject({ ...project, control_is_locked: lock })
+    showSave(lock ? 'Fase dikunci.' : 'Kunci fase dibuka.')
+  }
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
         
@@ -415,6 +463,27 @@ export default function ControlPage() {
               Fase Control memastikan implementasi solusi benar-benar menghasilkan efisiensi yang ditargetkan sebelumnya.
             </p>
           </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            {isLocked && (
+              <div className="flex items-center gap-3 bg-slate-800 px-4 py-2 rounded-xl border border-slate-700">
+                <Lock className="h-4 w-4 text-amber-500" />
+                <span className="text-xs font-semibold text-slate-300">Data Terkunci</span>
+                {!isKonsultan ? (
+                  <button onClick={handleRequestUnlock} className="ml-2 px-3 py-1 bg-slate-700 hover:bg-slate-600 text-amber-400 text-[10px] font-bold rounded-lg transition-colors">
+                    {pendingUnlockReq ? 'Menunggu Persetujuan' : 'Minta Akses Edit'}
+                  </button>
+                ) : (
+                  <button onClick={() => handleToggleLock(false)} className="ml-2 px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-[10px] font-bold rounded-lg transition-colors">
+                    Buka Kunci
+                  </button>
+                )}
+              </div>
+            )}
+            {!isLocked && isKonsultan && (
+              <button onClick={() => handleToggleLock(true)} className="flex items-center gap-2 px-4 py-2 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition-colors">
+                <Unlock className="h-3.5 w-3.5" /> Kunci Manual
+              </button>
+            )}
           <button
             onClick={handleFinishPhase}
             className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium transition-colors shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
@@ -422,7 +491,10 @@ export default function ControlPage() {
             Selesaikan & Buka Laporan
             <ArrowRight className="w-4 h-4" />
           </button>
+          </div>
         </div>
+
+        <fieldset disabled={isLocked && !isKonsultan} className="group disabled:opacity-80">
 
         {isGenerating && (
           <div className="p-8 text-center bg-slate-900/50 border border-indigo-500/30 rounded-2xl">
@@ -456,7 +528,7 @@ export default function ControlPage() {
             </h2>
             <div className="space-y-2">
               {changeRequests.filter(r => r.status === 'pending').map(req => {
-                const relatedTarget = targets.find(t => t.id === req.target_id)
+                const relatedTarget = targets.find(t => t.id === req.entity_id)
                 const relatedAp = actionPlans.find(ap => ap.id === relatedTarget?.action_plan_id)
                 return (
                   <div key={req.id} className="bg-slate-900 border border-amber-500/20 p-3 rounded-lg flex flex-col gap-2">
@@ -579,9 +651,9 @@ export default function ControlPage() {
                     {!isKonsultan && (
                       <div className="absolute top-4 right-4">
                         <button
-                          onClick={() => {
+                          onClick={async () => {
                             if (getPendingRequest(t.id)) {
-                              alert('Masih ada pengajuan perubahan yang menunggu persetujuan.')
+                              await showAlert('Masih ada pengajuan perubahan yang menunggu persetujuan.')
                               return
                             }
                             setEditingTarget(t)
@@ -889,7 +961,7 @@ export default function ControlPage() {
                    <button
                       type="button"
                       onClick={async () => {
-                         if (!confirm('Ini akan mengajukan target metrik baru. Lanjutkan?')) return
+                         if (!await showConfirm('Ini akan mengajukan target metrik baru. Lanjutkan?')) return
                          // Buat target dummy dan langsung submit change request
                          const newTargetId = crypto.randomUUID?.() || 'tgt-' + Math.random()
                          const newTarget = {
@@ -907,10 +979,13 @@ export default function ControlPage() {
                          try {
                            await saveEfficiencyTargets(projectId, [newTarget])
                            await submitApprovalRequest({
+                             id: crypto.randomUUID?.() || 'req-' + Math.random(),
                              project_id: editingTarget.project_id,
-                             entity_type: 'efficiency_target',
+                             entity_type: 'efficiency_target' as const,
                              entity_id: newTargetId,
                              requested_by: userInfo?.id || 'unknown',
+                             requested_at: new Date().toISOString(),
+                             status: 'pending',
                              changes: {
                                raw_text: editForm.raw_text,
                                metric_name: editForm.metric_name,
@@ -922,17 +997,15 @@ export default function ControlPage() {
                            setEditingTarget(null)
                            showSave('Target baru berhasil diajukan!')
                          } catch (err: any) {
-                           alert('Gagal menambahkan target baru')
+                           await showAlert('Gagal menambahkan target baru')
                          }
                       }}
-                      className="text-xs bg-slate-800 hover:bg-slate-700 text-indigo-400 px-3 py-1.5 rounded-lg font-medium transition-colors border border-slate-700"
+                      className="text-xs bg-slate-800 hover:bg-slate-700 text-indigo-400 px-3 py-1.5 rounded-lg font-medium transition-colors border border-slate-700 cursor-pointer"
                    >
                      + Ajukan Sebagai Target Baru
                    </button>
                 </div>
 
-                {/* Durasi removed: calculated automatically from Improve Timeline */}
-                
                 <div className="bg-indigo-500/10 border border-indigo-500/20 p-3 rounded-lg flex gap-3 text-sm text-indigo-300">
                   <AlertTriangle className="w-5 h-5 flex-shrink-0" />
                   <p>
@@ -944,13 +1017,13 @@ export default function ControlPage() {
               <div className="p-4 border-t border-slate-800 bg-slate-900 flex justify-end gap-3">
                 <button
                   onClick={() => setEditingTarget(null)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg"
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   onClick={handleSubmitEditRencana}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg shadow-lg shadow-indigo-500/20"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg shadow-lg shadow-indigo-500/20 cursor-pointer"
                 >
                   Ajukan Perubahan
                 </button>
@@ -958,6 +1031,82 @@ export default function ControlPage() {
             </div>
           </div>
         )}
+
+        {/* --- DOKUMENTASI SOP & PENYELESAIAN PROYEK --- */}
+        <div className="mt-12 bg-slate-900/60 border border-slate-800 rounded-3xl p-8 mb-20">
+          
+          {(company?.tier === 'besar' || company?.tier === 'menengah') && (
+            <div className="mb-10 pb-8 border-b border-slate-800">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+                  <FileCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-white">Standarisasi & SOP (Advanced Tier)</h2>
+                  <p className="text-sm text-slate-400 mt-1">Unggah dokumen SOP untuk menjaga keberlanjutan hasil perbaikan proyek ini.</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-4 mb-6">
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${sopUploaded ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}`}>
+                  {sopUploaded ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+                  Kelengkapan Standarisasi: {sopUploaded ? '1/1 Dokumen' : '0/1 Dokumen'}
+                </span>
+                <span className="text-xs text-slate-500">Sifat: Opsional (Tidak memblokir laporan akhir)</span>
+              </div>
+              
+              <div className="bg-slate-950 border border-slate-800 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center text-center">
+                {sopUploaded ? (
+                  <div className="space-y-3">
+                    <div className="w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-500 mx-auto flex items-center justify-center mb-2">
+                      <FileCheck className="w-8 h-8" />
+                    </div>
+                    <p className="text-sm font-bold text-slate-200">{sopUploaded.name}</p>
+                    <p className="text-xs text-slate-500">Diunggah pada: {sopUploaded.timestamp}</p>
+                    <div className="pt-2">
+                      <label className="text-xs font-bold text-indigo-400 hover:text-indigo-300 cursor-pointer underline">
+                        Ganti File
+                        <input type="file" className="hidden" onChange={handleSopUpload} />
+                      </label>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="w-16 h-16 rounded-full bg-slate-900 border border-slate-800 text-slate-500 mx-auto flex items-center justify-center mb-4">
+                      <FileCheck className="w-6 h-6" />
+                    </div>
+                    <p className="text-sm text-slate-400 mb-4 max-w-sm">Pilih file SOP (PDF, DOCX) dari perangkat Anda untuk diarsipkan dalam sistem.</p>
+                    <label className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-sm font-bold rounded-xl cursor-pointer transition-colors inline-block">
+                      Pilih File SOP
+                      <input type="file" className="hidden" onChange={handleSopUpload} />
+                    </label>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col items-center justify-center text-center space-y-4">
+            <h2 className="text-xl font-bold text-white">Laporan Akhir Proyek</h2>
+            <p className="text-sm text-slate-400 max-w-lg leading-relaxed">
+              Jika semua tahap implementasi (Improve) dan pemantauan (Control) telah selesai dievaluasi, Anda dapat menutup siklus proyek ini dan melihat Laporan Akhir Produktivitas.
+            </p>
+            <button 
+              onClick={async () => {
+                 if (await showConfirm('Anda yakin ingin menyelesaikan proyek ini dan membuka laporan akhir?')) {
+                    await updateProjectPhase(projectId, 'completed')
+                    router.push(`/projects/${projectId}/report`)
+                 }
+              }}
+              className="mt-4 px-8 py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-bold rounded-2xl shadow-xl shadow-emerald-500/20 flex items-center gap-3 transition-all transform hover:scale-105 cursor-pointer"
+            >
+              <CheckCircle2 className="w-6 h-6" />
+              Selesaikan & Buka Laporan
+            </button>
+          </div>
+        </div>
+
+        </fieldset>
 
       </div>
   )

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { Mail, Lock, Eye, EyeOff, User, Building2, Phone, ArrowLeft, ArrowRight, CheckCircle2 } from 'lucide-react'
 
@@ -185,7 +186,7 @@ export default function RegisterPage() {
         
         {/* Top Branding Logo */}
         <div className="flex items-center gap-4 z-10">
-          <img src="/sibimkonicon.png" alt="Logo" className="h-10 w-10 object-contain" />
+          <Image src="/sibimkonicon.png" alt="Logo" width={40} height={40} className="h-10 w-10 object-contain" />
           <div>
             <h1 className="text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-200">
               Smart Productive
@@ -262,7 +263,7 @@ export default function RegisterPage() {
         <div className="w-full max-w-md mx-auto">
           {/* Mobile logo header */}
           <div className="lg:hidden flex flex-col items-center mb-6">
-            <img src="/sibimkonicon.png" alt="Logo" className="h-12 w-12 object-contain" />
+            <Image src="/sibimkonicon.png" alt="Logo" width={48} height={48} className="h-12 w-12 object-contain" />
             <h2 className="mt-2 text-center text-xl font-black text-[#0a1628]">
               Daftar Smart Productive
             </h2>

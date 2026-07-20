@@ -77,14 +77,7 @@ export async function POST(req: Request) {
     )
   }
 
-  const apiKey = process.env.GROQ_API_KEY
-  if (!apiKey) {
-    console.error('[measure-data-needed] GROQ_API_KEY tidak ditemukan di environment')
-    return NextResponse.json(
-      { error: 'Konfigurasi AI belum tersedia. Tambahkan GROQ_API_KEY di .env.local' },
-      { status: 503 }
-    )
-  }
+
 
   const prompt = buildPrompt(charter)
 

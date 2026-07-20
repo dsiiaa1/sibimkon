@@ -5,8 +5,10 @@ import { getCompanies, createCompany, updateCompany, getCompanyBaselineAssessmen
 import { Company, CompanyBaselineAssessment } from '@/lib/mockData'
 import Link from 'next/link'
 import { Building, Save, User, Phone, Mail } from 'lucide-react'
+import { useDialog } from '@/hooks/useDialog'
 
 export default function CompanyProfilePage() {
+  const { showAlert, showConfirm } = useDialog()
   const [company, setCompany] = useState<Company | null>(null)
   const [assessment, setAssessment] = useState<CompanyBaselineAssessment | null>(null)
   const [saving, setSaving] = useState(false)
@@ -141,8 +143,8 @@ export default function CompanyProfilePage() {
     setNewCert('')
   }
 
-  const handleDeleteCert = (certName: string) => {
-    if (!window.confirm(`Hapus sertifikasi "${certName}"?`)) return
+  const handleDeleteCert = async (certName: string) => {
+    if (!await showConfirm(`Hapus sertifikasi "${certName}"?`)) return
     setCompCertifications(compCertifications.filter(c => c !== certName))
   }
 

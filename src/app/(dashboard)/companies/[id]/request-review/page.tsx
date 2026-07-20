@@ -5,10 +5,12 @@ import { useParams, useRouter } from 'next/navigation'
 import { getCompanies } from '@/lib/db'
 import { Company, TierReviewRequest } from '@/lib/mockData'
 import { ArrowLeft, Send } from 'lucide-react'
+import { useDialog } from '@/hooks/useDialog'
 
 export default function TierReviewRequestPage() {
   const { id } = useParams()
   const router = useRouter()
+  const { showAlert } = useDialog()
   const [company, setCompany] = useState<Company | null>(null)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
@@ -49,11 +51,11 @@ export default function TierReviewRequestPage() {
       }
       
       localStorage.setItem('smartproductive_tierReviewRequests', JSON.stringify([...existing, newRequest]))
-      alert('Pengajuan peninjauan tier berhasil dikirim ke Konsultan.')
+      await showAlert('Pengajuan peninjauan tier berhasil dikirim ke Konsultan.')
       router.push('/dashboard')
     } catch (err) {
       console.error(err)
-      alert('Terjadi kesalahan')
+      await showAlert('Terjadi kesalahan')
     } finally {
       setSubmitting(false)
     }

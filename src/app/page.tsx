@@ -1,9 +1,29 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
+import { useDialog } from '@/hooks/useDialog'
 
 export default function LandingPage() {
+  const { showAlert } = useDialog()
+  const [formState, setFormState] = useState({ name: '', email: '', company: '', message: '' })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleContactSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!formState.name || !formState.email || !formState.message) {
+      await showAlert('Harap isi Nama, Email, dan Pesan Anda.')
+      return
+    }
+    setIsSubmitting(true)
+    // Simulate API call
+    await new Promise(r => setTimeout(r, 1000))
+    setIsSubmitting(false)
+    await showAlert('Pesan Anda berhasil dikirim! Tim kami akan segera menghubungi Anda.', 'Berhasil')
+    setFormState({ name: '', email: '', company: '', message: '' })
+  }
+
   const scrollToContact = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault()
     const element = document.getElementById('kontak')
@@ -19,7 +39,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
             <div className="flex items-center gap-3">
-              <img src="/sibimkonicon.png" alt="Smart Productive Logo" className="h-10 w-10 object-contain" style={{ width: '40px', height: '40px' }} />
+              <Image src="/sibimkonicon.png" alt="Smart Productive Logo" width={40} height={40} className="h-10 w-10 object-contain" />
               <div className="flex flex-col">
                 <span className="font-bold text-xl tracking-tight leading-tight">SMART PRODUCTIVE</span>
                 <span className="text-[10px] text-slate-400 tracking-[0.2em] font-medium uppercase">Link Productive</span>
@@ -393,38 +413,32 @@ export default function LandingPage() {
           
           {/* Placeholder Contact Form or Buttons */}
           <div className="bg-[#121c2f]/80 p-8 rounded-2xl border border-[#2a3f63] backdrop-blur-sm max-w-2xl mx-auto">
-             <form className="space-y-4 mb-8 text-left" onSubmit={(e) => e.preventDefault()}>
+             <form className="space-y-4 mb-8 text-left" onSubmit={handleContactSubmit}>
                <div className="grid grid-cols-2 gap-4">
                  <div>
                    <label className="block text-sm font-medium text-slate-400 mb-1">Nama Lengkap</label>
-                   <input type="text" className="w-full bg-[#0B1220] border border-[#2a3f63] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#3dd9b0]" placeholder="John Doe" />
+                   <input type="text" value={formState.name} onChange={(e) => setFormState({...formState, name: e.target.value})} className="w-full bg-[#0B1220] border border-[#2a3f63] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#3dd9b0]" placeholder="John Doe" />
                  </div>
                  <div>
                    <label className="block text-sm font-medium text-slate-400 mb-1">Email Profesional</label>
-                   <input type="email" className="w-full bg-[#0B1220] border border-[#2a3f63] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#3dd9b0]" placeholder="john@company.com" />
+                   <input type="email" value={formState.email} onChange={(e) => setFormState({...formState, email: e.target.value})} className="w-full bg-[#0B1220] border border-[#2a3f63] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#3dd9b0]" placeholder="john@company.com" />
                  </div>
                </div>
                <div>
                  <label className="block text-sm font-medium text-slate-400 mb-1">Nama Perusahaan</label>
-                 <input type="text" className="w-full bg-[#0B1220] border border-[#2a3f63] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#3dd9b0]" placeholder="PT. Inovasi Industri" />
+                 <input type="text" value={formState.company} onChange={(e) => setFormState({...formState, company: e.target.value})} className="w-full bg-[#0B1220] border border-[#2a3f63] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#3dd9b0]" placeholder="PT. Inovasi Industri" />
                </div>
                <div>
                  <label className="block text-sm font-medium text-slate-400 mb-1">Pesan / Kebutuhan</label>
-                 <textarea rows={3} className="w-full bg-[#0B1220] border border-[#2a3f63] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#3dd9b0]" placeholder="Jelaskan tantangan produktivitas perusahaan Anda..."></textarea>
+                 <textarea rows={3} value={formState.message} onChange={(e) => setFormState({...formState, message: e.target.value})} className="w-full bg-[#0B1220] border border-[#2a3f63] rounded-lg px-4 py-2 text-white focus:outline-none focus:border-[#3dd9b0]" placeholder="Jelaskan tantangan produktivitas perusahaan Anda..."></textarea>
+               </div>
+               
+               <div className="flex flex-col sm:flex-row gap-4 justify-center mt-6">
+                 <button type="submit" disabled={isSubmitting} className="bg-[#3dd9b0] text-[#0B1220] px-6 py-3 rounded-lg font-bold hover:bg-[#2bb394] transition-colors w-full sm:w-auto flex items-center justify-center gap-2">
+                   {isSubmitting ? 'Mengirim...' : 'Kirim Pesan & Jadwalkan Assessment'}
+                 </button>
                </div>
              </form>
-             
-             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-               <button type="button" className="bg-[#3dd9b0] text-[#0B1220] px-6 py-3 rounded-lg font-bold hover:bg-[#2bb394] transition-colors w-full sm:w-auto">
-                 Jadwalkan Assessment
-               </button>
-               <button type="button" className="bg-transparent border border-[#d4af37] text-[#d4af37] px-6 py-3 rounded-lg font-bold hover:bg-[#d4af37]/10 transition-colors w-full sm:w-auto">
-                 Request Demo
-               </button>
-               <button type="button" className="bg-[#1a2942] text-white px-6 py-3 rounded-lg font-bold hover:bg-[#2a3f63] transition-colors w-full sm:w-auto">
-                 Konsultasi Gratis
-               </button>
-             </div>
           </div>
         </div>
       </section>

@@ -2,17 +2,19 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import { useDialog } from '@/hooks/useDialog'
 import {
-  getProjects,
+  getProjects, getCompanies,
   updateProjectPhase, getMeasureProblems, getProjectCharter,
-  getAnalyzeResult, saveAnalyzeResult, getMeasureDataRequirements
+  getAnalyzeResult, saveAnalyzeResult, getMeasureDataRequirements,
+  setProjectPhaseLock, submitApprovalRequest, cancelApprovalRequest, getApprovalRequests
 } from '@/lib/db'
 import {
-  Project, AnalyzeRecommendation, MeasureProblem, AnalyzeResult, MeasureDataRequirement, PriorityItem, ActionPlanStep
+  Project, AnalyzeRecommendation, MeasureProblem, AnalyzeResult, MeasureDataRequirement, PriorityItem, ActionPlanStep, GenericApprovalRequest, Company
 } from '@/lib/mockData'
 import {
   Sparkles, Plus, AlertCircle, ArrowRight, Trash2, Save, CheckCircle, Edit3,
-  Loader2, RefreshCw, X
+  Loader2, RefreshCw, X, Lock, Unlock
 } from 'lucide-react'
 import { useUserRole } from '@/hooks/useUserRole'
 
@@ -246,17 +248,16 @@ function GenericAnalyzeComponent({
 export default function AnalyzePage() {
   const router = useRouter()
   const params = useParams()
+  const { showAlert, showConfirm } = useDialog()
   const projectId = params.id as string
-
-  useUserRole()
-
-  /* ── no tabs needed, single view ── */
 
   /* ── core data ── */
   const [project, setProject] = useState<Project | null>(null)
+  const [company, setCompany] = useState<Company | null>(null)
+  const [projectCharter, setProjectCharter] = useState<any>(null)
+  const [dataRequirements, setDataRequirements] = useState<MeasureDataRequirement[]>([])
 
   /* ── AI Analyze Recommendation ── */
-  const [dataRequirements, setDataRequirements] = useState<MeasureDataRequirement[]>([])
   const [analyzeResult, setAnalyzeResult] = useState<AnalyzeResult | null>(null)
   const [aiError, setAiError] = useState<string | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
@@ -268,25 +269,32 @@ export default function AnalyzePage() {
   const [showAddCustom, setShowAddCustom] = useState(false)
   const [customMethod, setCustomMethod] = useState('')
   const [customReasoning, setCustomReasoning] = useState('')
+  const [showAllRecommendations, setShowAllRecommendations] = useState(false)
   
   const [priorityResult, setPriorityResult] = useState<PriorityItem[] | null>(null)
   const [isGeneratingPriority, setIsGeneratingPriority] = useState(false)
   const [priorityError, setPriorityError] = useState<string | null>(null)
   const priorityTriggered = useRef(false)
+  
   const [expandedPriority, setExpandedPriority] = useState<number | null>(null)
   
   const aiTriggered = useRef(false)
 
   const [measureProblems, setMeasureProblems] = useState<MeasureProblem[]>([])
-  const [projectCharter, setProjectCharter] = useState<any>(null)
+  
+  const { userInfo } = useUserRole()
+  const isKonsultan = (userInfo?.role ?? 'perusahaan').toLowerCase() !== 'perusahaan'
+  const [approvalRequests, setApprovalRequests] = useState<GenericApprovalRequest[]>([])
 
   /* ── load ── */
   useEffect(() => {
     async function loadData() {
-      const projects = await getProjects()
+      const [projects, companies] = await Promise.all([getProjects(), getCompanies()])
       const proj = projects.find((p: Project) => p.id === projectId)
       if (!proj) { router.push('/dashboard'); return }
       setProject(proj)
+      const comp = companies.find((c: any) => c.id === proj.company_id)
+      if (comp) setCompany(comp)
 
       const [mProblems, charter, dataReqs, resultAI] = await Promise.all([
         getMeasureProblems(projectId),
@@ -302,7 +310,8 @@ export default function AnalyzePage() {
         setPriorityResult(resultAI.priority_result || null)
       }
 
-
+      const reqs = await getApprovalRequests(projectId)
+      setApprovalRequests(reqs)
     }
     loadData()
   }, [projectId, router])
@@ -334,7 +343,8 @@ export default function AnalyzePage() {
             requirements: dataRequirements,
             problems: measureProblems,
             measure_summary: projectCharter?.measure_summary
-          }
+          },
+          tier: company?.tier || 'simple'
         })
       })
       const result = await response.json()
@@ -361,7 +371,7 @@ export default function AnalyzePage() {
     } finally {
       setAiLoading(false)
     }
-  }, [isMeasureSaved, projectCharter, dataRequirements, measureProblems, projectId])
+  }, [isMeasureSaved, projectCharter, dataRequirements, measureProblems, projectId, company?.tier])
 
   // Auto trigger AI on first open if no result
   useEffect(() => {
@@ -427,10 +437,16 @@ export default function AnalyzePage() {
       }
       await saveAnalyzeResult(projectId, toSave)
       setAnalyzeResult(toSave)
+      
+      if (!project?.analyze_is_locked) {
+        await setProjectPhaseLock(projectId, 'analyze', true)
+        setProject(prev => prev ? { ...prev, analyze_is_locked: true } : null)
+      }
+      
       setAiSaveMsg('Hasil analisis berhasil disimpan!')
       setTimeout(() => setAiSaveMsg(null), 3000)
     } catch (err: any) {
-      alert(`Gagal menyimpan hasil analisis: ${err.message}`)
+      await showAlert(`Gagal menyimpan hasil analisis: ${err.message}`)
     } finally {
       setSaving(false)
     }
@@ -460,9 +476,9 @@ export default function AnalyzePage() {
     setAnalyzeResult(prev => prev ? { ...prev, priority_result: newPr, status: 'draft' } : null)
   }
 
-  const handleDeleteRecommendation = (index: number) => {
+  const handleDeleteRecommendation = async (index: number) => {
+    if (!await showConfirm('Hapus rekomendasi ini?')) return
     if (!analyzeResult) return
-    if (!window.confirm('Hapus rekomendasi ini?')) return
     const newRecs = [...(analyzeResult.recommendations || [])]
     newRecs.splice(index, 1)
     setAnalyzeResult({ ...analyzeResult, recommendations: newRecs, status: 'draft' })
@@ -495,7 +511,37 @@ export default function AnalyzePage() {
 
   if (!project) return null
 
+  const isLocked = project.analyze_is_locked
+  const pendingUnlockReq = approvalRequests.find(r => r.entity_type === 'phase_unlock' && r.entity_id === 'analyze' && r.status === 'pending')
 
+  const handleRequestUnlock = async () => {
+    if (pendingUnlockReq) {
+      if (await showConfirm('Batalkan pengajuan buka kunci?')) {
+        await cancelApprovalRequest(pendingUnlockReq.id)
+        setApprovalRequests(approvalRequests.filter(r => r.id !== pendingUnlockReq.id))
+      }
+      return
+    }
+    if (await showConfirm('Minta akses edit ke Konsultan?')) {
+      const req: GenericApprovalRequest = {
+        id: crypto.randomUUID(), project_id: projectId, entity_type: 'phase_unlock', entity_id: 'analyze',
+        requested_by: userInfo?.id || 'unknown', requested_at: new Date().toISOString(),
+        changes: { phase: 'analyze' }, status: 'pending'
+      }
+      await submitApprovalRequest(req)
+      setApprovalRequests([req, ...approvalRequests])
+      setAiSaveMsg('Permintaan akses edit terkirim.')
+      setTimeout(() => setAiSaveMsg(null), 3000)
+    }
+  }
+
+  const handleToggleLock = async (lock: boolean) => {
+    if (!isKonsultan) return
+    await setProjectPhaseLock(projectId, 'analyze', lock)
+    setProject({ ...project, analyze_is_locked: lock })
+    setAiSaveMsg(lock ? 'Fase dikunci.' : 'Kunci fase dibuka.')
+    setTimeout(() => setAiSaveMsg(null), 3000)
+  }
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -507,6 +553,27 @@ export default function AnalyzePage() {
           <h1 className="text-2xl font-bold text-slate-100 mt-1">{project.title}</h1>
           <p className="text-xs text-slate-500 mt-0.5">Fase ANALYZE: Analisis Akar Penyebab &amp; Kebutuhan Implementasi</p>
         </div>
+        
+        {isLocked && (
+          <div className="flex items-center gap-3 bg-slate-900 px-4 py-2 rounded-xl border border-slate-800">
+            <Lock className="h-4 w-4 text-amber-500" />
+            <span className="text-xs font-semibold text-slate-300">Data Terkunci</span>
+            {!isKonsultan ? (
+              <button onClick={handleRequestUnlock} className="ml-2 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-amber-400 text-[10px] font-bold rounded-lg transition-colors">
+                {pendingUnlockReq ? 'Menunggu Persetujuan' : 'Minta Akses Edit'}
+              </button>
+            ) : (
+              <button onClick={() => handleToggleLock(false)} className="ml-2 px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-[10px] font-bold rounded-lg transition-colors">
+                Buka Kunci
+              </button>
+            )}
+          </div>
+        )}
+        {!isLocked && isKonsultan && (
+          <button onClick={() => handleToggleLock(true)} className="flex items-center gap-2 px-4 py-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 text-xs font-bold rounded-xl transition-colors">
+            <Unlock className="h-3.5 w-3.5" /> Kunci Manual
+          </button>
+        )}
       </div>
 
       {/* ── Phase banner ── */}
@@ -526,6 +593,7 @@ export default function AnalyzePage() {
         </button>
       </div>
 
+      <fieldset disabled={isLocked && !isKonsultan} className="group disabled:opacity-80">
       {/* ── Content ── */}
       <div className="glass-card rounded-3xl border border-slate-800 bg-slate-950/20 p-6 md:p-8">
 
@@ -642,8 +710,8 @@ export default function AnalyzePage() {
                       {showAddCustom ? 'Batal' : 'Tambah Manual'}
                     </button>
                     <button
-                      onClick={() => {
-                        if (window.confirm('Generate ulang akan menimpa semua data analisis saat ini. Lanjutkan?')) {
+                      onClick={async () => {
+                        if (await showConfirm('Generate ulang akan menimpa semua data analisis saat ini. Lanjutkan?')) {
                           handleTriggerAnalyzeAI()
                         }
                       }}
@@ -694,7 +762,9 @@ export default function AnalyzePage() {
                 )}
 
                 <div className="space-y-6">
-                  {(analyzeResult.recommendations || []).map((rec, idx) => (
+                  {(analyzeResult.recommendations || []).map((rec, idx) => {
+                    if (company?.tier === 'simple' && !showAllRecommendations && idx > 0) return null;
+                    return (
                     <div key={idx} className="p-5 rounded-2xl bg-slate-950/40 border border-slate-850 flex flex-col gap-3 relative group">
                       
                       {/* Badge Source & Priority */}
@@ -753,8 +823,20 @@ export default function AnalyzePage() {
                         setAnalyzeResult({ ...analyzeResult, recommendations: newRecs, status: 'draft' })
                       }} />
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
+
+                {company?.tier === 'simple' && (analyzeResult.recommendations || []).length > 1 && (
+                  <div className="flex justify-center mt-4 border-t border-slate-800/50 pt-4">
+                    <button 
+                      onClick={() => setShowAllRecommendations(!showAllRecommendations)} 
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                    >
+                      {showAllRecommendations ? 'Sembunyikan Analisis Tambahan' : 'Lihat Analisis Lengkap (Metode Tambahan)'}
+                    </button>
+                  </div>
+                )}
 
                 {(analyzeResult.recommendations || []).length === 0 && (
                   <div className="text-center py-10 text-xs text-slate-500 border border-dashed border-slate-800 rounded-2xl">
@@ -850,6 +932,7 @@ export default function AnalyzePage() {
         )}
 
       </div>
+      </fieldset>
     </div>
   )
 }

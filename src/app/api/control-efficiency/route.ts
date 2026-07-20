@@ -24,11 +24,6 @@ function extractJson(raw: string): any {
 
 export async function POST(req: Request) {
   try {
-    const apiKey = process.env.GROQ_API_KEY
-    if (!apiKey) {
-      return NextResponse.json({ error: 'GROQ_API_KEY belum dikonfigurasi di server.' }, { status: 500 })
-    }
-
     const body = await req.json()
     const { actionPlans } = body
 

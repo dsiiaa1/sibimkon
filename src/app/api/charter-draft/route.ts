@@ -97,13 +97,17 @@ Tugas Anda: Buat draf untuk 4 kolom berikut dalam bentuk JSON (pastikan valid JS
 - "objectives": (string) Tujuan proyek yang SMART (Specific, Measurable, Achievable, Relevant, Time-bound).
 - "productivity_target": (string) Target efisiensi/produktivitas atau perbaikan metrik yang diharapkan.
 - "scope": (string) Batasan masalah atau area kerja proyek ini (in scope & out of scope).
+- "business_case": (string) Alasan strategis mengapa proyek ini penting bagi perusahaan secara finansial atau kelangsungan bisnis.
+- "timeline": (string) Estimasi garis waktu proyek dari awal hingga akhir dalam hitungan minggu atau bulan.
 
 CONTOH OUTPUT:
 {
   "problem_statement": "Tingkat defect pada produk X mencapai 8% melebihi toleransi maksimal 2%...",
   "objectives": "Menurunkan tingkat defect dari 8% menjadi 2% pada akhir kuartal 4.",
   "productivity_target": "Peningkatan yield rate produksi sebesar 6%.",
-  "scope": "In scope: Proses produksi di Line 1. Out of scope: Pengiriman dan logistik."
+  "scope": "In scope: Proses produksi di Line 1. Out of scope: Pengiriman dan logistik.",
+  "business_case": "Mengurangi cacat produksi akan menghemat biaya material sebesar 15% per bulan.",
+  "timeline": "Bulan 1-2: Fase Measure & Analyze. Bulan 3: Improve & Control."
 }`
 
     const aiRes = await generateWithFallback(prompt, {

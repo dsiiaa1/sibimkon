@@ -18,8 +18,16 @@ function buildPrompt(body: {
   method: string
   calculation_results: any
   data_name: string
+  is_simple?: boolean
 }): string {
   const resultsStr = JSON.stringify(body.calculation_results, null, 2)
+
+  let levelInstruction = `  "level_assessment": "Ringkasan singkat level permasalahan (misal: 'Sigma Level 3.2 — Rata-rata industri, masih ada ruang perbaikan signifikan')",`;
+  let extraRule = "";
+  if (body.is_simple) {
+    levelInstruction = `  "level_assessment": "Kosongkan saja (kembalikan string kosong) karena tidak menggunakan pendekatan Sigma",`;
+    extraRule = `\n4. KARENA INI PROYEK SIMPLE, JANGAN interpretasikan berdasarkan Sigma Level (meskipun nilainya 0), karena memang tidak ada data kuantitatif volume yang diupload. Fokus pada kualitatif dari problem statement dan data manual pendukung yang ada.`;
+  }
 
   return `Anda adalah konsultan produktivitas senior (Six Sigma / Lean Expert) dari firma konsultan Link Productive Indonesia.
 
@@ -34,15 +42,15 @@ ${resultsStr}
 ATURAN KETAT:
 1. ANDA DILARANG menghitung ulang angka apapun. Semua angka di atas sudah final.
 2. ANDA DILARANG menyebutkan angka/rumus yang TIDAK ada di data di atas.
-3. Tugas Anda HANYA menjelaskan dan menginterpretasikan angka yang sudah diberikan.
+3. Tugas Anda HANYA menjelaskan dan menginterpretasikan angka yang sudah diberikan.${extraRule}
 
 TUGAS ANDA:
 Berdasarkan angka hasil perhitungan di atas, berikan interpretasi dalam format JSON berikut:
 
 {
-  "level_assessment": "Ringkasan singkat level permasalahan (misal: 'Sigma Level 3.2 — Rata-rata industri, masih ada ruang perbaikan signifikan')",
+${levelInstruction}
   "standard_used": "Nama standar/metode yang dipakai (misal: 'Konversi DPMO ke Sigma Level — standar Six Sigma dengan 1.5σ shift')",
-  "interpretation": "Penjelasan detail dalam 2-4 kalimat yang mudah dipahami oleh manajer non-teknis tentang apa arti angka tersebut bagi perusahaan",
+  "interpretation": "Penjelasan detail dalam 2-4 kalimat yang mudah dipahami oleh manajer non-teknis tentang apa arti angka/kondisi tersebut bagi perusahaan",
   "analyze_recommendation": "Rekomendasi arah untuk tahap Analyze berikutnya (1-2 kalimat)"
 }
 
@@ -88,17 +96,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'calculation_results dan method wajib diisi' }, { status: 400 })
   }
 
-  const apiKey = process.env.GROQ_API_KEY
-  if (!apiKey) {
-    // Guardrail: jika tidak ada API key, kembalikan fallback
-    return NextResponse.json({ interpretation: FALLBACK_INTERPRETATION })
-  }
+
 
   const prompt = buildPrompt({
     problem_statement: body.problem_statement || '',
     method: body.method,
     calculation_results: body.calculation_results,
     data_name: body.data_name || 'Data Measure',
+    is_simple: body.is_simple || false,
   })
 
   try {

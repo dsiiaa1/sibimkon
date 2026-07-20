@@ -6,12 +6,12 @@
 export interface GenericApprovalRequest {
   id: string
   project_id: string
-  entity_type: 'efficiency_target' | 'action_plan_step' | 'kpi_support_data' | 'tier_override'
+  entity_type: 'efficiency_target' | 'action_plan_step' | string
   entity_id: string
   requested_by: string
   requested_at: string
-  changes: any // Flexible payload per entity_type
-  status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'resolved'
+  changes: Record<string, any>
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled'
   reviewed_by?: string
   reviewed_at?: string
   reject_reason?: string
@@ -121,6 +121,11 @@ export interface Project {
   baseline_score?: number
   baseline_reasoning?: string
   current_score?: number
+  define_is_locked?: boolean
+  measure_is_locked?: boolean
+  analyze_is_locked?: boolean
+  improve_is_locked?: boolean
+  control_is_locked?: boolean
 }
 
 export interface ProjectCharter {
@@ -129,6 +134,8 @@ export interface ProjectCharter {
   objectives: string
   productivity_target: string
   scope: string
+  business_case?: string
+  timeline?: string
   team_members: Array<{ name: string; position: string; role: string }>
   measure_summary?: any
   field_sources?: Record<string, string>
@@ -661,7 +668,7 @@ export const getMockDB = () => {
       consultantNotes: {} as Record<string, ConsultantControlNote[]>,
       measureDataReqs: {} as Record<string, MeasureDataRequirement[]>,
       analyzeResults: {} as Record<string, AnalyzeResult>,
-      controlChangeRequests: {} as Record<string, ControlChangeRequest[]>,
+      controlChangeRequests: {} as Record<string, GenericApprovalRequest[]>,
       companyBaselineAssessments: {} as Record<string, CompanyBaselineAssessment>,
       aiIdentifiedProblems: {} as Record<string, AiIdentifiedProblem[]>,
     }

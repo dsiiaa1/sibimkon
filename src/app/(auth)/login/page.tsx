@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { Mail, Lock, Eye, EyeOff, Building2, User, CheckCircle2, ArrowRight } from 'lucide-react'
 
@@ -96,9 +97,9 @@ function LoginForm() {
   return (
     <div className="w-full max-w-md mx-auto">
       {/* Mobile logo & tagline */}
-      <div className="lg:hidden flex flex-col items-center mb-8">
-        <img src="/sibimkonicon.png" alt="Logo" className="h-14 w-14 object-contain" />
-        <h2 className="mt-3 text-center text-2xl font-black tracking-tight text-[#0a1628]">
+      <div className="lg:hidden flex flex-col items-center mb-6">
+        <Image src="/sibimkonicon.png" alt="Logo" width={40} height={40} className="h-10 w-10 object-contain" />
+        <h2 className="mt-2 text-center text-xl font-black text-[#0a1628]">
           Smart Productive
         </h2>
         <p className="mt-1.5 text-center text-xs text-slate-500 leading-relaxed max-w-xs">
@@ -304,7 +305,7 @@ export default function LoginPage() {
         
         {/* Top Branding Logo */}
         <div className="flex items-center gap-4 z-10">
-          <img src="/sibimkonicon.png" alt="Logo" className="h-10 w-10 object-contain" />
+          <Image src="/sibimkonicon.png" alt="Logo" width={40} height={40} className="h-10 w-10 object-contain" />
           <div>
             <h1 className="text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-200">
               Smart Productive

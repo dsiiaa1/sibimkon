@@ -11,6 +11,12 @@ function extractJson(raw: string): any {
     try { return JSON.parse(codeBlock[1]) } catch { /* lanjut */ }
   }
 
+  const firstBracket = trimmed.indexOf('[')
+  const lastBracket = trimmed.lastIndexOf(']')
+  if (firstBracket !== -1 && lastBracket > firstBracket) {
+    try { return JSON.parse(trimmed.substring(firstBracket, lastBracket + 1)) } catch { /* lanjut */ }
+  }
+
   const firstBrace = trimmed.indexOf('{')
   const lastBrace  = trimmed.lastIndexOf('}')
   if (firstBrace !== -1 && lastBrace > firstBrace) {
@@ -32,6 +38,7 @@ function buildPrompt(data: {
     problems: any[]
     measure_summary?: any
   }
+  tier?: string
 }): string {
   const charterStr = `
 - Problem Statement: ${data.charter?.problem_statement || 'Tidak diisi'}
@@ -48,6 +55,11 @@ function buildPrompt(data: {
   ).join('\n')
 
   const summaryStr = data.dataCollected?.measure_summary ? JSON.stringify(data.dataCollected.measure_summary) : 'Tidak ada summary agregat'
+
+  const tier = data.tier || 'simple'
+  const tierDirective = tier === 'simple' 
+    ? "PERHATIAN (TIER SIMPLE): Arahkan dan prioritaskan metode '5 Whys' sebagai output UTAMA dengan priority 1, kecuali jika masalah sangat multi-variabel. Hasilkan format Nested List untuk 5 Whys. Metode lain boleh disertakan sebagai opsi tambahan."
+    : "PERHATIAN (TIER ADVANCED): Prioritaskan metode analitis komprehensif seperti 'Fishbone Diagram' atau 'Pareto Analysis' dengan priority 1 sebagai default. 5 Whys bisa menjadi pelengkap."
 
   return `Anda adalah konsultan senior Lean Six Sigma (DMAIC Expert).
 
@@ -69,6 +81,8 @@ ${problemsStr || 'Tidak ada masalah teridentifikasi'}
 TUGAS ANDA:
 Berdasarkan konteks Project Charter (Define) dan data hasil pengukuran (Measure) di atas, rekomendasikan metode analisis yang paling tepat untuk mendalami akar masalah (Root Cause Analysis).
 SELAIN ITU, Anda juga harus langsung melakukan simulasi analisis dan menghasilkan data terstruktur Root Cause HANYA BERDASARKAN MASALAH YANG ADA DI PROJECT CHARTER DAN MEASURE TERSEBUT.
+
+${tierDirective}
 
 PERINGATAN KERAS (CRITICAL WARNING): 
 JANGAN MENGGUNAKAN DATA CONTOH ATAU KARANGAN SENDIRI! Anda wajib menyesuaikan isi RCA dengan bidang industri/konteks yang tertulis di Project Charter. Jika Charter tidak diisi, hasilkan data abstrak seperti "Proses Sistem A bermasalah", "Error pada modul B". JANGAN PERNAH MENGHASILKAN DATA TENTANG PABRIK ATAU PRODUKSI JIKA KONTEKSNYA BUKAN PABRIK! PAHAMI KONTEKS CHARTER TERLEBIH DAHULU SEBELUM MENGHASILKAN DATA RCA!
@@ -176,7 +190,7 @@ export async function POST(req: Request) {
     const aiRes = await generateWithFallback(prompt, {
       model: 'llama-3.1-8b-instant',
       temperature: 0.1,
-      maxTokens: 1536
+      maxTokens: 2048
     })
     const rawText = aiRes.text
     let parsed = extractJson(rawText)

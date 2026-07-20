@@ -7,6 +7,7 @@ import { Project, ActionPlan, Assessment, MeasureProblem } from '@/lib/mockData'
 import { generateFinalReport, generateCertificate } from '@/lib/pdf-generator'
 import { FileText, Award, ShieldCheck, Download, Edit3, CheckCircle2, Loader2, X } from 'lucide-react'
 import { useUserRole } from '@/hooks/useUserRole'
+import { useDialog } from '@/hooks/useDialog'
 
 interface SignatureRecord {
   signed: boolean
@@ -48,6 +49,7 @@ async function persistSignaturesToSupabase(
 }
 
 export default function ReportsPage() {
+  const { showAlert, showConfirm, showPrompt } = useDialog()
   const router = useRouter()
   const params = useParams()
   const projectId = params.id as string
@@ -73,6 +75,7 @@ export default function ReportsPage() {
   const [sigRole, setSigRole] = useState<'consultant' | 'company' | null>(null)
 
   const [pdfLoading, setPdfLoading] = useState(false)
+  const [pptxLoading, setPptxLoading] = useState(false)
   const [certLoading, setCertLoading] = useState(false)
 
   // ── Ambil tanda tangan: coba Supabase dulu, fallback localStorage ──
@@ -298,9 +301,48 @@ export default function ReportsPage() {
       doc.save(`Laporan_Akhir_${project.project_code}.pdf`)
     } catch (err) {
       console.error(err)
-      alert('Gagal membuat PDF: ' + (err instanceof Error ? err.message : String(err)))
+      await showAlert('Gagal membuat PDF: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
       setPdfLoading(false)
+    }
+  }
+
+  const handleDownloadPPTX = async () => {
+    if (!project) return
+    setPptxLoading(true)
+    try {
+      const res = await fetch('/api/generate-pptx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project,
+          measureProblems,
+          actionPlans,
+          beforeScore,
+          afterScore,
+          improvement,
+          computedKpiAkhir,
+          consultantSig,
+        })
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || `Server error (${res.status})`)
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Laporan_DMAIC_${project.project_code}.pptx`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error(err)
+      await showAlert('Gagal membuat PPTX: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setPptxLoading(false)
     }
   }
 
@@ -315,7 +357,7 @@ export default function ReportsPage() {
       doc.save(`E-Sertifikat_${project.company_name.replace(/\s+/g, '_')}.pdf`)
     } catch (err) {
       console.error(err)
-      alert('Gagal membuat Sertifikat: ' + (err instanceof Error ? err.message : String(err)))
+      await showAlert('Gagal membuat Sertifikat: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
       setCertLoading(false)
     }
@@ -586,6 +628,11 @@ export default function ReportsPage() {
               className="w-full flex items-center justify-center gap-2 px-5 py-3 bg-indigo-650 hover:bg-indigo-600 text-sm font-semibold rounded-xl text-white transition-all cursor-pointer shadow-md disabled:opacity-50">
               <Download className="h-4 w-4" />
               {pdfLoading ? 'Menyusun Laporan...' : 'Unduh Laporan Akhir (PDF)'}
+            </button>
+            <button onClick={handleDownloadPPTX} disabled={pptxLoading}
+              className="w-full flex items-center justify-center gap-2 px-5 py-3 bg-orange-600/80 hover:bg-orange-600 text-sm font-semibold rounded-xl text-white transition-all cursor-pointer shadow-md disabled:opacity-50">
+              <Download className="h-4 w-4" />
+              {pptxLoading ? 'Menyusun Presentasi...' : 'Unduh Laporan (PowerPoint)'}
             </button>
           </div>
 

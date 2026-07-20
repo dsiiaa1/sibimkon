@@ -6,10 +6,11 @@ import { createPortal } from 'react-dom'
 import { Project, ActionPlan, EvidenceItem, MeasureProblem, AnalyzeNeed } from '@/lib/mockData'
 import {
   Plus, CheckCircle2, Calendar, User, DollarSign, ArrowUpRight,
-  Trash, Upload, FileText, ArrowRight, Lock, ShieldCheck,
+  Trash, Upload, FileText, ArrowRight, Lock, Unlock, ShieldCheck,
   Clock, XCircle, Eye, Save, Sparkles, Lightbulb, X, ChevronDown, ChevronUp, RefreshCw, Activity, CheckSquare, ListTodo, Target, Check, UploadCloud, Trash2
 } from 'lucide-react'
 import { Tooltip } from '@/components/Tooltip'
+import { useDialog } from '@/hooks/useDialog'
 import { ACTION_STATUS_LABELS, sanitizeText } from '@/lib/utils'
 import {
   getProjects, getActionPlans, saveActionPlans as saveActionPlansDb,
@@ -17,7 +18,7 @@ import {
   submitEvidence, verifyEvidence, getEvidenceItems, saveNotification,
   getMeasureProblems, getAnalyzeNeeds, getAnalyzeResult,
   getChecklistEvidences, submitChecklistEvidence, verifyChecklistEvidence, ChecklistEvidenceItem,
-  getApprovalRequests, submitApprovalRequest, reviewApprovalRequest, cancelApprovalRequest, GenericApprovalRequest
+  getApprovalRequests, submitApprovalRequest, reviewApprovalRequest, cancelApprovalRequest, GenericApprovalRequest, setProjectPhaseLock
 } from '@/lib/db'
 import { useUserRole } from '@/hooks/useUserRole'
 
@@ -31,6 +32,7 @@ const EVIDENCE_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
 }
 
 export default function ImprovePage() {
+  const { showAlert, showConfirm, showPrompt } = useDialog()
   const router    = useRouter()
   const params    = useParams()
   const projectId = params.id as string
@@ -94,12 +96,15 @@ export default function ImprovePage() {
   const [expandedProblemGroups, setExpandedProblemGroups] = useState<Set<string>>(new Set())
   const [generatingStepsId, setGeneratingStepsId] = useState<string | null>(null)
 
+  const [hasAutoExpanded, setHasAutoExpanded] = useState(false)
+
   useEffect(() => {
-    if (actionPlans.length > 0 && expandedProblemGroups.size === 0) {
+    if (actionPlans.length > 0 && !hasAutoExpanded) {
       const groups = new Set(actionPlans.map(a => a.problem_title || 'Tindakan Lainnya'))
       setExpandedProblemGroups(groups)
+      setHasAutoExpanded(true)
     }
-  }, [actionPlans])
+  }, [actionPlans, hasAutoExpanded])
 
   const toggleGroup = (group: string) => {
     setExpandedProblemGroups(prev => {
@@ -140,7 +145,7 @@ export default function ImprovePage() {
       await persistActionPlans(updated)
     } catch (error) {
       console.error('Failed to generate steps:', error)
-      alert('Gagal membuat langkah otomatis')
+      await showAlert('Gagal membuat langkah otomatis')
     } finally {
       setGeneratingStepsId(null)
     }
@@ -322,37 +327,7 @@ export default function ImprovePage() {
     loadData()
   }, [projectId, router])
 
-  // Auto-generate AI for empty AI analysis secara antrean (menghindari rate limit)
-  useEffect(() => {
-    if (!mounted || actionPlans.length === 0) return;
-    
-    // Cari 1 action plan yang belum di-generate dan belum pernah dicoba
-    const actToProcess = actionPlans.find(act => 
-      !act.ai_analysis && !generatingAiIds[act.id] && !attemptedAiIds.has(act.id)
-    );
 
-    if (actToProcess) {
-      setAttemptedAiIds(prev => new Set(prev).add(actToProcess.id));
-      handleGenerateAiAnalysis(actToProcess);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actionPlans, mounted, generatingAiIds, attemptedAiIds]);
-
-  // Auto-generate Steps for empty steps secara antrean
-  useEffect(() => {
-    if (!mounted || actionPlans.length === 0) return;
-    
-    // Cari 1 action plan yang belum punya steps
-    const actToProcess = actionPlans.find(act => 
-      (!act.steps || act.steps.length === 0) && generatingStepsId !== act.id && !attemptedStepIds.has(act.id)
-    );
-
-    if (actToProcess) {
-      setAttemptedStepIds(prev => new Set(prev).add(actToProcess.id));
-      handleGenerateSteps(actToProcess);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actionPlans, mounted, generatingStepsId, attemptedStepIds]);
 
   /* ── save action plans helper ── */
   const derivedRecommendations = (() => {
@@ -484,14 +459,14 @@ export default function ImprovePage() {
     
     const pendingReq = getPendingChecklistRequest(stepId)
     if (pendingReq) {
-      if (window.confirm('Batalkan pengajuan penyelesaian langkah ini?')) {
+      if (await showConfirm('Batalkan pengajuan penyelesaian langkah ini?')) {
         await cancelApprovalRequest(pendingReq.id)
         setApprovalRequests(approvalRequests.filter(r => r.id !== pendingReq.id))
       }
       return
     }
 
-    if (window.confirm('Ajukan penyelesaian langkah ini ke Konsultan?')) {
+    if (await showConfirm('Ajukan penyelesaian langkah ini ke Konsultan?')) {
       const req: GenericApprovalRequest = {
         id: crypto.randomUUID(),
         project_id: projectId,
@@ -506,14 +481,14 @@ export default function ImprovePage() {
         await submitApprovalRequest(req)
         setApprovalRequests([req, ...approvalRequests])
       } catch (err) {
-        alert('Gagal mengajukan ke Konsultan')
+        await showAlert('Gagal mengajukan ke Konsultan')
       }
     }
   }
 
-  const handleDeleteAction = (actionId: string) => {
+  const handleDeleteAction = async (actionId: string) => {
     if (!isKonsultan) return
-    if (!window.confirm('Hapus action plan ini?')) return
+    if (!await showConfirm('Hapus action plan ini?')) return
     const updated = actionPlans.map(act => act.id === actionId ? { ...act, is_deleted: true } : act)
     persistActionPlans(updated)
   }
@@ -572,7 +547,7 @@ export default function ImprovePage() {
       await persistActionPlans(updated)
 
     } catch (err: any) {
-      alert(`Error: ${err.message}`)
+      await showAlert(`Error: ${err.message}`)
     } finally {
       setGeneratingAiIds(prev => ({ ...prev, [act.id]: false }))
     }
@@ -611,12 +586,12 @@ export default function ImprovePage() {
   }
 
   const handleForceSyncFromAnalyze = async () => {
-    if (!confirm('Peringatan: Sinkronisasi akan menimpa semua Action Plan saat ini dengan draft terbaru dari Analyze. Jika ada Action Plan yang sudah berjalan, progresnya mungkin hilang. Lanjutkan?')) return;
+    if (!await showConfirm('Peringatan: Sinkronisasi akan menimpa semua Action Plan saat ini dengan draft terbaru dari Analyze. Jika ada Action Plan yang sudah berjalan, progresnya mungkin hilang. Lanjutkan?')) return;
     setIsSyncing(true)
     try {
       const analyzeRes = await getAnalyzeResult(projectId)
       if (!analyzeRes) {
-        alert('Data Analyze tidak ditemukan.')
+        await showAlert('Data Analyze tidak ditemukan.')
         return
       }
 
@@ -697,12 +672,12 @@ export default function ImprovePage() {
       if (newActions.length > 0) {
         await saveActionPlansDb(projectId, newActions)
         setActionPlans(newActions)
-        alert('Data berhasil disinkronisasi dari Analyze!')
+        await showAlert('Data berhasil disinkronisasi dari Analyze!')
       } else {
-        alert('Tidak ada rencana perbaikan yang valid dari Analyze.')
+        await showAlert('Tidak ada rencana perbaikan yang valid dari Analyze.')
       }
     } catch(err: any) {
-      alert(`Gagal sync: ${err.message}`)
+      await showAlert(`Gagal sync: ${err.message}`)
     } finally {
       setIsSyncing(false)
     }
@@ -717,7 +692,7 @@ export default function ImprovePage() {
     if (selectedFile) {
       const maxSizeBytes = 5 * 1024 * 1024
       if (selectedFile.size > maxSizeBytes) {
-        alert('❌ Ukuran file terlalu besar! Maksimal ukuran file adalah 5MB.')
+        await showAlert('❌ Ukuran file terlalu besar! Maksimal ukuran file adalah 5MB.')
         setUploading(false)
         return
       }
@@ -732,7 +707,7 @@ export default function ImprovePage() {
       const allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx', 'xls', 'xlsx']
 
       if (!allowedTypes.includes(selectedFile.type) && !allowedExtensions.includes(fileExt)) {
-        alert('❌ Format file tidak didukung! Harap unggah gambar (JPG, PNG, WebP), PDF, Word, atau Excel.')
+        await showAlert('❌ Format file tidak didukung! Harap unggah gambar (JPG, PNG, WebP), PDF, Word, atau Excel.')
         setUploading(false)
         return
       }
@@ -824,7 +799,7 @@ export default function ImprovePage() {
 
     const maxSizeBytes = 10 * 1024 * 1024 // 10MB
     if (chkEvidenceFile.size > maxSizeBytes) {
-      alert('❌ Ukuran file terlalu besar! Maksimal ukuran file adalah 10MB.')
+      await showAlert('❌ Ukuran file terlalu besar! Maksimal ukuran file adalah 10MB.')
       setChkUploading(false)
       return
     }
@@ -839,7 +814,7 @@ export default function ImprovePage() {
     const allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx', 'xls', 'xlsx']
 
     if (!allowedTypes.includes(chkEvidenceFile.type) && !allowedExtensions.includes(fileExt)) {
-      alert('❌ Format file tidak didukung! Harap unggah gambar, PDF, Word, atau Excel.')
+      await showAlert('❌ Format file tidak didukung! Harap unggah gambar, PDF, Word, atau Excel.')
       setChkUploading(false)
       return
     }
@@ -854,7 +829,7 @@ export default function ImprovePage() {
       const { data: urlData } = sb.storage.from('evidence-files').getPublicUrl(up.path)
       fileUrl = urlData.publicUrl
     } catch {
-      alert('❌ Gagal mengunggah ke Supabase Storage.')
+      await showAlert('❌ Gagal mengunggah ke Supabase Storage.')
       setChkUploading(false)
       return
     }
@@ -931,6 +906,36 @@ export default function ImprovePage() {
   const pendingCountChecklist = Object.values(checklistEvidenceMap).flat().filter(e => e.verification_status === 'pending').length
   const pendingCount = pendingCountAction + pendingCountChecklist
 
+  const isLocked = project.improve_is_locked
+  const pendingUnlockReq = approvalRequests.find(r => r.entity_type === 'phase_unlock' && r.entity_id === 'improve' && r.status === 'pending')
+
+  const handleRequestUnlock = async () => {
+    if (pendingUnlockReq) {
+      if (await showConfirm('Batalkan pengajuan buka kunci?')) {
+        await cancelApprovalRequest(pendingUnlockReq.id)
+        setApprovalRequests(approvalRequests.filter(r => r.id !== pendingUnlockReq.id))
+      }
+      return
+    }
+    if (await showConfirm('Minta akses edit ke Konsultan?')) {
+      const req: GenericApprovalRequest = {
+        id: crypto.randomUUID(), project_id: projectId, entity_type: 'phase_unlock', entity_id: 'improve',
+        requested_by: userInfo?.id || 'unknown', requested_at: new Date().toISOString(),
+        changes: { phase: 'improve' }, status: 'pending'
+      }
+      await submitApprovalRequest(req)
+      setApprovalRequests([req, ...approvalRequests])
+      await showAlert('Permintaan akses edit terkirim.')
+    }
+  }
+
+  const handleToggleLock = async (lock: boolean) => {
+    if (!isKonsultan) return
+    await setProjectPhaseLock(projectId, 'improve', lock)
+    setProject({ ...project, improve_is_locked: lock })
+    await showAlert(lock ? 'Fase dikunci.' : 'Kunci fase dibuka.')
+  }
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
 
@@ -941,6 +946,26 @@ export default function ImprovePage() {
           <h1 className="text-2xl font-bold text-slate-100 mt-1">{project.title}</h1>
           <p className="text-xs text-slate-500 mt-0.5">Fase IMPROVE: Eksekusi Action Plan &amp; Verifikasi Bukti Implementasi</p>
         </div>
+        {isLocked && (
+          <div className="flex items-center gap-3 bg-slate-900 px-4 py-2 rounded-xl border border-slate-800">
+            <Lock className="h-4 w-4 text-amber-500" />
+            <span className="text-xs font-semibold text-slate-300">Data Terkunci</span>
+            {!isKonsultan ? (
+              <button onClick={handleRequestUnlock} className="ml-2 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-amber-400 text-[10px] font-bold rounded-lg transition-colors">
+                {pendingUnlockReq ? 'Menunggu Persetujuan' : 'Minta Akses Edit'}
+              </button>
+            ) : (
+              <button onClick={() => handleToggleLock(false)} className="ml-2 px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-[10px] font-bold rounded-lg transition-colors">
+                Buka Kunci
+              </button>
+            )}
+          </div>
+        )}
+        {!isLocked && isKonsultan && (
+          <button onClick={() => handleToggleLock(true)} className="flex items-center gap-2 px-4 py-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 text-xs font-bold rounded-xl transition-colors">
+            <Unlock className="h-3.5 w-3.5" /> Kunci Manual
+          </button>
+        )}
         <div className="flex items-center gap-3">
           {isKonsultan && pendingCount > 0 && (
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold rounded-xl">
@@ -950,7 +975,11 @@ export default function ImprovePage() {
           )}
           <button
             onClick={async () => {
-              if (actionPlans.length === 0) { alert('Tambahkan minimal satu Action Plan sebelum melanjutkan ke CONTROL.'); return }
+              if (actionPlans.length === 0) { await showAlert('Tambahkan minimal satu Action Plan sebelum melanjutkan ke CONTROL.'); return }
+              if (!project.improve_is_locked) {
+                await setProjectPhaseLock(projectId, 'improve', true)
+                setProject({ ...project, improve_is_locked: true })
+              }
               await updateProjectPhase(projectId, 'control')
               router.push(`/projects/${projectId}/control`)
             }}
@@ -967,7 +996,7 @@ export default function ImprovePage() {
             >
               <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} /> Reset Action Plans
             </button>
-            {isKonsultan && (
+            {isKonsultan && !isLocked && (
               <button onClick={() => setShowAddModal(true)}
                 className="inline-flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold rounded-xl text-white cursor-pointer shadow-md transition-colors">
                 <Plus className="h-4 w-4" /> Tambah Action Plan
@@ -977,6 +1006,7 @@ export default function ImprovePage() {
         </div>
       </div>
 
+      <fieldset disabled={isLocked && !isKonsultan} className="group disabled:opacity-80">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <div className="lg:col-span-8 space-y-4">
           {actionPlans.filter(a => !a.is_deleted).length === 0 ? (
@@ -1120,10 +1150,19 @@ export default function ImprovePage() {
                             <div className="pt-2 border-t border-slate-800/60">
                               <div className="flex justify-between items-center mb-3">
                                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Checklist Implementasi</h4>
-                                {(!act.steps || act.steps.length === 0) && generatingStepsId === act.id && (
-                                  <span className="text-[10px] text-indigo-400 font-bold animate-pulse flex items-center gap-1.5">
-                                    <Sparkles className="w-3.5 h-3.5" /> Menyusun langkah otomatis...
-                                  </span>
+                                {(!act.steps || act.steps.length === 0) && (
+                                  generatingStepsId === act.id ? (
+                                    <span className="text-[10px] text-indigo-400 font-bold animate-pulse flex items-center gap-1.5">
+                                      <Sparkles className="w-3.5 h-3.5" /> Menyusun langkah otomatis...
+                                    </span>
+                                  ) : (
+                                    <button 
+                                      onClick={() => handleGenerateSteps(act)}
+                                      className="px-2 py-1 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 rounded text-[10px] font-bold transition-all cursor-pointer"
+                                    >
+                                      Lihat Hasil
+                                    </button>
+                                  )
                                 )}
                               </div>
                               {act.steps && act.steps.length > 0 ? (
@@ -1172,7 +1211,7 @@ export default function ImprovePage() {
                                                 setApprovalRequests(approvalRequests.filter(r => r.id !== pendingReq.id))
                                               }} className="px-2 py-1 bg-emerald-600/20 text-emerald-400 text-[10px] rounded hover:bg-emerald-600/40">Setujui</button>
                                               <button onClick={async () => {
-                                                const reason = prompt('Alasan penolakan?')
+                                                const reason = await showPrompt('Alasan penolakan?')
                                                 if(reason) {
                                                   await reviewApprovalRequest(pendingReq.id, 'rejected', userInfo?.id || 'unknown', reason)
                                                   setApprovalRequests(approvalRequests.filter(r => r.id !== pendingReq.id))
@@ -1248,10 +1287,19 @@ export default function ImprovePage() {
                                       setEditingRoiId(act.id)
                                     }} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-all cursor-pointer">Edit</button>
                                   ) : (
-                                    <button onClick={() => {
-                                      setRoiEditForm({ estimasi_penghematan_tahunan: 0, roi_persen: 0, biaya_implementasi: 0, target_efisiensi: '', manfaat: '' })
-                                      setEditingRoiId(act.id)
-                                    }} className="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 rounded-lg text-xs font-bold transition-all cursor-pointer">Input Manual</button>
+                                    <>
+                                      <button 
+                                        onClick={() => handleGenerateAiAnalysis(act)}
+                                        disabled={generatingAiIds[act.id]}
+                                        className="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 rounded-lg text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+                                      >
+                                        {generatingAiIds[act.id] ? 'Memproses...' : 'Lihat Hasil'}
+                                      </button>
+                                      <button onClick={() => {
+                                        setRoiEditForm({ estimasi_penghematan_tahunan: 0, roi_persen: 0, biaya_implementasi: 0, target_efisiensi: '', manfaat: '' })
+                                        setEditingRoiId(act.id)
+                                      }} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-all cursor-pointer">Input Manual</button>
+                                    </>
                                   )}
                                 </div>
                               </div>
@@ -1349,8 +1397,9 @@ export default function ImprovePage() {
           </div>
         )}
       </div>
+      </fieldset>
 
-      {/* ══ MODAL: Tambah Action Plan (konsultan) ══ */}
+      {/* ══ MODAL: Tambah/Edit Action Plan ══ */}
       {mounted && showAddModal && isKonsultan && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-lg bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">

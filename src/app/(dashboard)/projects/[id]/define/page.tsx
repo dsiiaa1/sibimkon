@@ -2,13 +2,15 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { getProjects, getCompanies, getProjectCharter, saveProjectCharter, updateProjectPhase, updateCompany } from '@/lib/db'
-import { Project, Company, ProjectCharter } from '@/lib/mockData'
-import { FileCheck, Building2, Save, ArrowRight, BrainCircuit } from 'lucide-react'
+import { getProjects, getCompanies, getProjectCharter, saveProjectCharter, updateProjectPhase, updateCompany, setProjectPhaseLock, submitApprovalRequest, cancelApprovalRequest, getApprovalRequests } from '@/lib/db'
+import { Project, Company, ProjectCharter, GenericApprovalRequest } from '@/lib/mockData'
+import { FileCheck, Building2, Save, ArrowRight, BrainCircuit, Lock, Unlock, Clock } from 'lucide-react'
+import { useDialog } from '@/hooks/useDialog'
 
 export default function DefinePage() {
   const router = useRouter()
   const params = useParams()
+  const { showAlert, showConfirm } = useDialog()
   const projectId = params.id as string
 
   const [activeTab, setActiveTab] = useState<'profile' | 'charter'>('profile')
@@ -16,6 +18,10 @@ export default function DefinePage() {
   const [company, setCompany] = useState<Company | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
+  
+  const localUser = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('smartproductive_user') || 'null') : null
+  const isKonsultan = localUser?.role === 'konsultan'
+  const [approvalRequests, setApprovalRequests] = useState<GenericApprovalRequest[]>([])
 
   // Company Profile form state
   const [compName, setCompName] = useState('')
@@ -34,6 +40,9 @@ export default function DefinePage() {
   const [charterObjectives, setCharterObjectives] = useState('')
   const [charterTarget, setCharterTarget] = useState('')
   const [charterScope, setCharterScope] = useState('')
+  const [charterBusinessCase, setCharterBusinessCase] = useState('')
+  const [charterTimeline, setCharterTimeline] = useState('')
+  const [showAdvancedFields, setShowAdvancedFields] = useState(false)
   const [teamMembers, setTeamMembers] = useState<Array<{ name: string; position: string; role: string }>>([])
   const [newMemberName, setNewMemberName] = useState('')
   const [newMemberPos, setNewMemberPos] = useState('')
@@ -46,7 +55,7 @@ export default function DefinePage() {
     if (!isAuto) {
       const hasEdited = Object.values(fieldSources).includes('user_edited')
       if (hasEdited) {
-        const confirm = window.confirm('Beberapa kolom sudah Anda edit manual. Yakin ingin menimpa dengan draf otomatis?')
+        const confirm = await showConfirm('Beberapa kolom sudah Anda edit manual. Yakin ingin menimpa dengan draf otomatis?')
         if (!confirm) return
       }
     }
@@ -64,20 +73,24 @@ export default function DefinePage() {
         setCharterObjectives(data.objectives || '')
         setCharterTarget(data.productivity_target || '')
         setCharterScope(data.scope || '')
+        setCharterBusinessCase(data.business_case || '')
+        setCharterTimeline(data.timeline || '')
         
         setFieldSources({
           problem_statement: data.problem_statement ? 'ai_draft' : 'empty',
           objectives: data.objectives ? 'ai_draft' : 'empty',
           productivity_target: data.productivity_target ? 'ai_draft' : 'empty',
-          scope: data.scope ? 'ai_draft' : 'empty'
+          scope: data.scope ? 'ai_draft' : 'empty',
+          business_case: data.business_case ? 'ai_draft' : 'empty',
+          timeline: data.timeline ? 'ai_draft' : 'empty'
         })
         setCharterSource('ai_generated')
         if (!isAuto) showSave('Draf berhasil disusun ulang dari kuesioner.')
       } else {
-        if (!isAuto) alert(data.error || 'Gagal menyusun draf otomatis.')
+        if (!isAuto) await showAlert(data.error || 'Gagal menyusun draf otomatis.')
       }
     } catch (err) {
-      if (!isAuto) alert('Terjadi kesalahan jaringan saat menyusun draf.')
+      if (!isAuto) await showAlert('Terjadi kesalahan jaringan saat menyusun draf.')
     } finally {
       setIsDrafting(false)
     }
@@ -110,6 +123,8 @@ export default function DefinePage() {
         setCharterObjectives(chart.objectives || '')
         setCharterTarget(chart.productivity_target || '')
         setCharterScope(chart.scope || '')
+        setCharterBusinessCase(chart.business_case || '')
+        setCharterTimeline(chart.timeline || '')
         setTeamMembers(chart.team_members || [])
         setCharterSource(chart.source || 'manual')
         setFieldSources(chart.field_sources || {})
@@ -122,6 +137,9 @@ export default function DefinePage() {
         // Auto trigger draft if no charter exists
         generateCharterDraft(true)
       }
+      
+      const reqs = await getApprovalRequests(projectId)
+      setApprovalRequests(reqs)
     }
     loadData()
   }, [projectId, router])
@@ -147,6 +165,11 @@ export default function DefinePage() {
         pkb_status: compPkb,
         certifications: compCertifications,
       })
+      
+      if (!project?.define_is_locked) {
+        await setProjectPhaseLock(projectId, 'define', true)
+        setProject(prev => prev ? { ...prev, define_is_locked: true } : null)
+      }
       showSave('Profil perusahaan berhasil disimpan!')
     } finally {
       setSaving(false)
@@ -156,19 +179,35 @@ export default function DefinePage() {
   const handleSaveCharter = async () => {
     setSaving(true)
     try {
+      let finalTeamMembers = teamMembers;
+      if (newMemberName.trim()) {
+        finalTeamMembers = [...teamMembers, { name: newMemberName, position: newMemberPos, role: newMemberRole }]
+        setTeamMembers(finalTeamMembers)
+        setNewMemberName(''); setNewMemberPos(''); setNewMemberRole('')
+      }
+      
       const updatedCharter: ProjectCharter = {
         project_id: projectId,
         problem_statement: charterProblem,
         objectives: charterObjectives,
         productivity_target: charterTarget,
         scope: charterScope,
-        team_members: teamMembers,
+        business_case: charterBusinessCase,
+        timeline: charterTimeline,
+        team_members: finalTeamMembers,
         source: charterSource,
         field_sources: fieldSources,
         ai_drafted_at: charterSource === 'ai_generated' ? new Date().toISOString() : undefined
       }
       await saveProjectCharter(updatedCharter)
+      
+      if (!project?.define_is_locked) {
+        await setProjectPhaseLock(projectId, 'define', true)
+        setProject(prev => prev ? { ...prev, define_is_locked: true } : null)
+      }
       showSave('Project Charter berhasil disimpan!')
+    } catch (err: any) {
+      await showAlert('Gagal menyimpan: ' + (err.message || 'Terjadi kesalahan pada database.'))
     } finally {
       setSaving(false)
     }
@@ -185,12 +224,20 @@ export default function DefinePage() {
 
     // Validasi kelengkapan data sebelum advance
     if (!charterProblem.trim() || !charterObjectives.trim() || !charterTarget.trim()) {
-      alert('Harap isi Project Charter terlebih dahulu (Problem Statement, Tujuan, dan Target Produktivitas wajib diisi) sebelum melanjutkan ke fase MEASURE.')
+      await showAlert('Harap isi Project Charter terlebih dahulu (Problem Statement, Tujuan, dan Target Productivity wajib diisi) sebelum melanjutkan ke fase MEASURE.')
       setActiveTab('charter')
       return
     }
+    if (company?.tier === 'besar' || company?.tier === 'menengah') {
+      if (!charterScope.trim() || !charterBusinessCase.trim() || !charterTimeline.trim()) {
+        await showAlert('Sebagai pengguna Tier Advanced, Anda wajib mengisi Scope, Business Case, dan Timeline.');
+        setActiveTab('charter')
+        return
+      }
+    }
+
     if (!compName.trim() || !compField.trim() || !compAddress.trim()) {
-      alert('Harap lengkapi Profil Perusahaan (Nama, Bidang Usaha, dan Alamat wajib diisi) sebelum melanjutkan ke fase MEASURE.')
+      await showAlert('Harap lengkapi Profil Perusahaan (Nama, Bidang Usaha, dan Alamat wajib diisi) sebelum melanjutkan ke fase MEASURE.')
       setActiveTab('profile')
       return
     }
@@ -214,8 +261,8 @@ export default function DefinePage() {
     setNewMemberName(''); setNewMemberPos(''); setNewMemberRole('')
   }
 
-  const handleDeleteMember = (idx: number) => {
-    if (!window.confirm('Hapus anggota tim ini?')) return
+  const handleDeleteMember = async (idx: number) => {
+    if (!await showConfirm('Hapus anggota tim ini?')) return
     setTeamMembers(teamMembers.filter((_, i) => i !== idx))
   }
 
@@ -232,6 +279,36 @@ export default function DefinePage() {
     <div className="flex h-64 items-center justify-center text-slate-400 text-sm">Memuat data proyek...</div>
   )
 
+  const isLocked = project.define_is_locked
+  const pendingUnlockReq = approvalRequests.find(r => r.entity_type === 'phase_unlock' && r.entity_id === 'define' && r.status === 'pending')
+
+  const handleRequestUnlock = async () => {
+    if (pendingUnlockReq) {
+      if (await showConfirm('Batalkan pengajuan buka kunci?')) {
+        await cancelApprovalRequest(pendingUnlockReq.id)
+        setApprovalRequests(approvalRequests.filter(r => r.id !== pendingUnlockReq.id))
+      }
+      return
+    }
+    if (await showConfirm('Minta akses edit ke Konsultan?')) {
+      const req: GenericApprovalRequest = {
+        id: crypto.randomUUID(), project_id: projectId, entity_type: 'phase_unlock', entity_id: 'define',
+        requested_by: localUser?.id || 'unknown', requested_at: new Date().toISOString(),
+        changes: { phase: 'define' }, status: 'pending'
+      }
+      await submitApprovalRequest(req)
+      setApprovalRequests([req, ...approvalRequests])
+      showSave('Permintaan akses edit terkirim.')
+    }
+  }
+
+  const handleToggleLock = async (lock: boolean) => {
+    if (!isKonsultan) return
+    await setProjectPhaseLock(projectId, 'define', lock)
+    setProject({ ...project, define_is_locked: lock })
+    showSave(lock ? 'Fase dikunci.' : 'Kunci fase dibuka.')
+  }
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Header */}
@@ -241,6 +318,27 @@ export default function DefinePage() {
           <h1 className="text-2xl font-bold text-slate-100 mt-1">{project.title}</h1>
           <p className="text-xs text-slate-500 mt-0.5">Fase DEFINE: Mendefinisikan profil, charter proyek, dan prioritas masalah</p>
         </div>
+        
+        {isLocked && (
+          <div className="flex items-center gap-3 bg-slate-900 px-4 py-2 rounded-xl border border-slate-800">
+            <Lock className="h-4 w-4 text-amber-500" />
+            <span className="text-xs font-semibold text-slate-300">Data Terkunci</span>
+            {!isKonsultan ? (
+              <button onClick={handleRequestUnlock} className="ml-2 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-amber-400 text-[10px] font-bold rounded-lg transition-colors">
+                {pendingUnlockReq ? 'Menunggu Persetujuan' : 'Minta Akses Edit'}
+              </button>
+            ) : (
+              <button onClick={() => handleToggleLock(false)} className="ml-2 px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-[10px] font-bold rounded-lg transition-colors">
+                Buka Kunci
+              </button>
+            )}
+          </div>
+        )}
+        {!isLocked && isKonsultan && (
+          <button onClick={() => handleToggleLock(true)} className="flex items-center gap-2 px-4 py-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 text-xs font-bold rounded-xl transition-colors">
+            <Unlock className="h-3.5 w-3.5" /> Kunci Manual
+          </button>
+        )}
       </div>
 
       {/* Save notification */}
@@ -282,14 +380,17 @@ export default function DefinePage() {
             {tab.name}
           </button>
         ))}
+        <div className="absolute bottom-0 left-0 h-0.5 bg-amber-500 transition-all duration-300"
+          style={{ width: '50%', transform: `translateX(${activeTab === 'profile' ? '0%' : '100%'})` }} />
       </div>
 
-      {/* Tab Panels */}
-      <div className="glass-card rounded-3xl border border-slate-800 bg-slate-950/20 p-6 md:p-8">
+      <fieldset disabled={isLocked && !isKonsultan} className="group disabled:opacity-80">
+        {/* Tab Panels */}
+        <div className="glass-card rounded-3xl border border-slate-800 bg-slate-950/20 p-6 md:p-8">
 
         {/* ── TAB: PROFIL PERUSAHAAN ── */}
         {activeTab === 'profile' && (
-          <div className="space-y-6">
+          <div className="space-y-6 animate-fade-in">
             <h2 className="text-lg font-bold text-slate-200 border-b border-slate-850 pb-3">Profil Perusahaan Klien</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
@@ -415,13 +516,48 @@ export default function DefinePage() {
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm" />
 
               </div>
-              <div className="relative">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Ruang Lingkup (Scope)</label>
-                <textarea value={charterScope} onChange={(e) => handleFieldChange('scope', e.target.value, setCharterScope)} rows={3}
-                  placeholder="Batasan perbaikan..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm" />
+              {/* === TIER SPECIFIC FIELDS (Scope, Business Case, Timeline) === */}
+              {company?.tier === 'simple' && !showAdvancedFields ? (
+                <div className="mt-6 p-4 border border-slate-800 border-dashed rounded-xl flex items-center justify-between bg-slate-900/30">
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-300">Detail Lanjutan (Opsional)</h4>
+                    <p className="text-xs text-slate-500 mt-1">Isi Ruang Lingkup, Business Case, dan Timeline jika diperlukan.</p>
+                  </div>
+                  <button onClick={() => setShowAdvancedFields(true)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-colors cursor-pointer">
+                    Tampilkan Kolom
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4 mt-6 pt-4 border-t border-slate-800">
+                  {company?.tier === 'simple' && (
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="text-sm font-bold text-slate-300">Detail Lanjutan (Opsional)</h4>
+                      <button onClick={() => setShowAdvancedFields(false)} className="text-xs text-indigo-400 hover:text-indigo-300 cursor-pointer">Sembunyikan</button>
+                    </div>
+                  )}
+                  
+                  <div className="relative">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Ruang Lingkup (Scope) {company?.tier === 'simple' && <span className="text-slate-600 normal-case font-normal">(Opsional)</span>}</label>
+                    <textarea value={charterScope} onChange={(e) => handleFieldChange('scope', e.target.value, setCharterScope)} rows={3}
+                      placeholder="Batasan perbaikan, area yang difokuskan, dan out-of-scope..."
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm" />
+                  </div>
 
-              </div>
+                  <div className="relative">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Business Case {company?.tier === 'simple' && <span className="text-slate-600 normal-case font-normal">(Opsional)</span>}</label>
+                    <textarea value={charterBusinessCase} onChange={(e) => handleFieldChange('business_case', e.target.value, setCharterBusinessCase)} rows={3}
+                      placeholder="Alasan strategis finansial atau bisnis mengapa proyek ini penting..."
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm" />
+                  </div>
+
+                  <div className="relative">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Timeline (Jadwal) {company?.tier === 'simple' && <span className="text-slate-600 normal-case font-normal">(Opsional)</span>}</label>
+                    <textarea value={charterTimeline} onChange={(e) => handleFieldChange('timeline', e.target.value, setCharterTimeline)} rows={3}
+                      placeholder="Estimasi waktu penyelesaian (Misal: Fase Measure di Bulan 1, Improve di Bulan 3)..."
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm" />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Tim Pelaksana */}
@@ -484,7 +620,7 @@ export default function DefinePage() {
             </div>
 
             <div className="pt-4 flex justify-end border-t border-slate-850/80">
-              <button onClick={handleSaveCharter} disabled={saving}
+              <button onClick={handleSaveCharter} disabled={saving || (isLocked && !isKonsultan)}
                 className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-650 text-sm font-semibold rounded-xl text-white hover:bg-indigo-600 transition-colors cursor-pointer shadow-md disabled:opacity-50">
                 <Save className="h-4 w-4" />
                 {saving ? 'Menyimpan...' : 'Simpan Project Charter'}
@@ -493,6 +629,7 @@ export default function DefinePage() {
           </div>
         )}
       </div>
+      </fieldset>
     </div>
   )
 }

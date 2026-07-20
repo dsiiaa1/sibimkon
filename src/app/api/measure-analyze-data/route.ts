@@ -68,13 +68,7 @@ export async function POST(req: Request) {
     )
   }
 
-  const apiKey = process.env.GROQ_API_KEY
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: 'Konfigurasi AI belum tersedia' },
-      { status: 503 }
-    )
-  }
+
 
   const prompt = buildPrompt(body)
 
