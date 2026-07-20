@@ -9,13 +9,15 @@ import {
   Trash, Upload, FileText, ArrowRight, Lock, ShieldCheck,
   Clock, XCircle, Eye, Save, Sparkles, Lightbulb, X, ChevronDown, ChevronUp, RefreshCw, Activity, CheckSquare, ListTodo, Target, Check, UploadCloud, Trash2
 } from 'lucide-react'
+import { Tooltip } from '@/components/Tooltip'
 import { ACTION_STATUS_LABELS, sanitizeText } from '@/lib/utils'
 import {
   getProjects, getActionPlans, saveActionPlans as saveActionPlansDb,
   updateProjectPhase, updateProjectScore, saveAuditLog,
   submitEvidence, verifyEvidence, getEvidenceItems, saveNotification,
   getMeasureProblems, getAnalyzeNeeds, getAnalyzeResult,
-  getChecklistEvidences, submitChecklistEvidence, verifyChecklistEvidence, ChecklistEvidenceItem
+  getChecklistEvidences, submitChecklistEvidence, verifyChecklistEvidence, ChecklistEvidenceItem,
+  getApprovalRequests, submitApprovalRequest, reviewApprovalRequest, cancelApprovalRequest, GenericApprovalRequest
 } from '@/lib/db'
 import { useUserRole } from '@/hooks/useUserRole'
 
@@ -52,10 +54,14 @@ export default function ImprovePage() {
   const [evidenceMap, setEvidenceMap] = useState<Record<string, EvidenceItem[]>>({})
   /* evidence per checklist step id */
   const [checklistEvidenceMap, setChecklistEvidenceMap] = useState<Record<string, ChecklistEvidenceItem[]>>({})
+  
+  /* ── approval requests ── */
+  const [approvalRequests, setApprovalRequests] = useState<GenericApprovalRequest[]>([])
 
   /* ── ai analysis state ── */
   const [generatingAiIds, setGeneratingAiIds] = useState<Record<string, boolean>>({})
   const [attemptedAiIds, setAttemptedAiIds] = useState<Set<string>>(new Set())
+  const [attemptedStepIds, setAttemptedStepIds] = useState<Set<string>>(new Set())
   const [editingRoiId, setEditingRoiId] = useState<string | null>(null)
   const [roiEditForm, setRoiEditForm] = useState({
     estimasi_penghematan_tahunan: 0,
@@ -134,7 +140,7 @@ export default function ImprovePage() {
       await persistActionPlans(updated)
     } catch (error) {
       console.error('Failed to generate steps:', error)
-      alert('Gagal generate langkah AI')
+      alert('Gagal membuat langkah otomatis')
     } finally {
       setGeneratingStepsId(null)
     }
@@ -309,6 +315,9 @@ export default function ImprovePage() {
         chkGrouped[cev.step_id].push(cev)
       }
       setChecklistEvidenceMap(chkGrouped)
+
+      const reqs = await getApprovalRequests(projectId)
+      setApprovalRequests(reqs)
     }
     loadData()
   }, [projectId, router])
@@ -328,6 +337,22 @@ export default function ImprovePage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actionPlans, mounted, generatingAiIds, attemptedAiIds]);
+
+  // Auto-generate Steps for empty steps secara antrean
+  useEffect(() => {
+    if (!mounted || actionPlans.length === 0) return;
+    
+    // Cari 1 action plan yang belum punya steps
+    const actToProcess = actionPlans.find(act => 
+      (!act.steps || act.steps.length === 0) && generatingStepsId !== act.id && !attemptedStepIds.has(act.id)
+    );
+
+    if (actToProcess) {
+      setAttemptedStepIds(prev => new Set(prev).add(actToProcess.id));
+      handleGenerateSteps(actToProcess);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actionPlans, mounted, generatingStepsId, attemptedStepIds]);
 
   /* ── save action plans helper ── */
   const derivedRecommendations = (() => {
@@ -450,10 +475,47 @@ export default function ImprovePage() {
     persistActionPlans(updated)
   }
 
+  const getPendingChecklistRequest = (stepId: string) => {
+    return approvalRequests.find(r => r.entity_type === 'action_plan_step' && r.entity_id === stepId && r.status === 'pending')
+  }
+
+  const handleToggleSelfMarkedDone = async (actId: string, stepId: string) => {
+    if (isKonsultan) return;
+    
+    const pendingReq = getPendingChecklistRequest(stepId)
+    if (pendingReq) {
+      if (window.confirm('Batalkan pengajuan penyelesaian langkah ini?')) {
+        await cancelApprovalRequest(pendingReq.id)
+        setApprovalRequests(approvalRequests.filter(r => r.id !== pendingReq.id))
+      }
+      return
+    }
+
+    if (window.confirm('Ajukan penyelesaian langkah ini ke Konsultan?')) {
+      const req: GenericApprovalRequest = {
+        id: crypto.randomUUID(),
+        project_id: projectId,
+        entity_type: 'action_plan_step',
+        entity_id: stepId,
+        requested_by: userInfo?.id || 'unknown',
+        requested_at: new Date().toISOString(),
+        changes: { is_completed: true },
+        status: 'pending'
+      }
+      try {
+        await submitApprovalRequest(req)
+        setApprovalRequests([req, ...approvalRequests])
+      } catch (err) {
+        alert('Gagal mengajukan ke Konsultan')
+      }
+    }
+  }
+
   const handleDeleteAction = (actionId: string) => {
     if (!isKonsultan) return
     if (!window.confirm('Hapus action plan ini?')) return
-    persistActionPlans(actionPlans.filter(act => act.id !== actionId))
+    const updated = actionPlans.map(act => act.id === actionId ? { ...act, is_deleted: true } : act)
+    persistActionPlans(updated)
   }
 
   const handleToggleExpand = (actionId: string) => {
@@ -497,7 +559,7 @@ export default function ImprovePage() {
 
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.error || 'Gagal generate AI')
+        throw new Error(data.error || 'Gagal generate rekomendasi')
       }
 
       const aiData = await res.json()
@@ -510,7 +572,7 @@ export default function ImprovePage() {
       await persistActionPlans(updated)
 
     } catch (err: any) {
-      alert(`Error AI: ${err.message}`)
+      alert(`Error: ${err.message}`)
     } finally {
       setGeneratingAiIds(prev => ({ ...prev, [act.id]: false }))
     }
@@ -917,13 +979,13 @@ export default function ImprovePage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <div className="lg:col-span-8 space-y-4">
-          {actionPlans.length === 0 ? (
+          {actionPlans.filter(a => !a.is_deleted).length === 0 ? (
             <div className="p-12 text-center bg-slate-950/40 border border-dashed border-slate-800 rounded-3xl space-y-2">
               <h3 className="font-bold text-slate-350">Belum ada Rencana Perbaikan</h3>
             </div>
           ) : (
             Object.entries(
-              actionPlans.reduce((acc, act) => {
+              actionPlans.filter(a => !a.is_deleted).reduce((acc, act) => {
                 const groupName = act.problem_title || 'Tindakan Lainnya'
                 if (!acc[groupName]) acc[groupName] = []
                 acc[groupName].push(act)
@@ -971,9 +1033,14 @@ export default function ImprovePage() {
                         const totalSteps = act.steps?.length || 0;
                         const approvedSteps = act.steps?.filter(step => {
                           const evs = checklistEvidenceMap[step.id] || [];
-                          return evs.some(e => e.verification_status === 'approved');
+                          return step.is_completed || evs.some(e => e.verification_status === 'approved');
                         }).length || 0;
                         const progress = totalSteps > 0 ? Math.round((approvedSteps / totalSteps) * 100) : 0;
+                        
+                        const kpiTargetNum = typeof act.kpi_target === 'number' ? act.kpi_target : parseFloat(String(act.kpi_target)) || 0;
+                        const kpiBaselineNum = typeof act.kpi_baseline === 'number' ? act.kpi_baseline : parseFloat(String(act.kpi_baseline)) || 0;
+                        const calculatedKpiActualRaw = (progress / 100) * (kpiTargetNum - kpiBaselineNum) + kpiBaselineNum;
+                        const calculatedKpiActual = Number.isInteger(calculatedKpiActualRaw) ? calculatedKpiActualRaw : Number(calculatedKpiActualRaw.toFixed(2));
                         
                         return (
                           <div key={act.id} className="relative glass-card rounded-2xl border border-slate-800 bg-slate-950/50 p-5 sm:p-6 space-y-5">
@@ -1030,10 +1097,10 @@ export default function ImprovePage() {
                               <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-800/50">
                                 <div className="flex items-center gap-1.5 text-slate-400 mb-1">
                                   <CheckCircle2 className="w-3.5 h-3.5" />
-                                  <span className="text-[10px] font-bold uppercase tracking-wider">Aktual Verifikasi</span>
+                                  <span className="text-[10px] font-bold uppercase tracking-wider">Aktual (Auto)</span>
                                 </div>
                                 <div className="text-sm font-semibold text-emerald-400">
-                                  {act.verified_kpi_actual != null ? `${act.verified_kpi_actual} ${act.kpi_unit}` : 'Belum ada'}
+                                  {calculatedKpiActual} {act.kpi_unit}
                                 </div>
                               </div>
                             </div>
@@ -1053,15 +1120,10 @@ export default function ImprovePage() {
                             <div className="pt-2 border-t border-slate-800/60">
                               <div className="flex justify-between items-center mb-3">
                                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Checklist Implementasi</h4>
-                                {(!act.steps || act.steps.length === 0) && (
-                                  <button
-                                    onClick={() => handleGenerateSteps(act)}
-                                    disabled={generatingStepsId === act.id}
-                                    className="px-3 py-1 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 border border-indigo-600/40 rounded-lg text-[10px] font-bold transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
-                                  >
-                                    <Sparkles className="w-3.5 h-3.5" />
-                                    {generatingStepsId === act.id ? 'Loading AI...' : 'Generate AI'}
-                                  </button>
+                                {(!act.steps || act.steps.length === 0) && generatingStepsId === act.id && (
+                                  <span className="text-[10px] text-indigo-400 font-bold animate-pulse flex items-center gap-1.5">
+                                    <Sparkles className="w-3.5 h-3.5" /> Menyusun langkah otomatis...
+                                  </span>
                                 )}
                               </div>
                               {act.steps && act.steps.length > 0 ? (
@@ -1070,43 +1132,76 @@ export default function ImprovePage() {
                                     const evs = checklistEvidenceMap[step.id] || [];
                                     const hasEv = evs.length > 0;
                                     const latestEv = evs[0];
-                                    const isApproved = latestEv?.verification_status === 'approved';
+                                    const isEvApproved = latestEv?.verification_status === 'approved';
+                                    const isCompleted = step.is_completed || isEvApproved;
+                                    const pendingReq = getPendingChecklistRequest(step.id);
                                     
                                     return (
                                       <div key={step.id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-slate-900/40 border border-slate-800/80 rounded-xl hover:bg-slate-900/80 transition-colors">
-                                        <div className="flex items-start gap-3 flex-1">
-                                          <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
-                                            isApproved ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400' : 'border-slate-600 bg-slate-800 text-transparent'
+                                        <div 
+                                          className={`flex items-start gap-3 flex-1 ${!isKonsultan && !isCompleted ? 'cursor-pointer hover:opacity-80' : ''}`}
+                                          onClick={() => !isKonsultan && !isCompleted && handleToggleSelfMarkedDone(act.id, step.id)}
+                                        >
+                                          <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
+                                            isCompleted ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400' : 
+                                            pendingReq ? 'border-amber-500 bg-amber-500/20 text-amber-400' :
+                                            'border-slate-600 bg-slate-800 text-transparent'
                                           }`}>
-                                            {isApproved && <Check className="w-2.5 h-2.5" />}
+                                            {isCompleted && <Check className="w-2.5 h-2.5" />}
+                                            {pendingReq && <span className="text-[10px]">⏳</span>}
                                           </div>
-                                          <span className={`text-sm ${isApproved ? 'text-slate-400 line-through' : 'text-slate-300'}`}>
+                                          <span className={`text-sm transition-colors ${isCompleted ? 'text-slate-500 line-through' : pendingReq ? 'text-amber-300' : 'text-slate-300'}`}>
                                             {step.description || step.action}
                                           </span>
                                         </div>
                                         
                                         <div className="flex items-center gap-3 self-end sm:self-auto shrink-0 pl-7 sm:pl-0">
+                                          {pendingReq && !isKonsultan && (
+                                            <span className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider rounded-lg border bg-amber-500/10 text-amber-400 border-amber-500/20">
+                                              ⏳ Menunggu Persetujuan
+                                            </span>
+                                          )}
+
+                                          {pendingReq && isKonsultan && (
+                                            <div className="flex items-center gap-1">
+                                              <span className="px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-amber-400">Diminta: Selesai</span>
+                                              <button onClick={async () => {
+                                                await reviewApprovalRequest(pendingReq.id, 'approved', userInfo?.id || 'unknown')
+                                                const updated = actionPlans.map(a => a.id === act.id ? { ...a, steps: (a.steps || []).map(s => s.id === step.id ? { ...s, is_completed: true } : s) } : a)
+                                                setActionPlans(updated)
+                                                setApprovalRequests(approvalRequests.filter(r => r.id !== pendingReq.id))
+                                              }} className="px-2 py-1 bg-emerald-600/20 text-emerald-400 text-[10px] rounded hover:bg-emerald-600/40">Setujui</button>
+                                              <button onClick={async () => {
+                                                const reason = prompt('Alasan penolakan?')
+                                                if(reason) {
+                                                  await reviewApprovalRequest(pendingReq.id, 'rejected', userInfo?.id || 'unknown', reason)
+                                                  setApprovalRequests(approvalRequests.filter(r => r.id !== pendingReq.id))
+                                                }
+                                              }} className="px-2 py-1 bg-red-600/20 text-red-400 text-[10px] rounded hover:bg-red-600/40">Tolak</button>
+                                            </div>
+                                          )}
+                                          
                                           {hasEv && latestEv && (
                                             <span className={`px-2 py-1 text-[9px] font-bold uppercase tracking-wider rounded-lg border ${
                                               latestEv.verification_status === 'approved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
                                               latestEv.verification_status === 'rejected' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
                                               'bg-amber-500/10 text-amber-400 border-amber-500/20'
                                             }`}>
-                                              {latestEv.verification_status === 'approved' ? 'Disetujui' :
+                                              Bukti: {latestEv.verification_status === 'approved' ? 'Disetujui' :
                                                latestEv.verification_status === 'rejected' ? 'Ditolak' : 'Menunggu'}
                                             </span>
                                           )}
                                           
                                           {!isKonsultan ? (
                                             <button 
-                                              onClick={() => setUploadChecklistStep({ actionId: act.id, stepId: step.id, title: step.description || step.action })}
+                                              onClick={(e) => { e.stopPropagation(); setUploadChecklistStep({ actionId: act.id, stepId: step.id, title: step.description || step.action })}}
                                               className="px-3 py-1.5 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-600/30 rounded-lg text-xs font-bold transition-colors cursor-pointer"
                                             >
-                                              {hasEv ? 'Upload Ulang' : 'Upload Bukti'}
+                                              {hasEv ? 'Upload Ulang Bukti' : 'Upload Bukti'}
                                             </button>
                                           ) : (
                                             !hasEv ? (
-                                              <span className="text-[10px] italic text-slate-500">Menunggu Perusahaan</span>
+                                              <span className="text-[10px] italic text-slate-500">Belum ada bukti</span>
                                             ) : null
                                           )}
                                           {isKonsultan && hasEv && (
@@ -1133,8 +1228,7 @@ export default function ImprovePage() {
                             <div className={`pt-2 border-t mt-2 ${editingRoiId === act.id ? 'border-amber-500/50' : 'border-slate-800/60'}`}>
                               <div className="flex justify-between items-center mb-3">
                                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                                  Analisis Dampak & ROI
-                                  {generatingAiIds[act.id] && <span className="text-[10px] text-indigo-400 normal-case animate-pulse flex items-center gap-1"><Sparkles className="w-3 h-3"/> Sedang menganalisis (AI)...</span>}
+                                  Analisis Dampak & <Tooltip text="Return on Investment (Laba atas investasi): Rasio keuntungan yang diperoleh dibandingkan dengan biaya investasi yang dikeluarkan">ROI</Tooltip>
                                 </h4>
                                 <div className="flex gap-2">
                                   {editingRoiId === act.id ? (
@@ -1142,7 +1236,7 @@ export default function ImprovePage() {
                                       <button onClick={() => setEditingRoiId(null)} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-all cursor-pointer">Batal</button>
                                       <button onClick={() => handleSaveRoiEdit(act.id)} className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-900 rounded-lg text-xs font-bold transition-all cursor-pointer">Save</button>
                                     </>
-                                  ) : (
+                                  ) : act.ai_analysis ? (
                                     <button onClick={() => {
                                       setRoiEditForm({
                                         estimasi_penghematan_tahunan: act.ai_analysis?.roi?.estimasi_penghematan_tahunan || 0,
@@ -1153,6 +1247,11 @@ export default function ImprovePage() {
                                       })
                                       setEditingRoiId(act.id)
                                     }} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-all cursor-pointer">Edit</button>
+                                  ) : (
+                                    <button onClick={() => {
+                                      setRoiEditForm({ estimasi_penghematan_tahunan: 0, roi_persen: 0, biaya_implementasi: 0, target_efisiensi: '', manfaat: '' })
+                                      setEditingRoiId(act.id)
+                                    }} className="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 rounded-lg text-xs font-bold transition-all cursor-pointer">Input Manual</button>
                                   )}
                                 </div>
                               </div>
@@ -1221,17 +1320,9 @@ export default function ImprovePage() {
                                     </div>
                                   </div>
                                 ) : (
-                                  !generatingAiIds[act.id] && (
-                                    <div className="text-xs text-slate-500 italic p-3 bg-slate-900/40 rounded-xl border border-slate-800/80 mb-2 flex justify-between items-center gap-3">
-                                      <span>Data ROI belum tersedia.</span>
-                                      <button onClick={() => {
-                                        setAttemptedAiIds(prev => { const n = new Set(prev); n.delete(act.id); return n; });
-                                        handleGenerateAiAnalysis(act);
-                                      }} className="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 border border-indigo-600/40 rounded-lg text-[10px] font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5">
-                                        <Sparkles className="w-3 h-3" /> Coba Generate AI
-                                      </button>
-                                    </div>
-                                  )
+                                  <div className="text-xs text-slate-500 italic p-3 bg-slate-900/40 rounded-xl border border-slate-800/80 mb-2">
+                                    Belum ada data Analisis & ROI. Silakan gunakan Input Manual.
+                                  </div>
                                 )
                               )}
                             </div>

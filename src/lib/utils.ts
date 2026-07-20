@@ -39,6 +39,39 @@ export function sanitizeText(value: string): string {
 }
 
 /**
+ * Validates a business process stage duration.
+ */
+export function validateDuration(value: number): boolean {
+  return value > 0 && value < 1000000 // reasonable bounds
+}
+
+/**
+ * Evaluates whether an action plan is delayed based on its end_date and status.
+ */
+export function isActionPlanDelayed(endDate: string, status: string): boolean {
+  if (status === 'selesai') return false
+  const end = new Date(endDate).getTime()
+  const now = new Date().getTime()
+  return now > end
+}
+
+export function generateId(): string {
+  return Math.random().toString(36).substring(2, 9)
+}
+
+/**
+ * Menentukan tier perusahaan berdasarkan jumlah tenaga kerja.
+ * < 30: simple (UMKM)
+ * 30 - 100: menengah
+ * > 100: besar
+ */
+export function determineTier(jumlahTenagaKerja: number | undefined | null): 'simple' | 'menengah' | 'besar' {
+  if (!jumlahTenagaKerja || jumlahTenagaKerja < 30) return 'simple'
+  if (jumlahTenagaKerja <= 100) return 'menengah'
+  return 'besar'
+}
+
+/**
  * Sanitize an integer input: parse and clamp to a safe range.
  */
 export function sanitizeInt(value: string | number, min = 0, max = 999_999_999): number {

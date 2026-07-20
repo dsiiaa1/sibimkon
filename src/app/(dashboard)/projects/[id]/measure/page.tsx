@@ -16,6 +16,7 @@ import {
 import { useUserRole } from '@/hooks/useUserRole'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
+import { Tooltip } from '@/components/Tooltip'
 import {
   matchMethodToWhitelist, SUPPORTED_METHODS, validateDataForMethod,
   extractNumericValues, extractCategoryValues,
@@ -107,7 +108,7 @@ export default function MeasurePage() {
       })
       const data = await res.json()
       if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`)
-      if (!data.data_needed || !Array.isArray(data.data_needed)) throw new Error('Format balasan AI tidak sesuai')
+      if (!data.data_needed || !Array.isArray(data.data_needed)) throw new Error('Format balasan sistem tidak sesuai')
 
       const newReqs: MeasureDataRequirement[] = data.data_needed.map((d: any) => ({
         id: `data-${Math.random().toString(36).substr(2, 9)}`,
@@ -184,16 +185,34 @@ export default function MeasurePage() {
     await runAiDataNeedAnalysis(charter, project.title, companyName)
   }
 
+  const dataReqsRef = useRef(dataReqs)
+  useEffect(() => { dataReqsRef.current = dataReqs }, [dataReqs])
+
   const handleToggleRelevant = async (reqId: string, current: boolean | undefined) => {
-    const updated = dataReqs.map(r => r.id === reqId ? { ...r, is_relevant: !(current ?? true) } : r)
+    const isNowRelevant = !(current ?? true)
+    const updated = dataReqs.map(r => {
+      if (r.id === reqId) {
+        return { 
+          ...r, 
+          is_relevant: isNowRelevant,
+          status: (isNowRelevant ? 'Belum diupload' : 'Menunggu Persetujuan Konsultan') as MeasureDataRequirement['status']
+        }
+      }
+      return r
+    })
     setDataReqs(updated)
     await saveMeasureDataRequirements(projectId, updated)
-    showToast('Preferensi relevansi disimpan')
+    showToast('Preferensi relevansi disimpan dan menunggu persetujuan konsultan')
   }
 
-  const handleSaveManualData = async (reqId: string, manualData: string) => {
-    const updated = dataReqs.map(r => r.id === reqId ? { ...r, manual_data: manualData, status: (manualData ? 'Sudah diupload' : 'Belum diupload') as 'Sudah diupload' | 'Belum diupload' } : r)
-    setDataReqs(updated)
+  const handleSaveManualData = (reqId: string, manualData: string) => {
+    setDataReqs(prev => prev.map(r => r.id === reqId ? { ...r, manual_data: manualData, status: (manualData ? 'Sudah diupload' : 'Belum diupload') as any } : r))
+  }
+
+  const handleBlurManualData = async (reqId: string, manualData: string) => {
+    // Gunakan array terbaru dari ref (atau dataReqs jika render cepat) lalu timpa dengan manualData yang pasti akurat
+    const updated = dataReqsRef.current.map(r => r.id === reqId ? { ...r, manual_data: manualData, status: (manualData ? 'Sudah diupload' : 'Belum diupload') as any } : r)
+    setDataReqs(updated) // just in case
     await saveMeasureDataRequirements(projectId, updated)
     showToast('Data manual tersimpan (autosave)')
   }
@@ -435,19 +454,19 @@ export default function MeasurePage() {
       // 2. Prepare dynamic method computation if volume is missing
       let dynamicMetricResult: any = null
       
-      const volumeReqs = dataReqs.filter(r => r.group === 'primary_volume' && r.raw_data && r.raw_data.length > 0)
+      const volumeReqs = dataReqs.filter(r => r.group === 'primary_volume' && ((r.raw_data && r.raw_data.length > 0) || r.manual_data))
       if (volumeReqs.length === 0) {
         // Find Primary Data
-        const primaryDataReqs = dataReqs.filter(r => (r.group === 'primary_defect' || r.group === 'primary_ctq') && r.raw_data && r.raw_data.length > 0)
+        const primaryDataReqs = dataReqs.filter(r => (r.group === 'primary_defect' || r.group === 'primary_ctq') && ((r.raw_data && r.raw_data.length > 0) || r.manual_data))
         let primaryReq = primaryDataReqs.length > 0 ? primaryDataReqs[0] : null
         
         if (!primaryReq) {
-           const anyPrimary = dataReqs.find(r => r.raw_data && r.raw_data.length > 0 && r.group !== 'context' && r.group !== 'supporting')
+           const anyPrimary = dataReqs.find(r => ((r.raw_data && r.raw_data.length > 0) || r.manual_data) && r.group !== 'context' && r.group !== 'supporting')
            if (anyPrimary) primaryReq = anyPrimary
-           else primaryReq = dataReqs.find(r => r.raw_data && r.raw_data.length > 0) || null
+           else primaryReq = dataReqs.find(r => (r.raw_data && r.raw_data.length > 0) || r.manual_data) || null
         }
 
-        if (primaryReq) {
+        if (primaryReq && primaryReq.raw_data && primaryReq.raw_data.length > 0) {
            const targetCol = targetCols[primaryReq.id]
            let recommendedMethodKey = 'defect_counting'
            
@@ -565,7 +584,7 @@ export default function MeasurePage() {
           <span className="text-xs font-mono text-indigo-400">{project.project_code}</span>
           <h1 className="text-2xl font-bold text-slate-100 mt-1">{project.title}</h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Fase MEASURE — Pengumpulan data, validasi, perhitungan level masalah & rekomendasi AI
+            Fase MEASURE — Pengumpulan data, validasi, perhitungan level masalah & rekomendasi sistem
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -596,7 +615,7 @@ export default function MeasurePage() {
         <div>
           <p className="text-xs font-semibold text-indigo-300">Fase Saat Ini: <span className="uppercase font-black">MEASURE</span></p>
           <p className="text-[10px] text-slate-500 mt-0.5">
-            Upload data → AI analisis → Hitung level masalah → Lanjut ke ANALYZE
+            Upload data → Sistem analisis → Hitung level masalah → Lanjut ke ANALYZE
           </p>
         </div>
         <button onClick={handleAdvance} disabled={saving || analyzing}
@@ -620,7 +639,7 @@ export default function MeasurePage() {
       {analyzing && (
         <div className="flex flex-col items-center justify-center py-16 gap-4 border border-dashed border-indigo-500/30 rounded-3xl bg-indigo-500/5">
           <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
-          <p className="text-sm font-semibold text-indigo-300">Groq AI sedang merekomendasikan data yang perlu dikumpulkan...</p>
+          <p className="text-sm font-semibold text-indigo-300">Sistem sedang merekomendasikan data yang perlu dikumpulkan...</p>
         </div>
       )}
 
@@ -629,7 +648,7 @@ export default function MeasurePage() {
         <div className="py-12 text-center border border-dashed border-amber-800/30 rounded-2xl bg-amber-950/5 space-y-2">
           <AlertCircle className="h-8 w-8 mx-auto text-amber-600" />
           <p className="text-sm font-semibold text-amber-400">Project Charter belum diisi</p>
-          <p className="text-xs text-slate-500">Analisis AI membutuhkan Problem Statement dari Project Charter.</p>
+          <p className="text-xs text-slate-500">Analisis membutuhkan Problem Statement dari Project Charter.</p>
           <button onClick={() => router.push(`/projects/${projectId}/define`)}
             className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-xs font-bold rounded-xl text-white cursor-pointer">
             Ke Halaman DEFINE
@@ -677,12 +696,22 @@ export default function MeasurePage() {
                     <div className="flex-1 space-y-2">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-bold text-slate-200">{idx + 1}. {req.name}</span>
-                        {req.source === 'ai' && <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400 text-[10px] font-bold">AI</span>}
-                        {req.group && GROUP_BADGES[req.group] && (
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${GROUP_BADGES[req.group].style}`}>
-                            {GROUP_BADGES[req.group].label}
-                          </span>
-                        )}
+                        {req.source === 'ai' && <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400 text-[10px] font-bold">Auto</span>}
+                        {req.group && GROUP_BADGES[req.group] && (() => {
+                          const getTooltipText = (g: string) => {
+                            if (g === 'primary_defect') return 'Cacat produksi atau ketidaksesuaian standar (Defect)'
+                            if (g === 'primary_volume') return 'Jumlah total barang/jasa yang diproduksi atau dikerjakan (Volume)'
+                            if (g === 'primary_ctq') return 'Critical to Quality: Atribut hasil produksi yang paling penting bagi pelanggan'
+                            if (g === 'supporting') return 'Key Performance Indicator: Indikator Kinerja Utama yang mendukung proses'
+                            return null
+                          }
+                          const tt = getTooltipText(req.group)
+                          return (
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${GROUP_BADGES[req.group].style}`}>
+                              {tt ? <Tooltip text={tt}>{GROUP_BADGES[req.group].label}</Tooltip> : GROUP_BADGES[req.group].label}
+                            </span>
+                          )
+                        })()}
                         {req.group === 'supporting' && req.is_relevant !== false && (
                           <button onClick={() => handleToggleRelevant(req.id, req.is_relevant)} className="ml-2 px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] rounded border border-slate-700 text-slate-400">
                             Tandai Tidak Relevan
@@ -703,18 +732,28 @@ export default function MeasurePage() {
                         <p className="text-[10px] text-slate-500 mt-1 mb-2">Kolom disarankan: {req.example_columns.join(', ')}</p>
                       )}
                       
-                      <div className="mt-2 text-[10px] text-emerald-400/90 bg-emerald-500/10 p-2.5 rounded-lg border border-emerald-500/20">
-                        <span className="font-bold flex items-center gap-1.5 mb-1"><CheckCircle2 className="w-3.5 h-3.5" /> Standar Isi File {req.recommended_methods?.length ? '(Berdasarkan Metode AI)' : ''}:</span>
-                        <ul className="list-disc list-inside space-y-1 ml-1 text-emerald-400/70">
-                          <li><strong>Format Tabel:</strong> (.csv / .xlsx) persis seperti urutan kolom di template.</li>
-                          <li><strong>Minimal Baris:</strong> Siapkan minimal {minRows} baris data (sampel).</li>
-                          {reqNumeric ? (
-                            <li><strong>Tipe Data:</strong> Pastikan terdapat minimal 1 kolom nilai/pengukuran yang berisi <strong>angka numerik murni</strong>.</li>
-                          ) : (
-                            <li><strong>Tipe Data:</strong> Boleh berupa teks (kategorikal) ataupun angka.</li>
-                          )}
-                        </ul>
-                      </div>
+                      {companyTier === 'simple' ? (
+                        <div className="mt-2 text-[10px] text-emerald-400/90 bg-emerald-500/10 p-2.5 rounded-lg border border-emerald-500/20">
+                          <span className="font-bold flex items-center gap-1.5 mb-1"><CheckCircle2 className="w-3.5 h-3.5" /> Panduan Pengisian Data:</span>
+                          <ul className="list-disc list-inside space-y-1 ml-1 text-emerald-400/70">
+                            <li><strong>Apa yang harus diisi?</strong> Berdasarkan data yang diminta, Anda cukup mengetik <strong>satu angka perkiraan</strong> untuk: <br/><strong className="text-emerald-300">"{req.description}"</strong></li>
+                            <li><strong>Contoh:</strong> Ketik angkanya saja (misal: <code>5</code>, <code>80</code>, atau <code>15000</code>) yang paling menggambarkan kondisi usaha Anda saat ini.</li>
+                          </ul>
+                        </div>
+                      ) : (
+                        <div className="mt-2 text-[10px] text-emerald-400/90 bg-emerald-500/10 p-2.5 rounded-lg border border-emerald-500/20">
+                          <span className="font-bold flex items-center gap-1.5 mb-1"><CheckCircle2 className="w-3.5 h-3.5" /> Standar Isi File {req.recommended_methods?.length ? '(Rekomendasi Sistem)' : ''}:</span>
+                          <ul className="list-disc list-inside space-y-1 ml-1 text-emerald-400/70">
+                            <li><strong>Format Tabel:</strong> (.csv / .xlsx) persis seperti urutan kolom di template.</li>
+                            <li><strong>Minimal Baris:</strong> Siapkan minimal {minRows} baris data (sampel).</li>
+                            {reqNumeric ? (
+                              <li><strong>Tipe Data:</strong> Pastikan terdapat minimal 1 kolom nilai/pengukuran yang berisi <strong>angka numerik murni</strong>.</li>
+                            ) : (
+                              <li><strong>Tipe Data:</strong> Boleh berupa teks (kategorikal) ataupun angka.</li>
+                            )}
+                          </ul>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex flex-col items-end gap-2 shrink-0">
@@ -724,25 +763,46 @@ export default function MeasurePage() {
 
                       <div className="flex items-center gap-2">
                         {companyTier === 'simple' && (
-                           <div className="flex items-center gap-2">
-                             <input type="text" placeholder="Input Nilai / Data Manual" value={req.manual_data || ''}
-                               onChange={(e) => handleSaveManualData(req.id, e.target.value)}
-                               className="bg-slate-900 border border-slate-700 text-xs px-3 py-2 rounded-xl text-slate-200"
-                             />
+                           <div className="flex flex-col gap-1.5 mt-2">
+                             <div className="flex items-center gap-2">
+                               <input type="text" placeholder="Ketik angkanya di sini..." value={req.manual_data || ''}
+                                 onChange={(e) => handleSaveManualData(req.id, e.target.value)}
+                                 onBlur={(e) => handleBlurManualData(req.id, e.target.value)}
+                                 className="bg-slate-900 border border-slate-700 text-xs px-3 py-2 rounded-xl text-slate-200"
+                               />
+                               {(() => {
+                                 const text = (req.name + ' ' + req.description).toLowerCase();
+                                 if (text.includes('waktu') || text.includes('lama') || text.includes('keterlambatan')) {
+                                   return <span className="text-[10px] text-slate-400 font-medium">(Hari / Jam / Menit)</span>;
+                                 }
+                                 if (text.includes('biaya') || text.includes('harga') || text.includes('rugi') || text.includes('cost')) {
+                                   return <span className="text-[10px] text-slate-400 font-medium">(Nominal Rupiah)</span>;
+                                 }
+                                 if (text.includes('tingkat') || text.includes('akurasi') || text.includes('persentase') || text.includes('efisiensi') || text.includes('rasio')) {
+                                   return <span className="text-[10px] text-slate-400 font-medium">(Persentase %)</span>;
+                                 }
+                                 if (text.includes('jumlah') || text.includes('total') || text.includes('volume') || text.includes('produksi') || text.includes('cacat')) {
+                                   return <span className="text-[10px] text-slate-400 font-medium">(Pcs / Unit / Kg)</span>;
+                                 }
+                                 return null;
+                               })()}
+                             </div>
                            </div>
                         )}
-                        {req.example_columns && req.example_columns.length > 0 && (
+                        {companyTier !== 'simple' && req.example_columns && req.example_columns.length > 0 && (
                           <button onClick={() => handleDownloadTemplate(req)}
                             className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-slate-400 bg-slate-900 border border-slate-700 hover:text-slate-200 hover:bg-slate-800 transition-all">
                             <Download className="w-4 h-4" />
                             Unduh Template
                           </button>
                         )}
-                        <button onClick={() => handleUploadClick(req.id)} disabled={uploadingId === req.id}
-                          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${isUploaded ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-indigo-600 text-white hover:bg-indigo-500'}`}>
-                          {uploadingId === req.id ? <Loader2 className="w-4 h-4 animate-spin" /> : (isUploaded ? <RefreshCw className="w-4 h-4" /> : <UploadCloud className="w-4 h-4" />)}
-                          {isUploaded ? 'Upload Ulang' : 'Upload File'}
-                        </button>
+                        {companyTier !== 'simple' && (
+                          <button onClick={() => handleUploadClick(req.id)} disabled={uploadingId === req.id}
+                            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${isUploaded ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-indigo-600 text-white hover:bg-indigo-500'}`}>
+                            {uploadingId === req.id ? <Loader2 className="w-4 h-4 animate-spin" /> : (isUploaded ? <RefreshCw className="w-4 h-4" /> : <UploadCloud className="w-4 h-4" />)}
+                            {isUploaded ? 'Upload Ulang' : 'Upload File'}
+                          </button>
+                        )}
                       </div>
 
                       {isUploaded && (
@@ -787,7 +847,7 @@ export default function MeasurePage() {
                           </div>
 
                           <div className="space-y-2">
-                            <h4 className="text-xs font-bold text-amber-400 uppercase flex items-center gap-1.5"><Sparkles className="w-4 h-4" /> Rekomendasi Metode AI</h4>
+                            <h4 className="text-xs font-bold text-amber-400 uppercase flex items-center gap-1.5"><Sparkles className="w-4 h-4" /> Rekomendasi Metode</h4>
                             {req.recommended_methods?.length ? (
                               <div className="space-y-2">
                                 {req.recommended_methods.map((m: any, i: number) => {
@@ -929,7 +989,7 @@ export default function MeasurePage() {
                 <h4 className="text-lg font-bold text-slate-200">Hasil Analisis Level Masalah</h4>
               </div>
 
-              {charter.measure_summary.warnings && charter.measure_summary.warnings.length > 0 && (
+              {companyTier !== 'simple' && charter.measure_summary.warnings && charter.measure_summary.warnings.length > 0 && (
                 <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-xl space-y-2">
                   <h5 className="text-sm font-bold text-amber-400 flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4" /> Peringatan Perhitungan
@@ -944,28 +1004,49 @@ export default function MeasurePage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Visual Metric */}
-                <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 flex flex-col items-center justify-center text-center space-y-2">
-                  {charter.measure_summary.type === 'dynamic' ? (
-                    <>
-                      <div className="text-4xl font-black text-indigo-400">{charter.measure_summary.primary_metric?.value} <span className="text-2xl">{charter.measure_summary.primary_metric?.unit}</span></div>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{charter.measure_summary.primary_metric?.name}</p>
-                      <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded bg-slate-800 text-[10px] text-slate-400">
-                        <Gauge className="w-3 h-3" />
-                        Metode: {charter.measure_summary.primary_metric?.method_used}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="text-4xl font-black text-indigo-400">{charter.measure_summary.overall_sigma_level}σ</div>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Sigma Level Gabungan</p>
-                      <div className="mt-4 text-[10px] text-slate-500 space-y-1">
-                        <p>Total Defect: <span className="font-bold text-slate-300">{charter.measure_summary.total_defects}</span></p>
-                        <p>Total Volume: <span className="font-bold text-slate-300">{charter.measure_summary.total_volume}</span></p>
-                        <p>DPMO: <span className="font-bold text-slate-300">{charter.measure_summary.overall_dpmo}</span></p>
-                      </div>
-                    </>
-                  )}
-                </div>
+                {companyTier === 'simple' ? (
+                  <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 flex flex-col justify-center space-y-4">
+                    <div className="text-center">
+                      <div className="text-2xl font-black text-indigo-400">Ringkasan Kondisi</div>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-1">Metrik Saat Ini</p>
+                    </div>
+                    <div className="text-xs text-slate-300 space-y-2 bg-slate-950/50 p-4 rounded-lg">
+                      {charter.measure_summary.supporting_kpis && charter.measure_summary.supporting_kpis.length > 0 ? (
+                         charter.measure_summary.supporting_kpis.map((kpi: any, idx: number) => (
+                            <div key={idx} className="flex justify-between border-b border-slate-800/50 pb-1.5 pt-1.5 first:pt-0 last:border-0 last:pb-0">
+                               <span className="text-slate-400 pr-2">{kpi.name}</span>
+                               <span className="font-bold text-indigo-300 text-right">{kpi.value}</span>
+                            </div>
+                         ))
+                      ) : (
+                         <div className="text-center text-slate-500 italic">Data telah tercatat di sistem untuk dianalisis pada tahap berikutnya.</div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 flex flex-col items-center justify-center text-center space-y-2">
+                    {charter.measure_summary.type === 'dynamic' ? (
+                      <>
+                        <div className="text-4xl font-black text-indigo-400">{charter.measure_summary.primary_metric?.value} <span className="text-2xl">{charter.measure_summary.primary_metric?.unit}</span></div>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{charter.measure_summary.primary_metric?.name}</p>
+                        <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded bg-slate-800 text-[10px] text-slate-400">
+                          <Gauge className="w-3 h-3" />
+                          Metode: {charter.measure_summary.primary_metric?.method_used}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-4xl font-black text-indigo-400">{charter.measure_summary.overall_sigma_level !== undefined ? charter.measure_summary.overall_sigma_level : 'N/A'}{charter.measure_summary.overall_sigma_level !== undefined ? 'σ' : ''}</div>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider"><Tooltip text="Tingkat kapabilitas dari seluruh proses (semakin tinggi, semakin baik)">Sigma Level Gabungan</Tooltip></p>
+                        <div className="mt-4 text-[10px] text-slate-500 space-y-1">
+                          <p>Total Defect: <span className="font-bold text-slate-300">{charter.measure_summary.total_defects}</span></p>
+                          <p>Total Volume: <span className="font-bold text-slate-300">{charter.measure_summary.total_volume}</span></p>
+                          <p><Tooltip text="Defects Per Million Opportunities: Jumlah cacat yang diperkirakan terjadi dalam 1 juta kesempatan">DPMO</Tooltip>: <span className="font-bold text-slate-300">{charter.measure_summary.overall_dpmo !== undefined ? charter.measure_summary.overall_dpmo : 'N/A'}</span></p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
 
                 {/* AI Interpretation */}
                 {(() => {
@@ -982,7 +1063,7 @@ export default function MeasurePage() {
                   return (
                     <div className="bg-indigo-500/5 p-5 rounded-xl border border-indigo-500/20 space-y-3">
                       <h5 className="text-xs font-bold text-indigo-300 uppercase flex items-center gap-1.5">
-                        <Sparkles className="w-4 h-4" /> Interpretasi AI
+                        <Sparkles className="w-4 h-4" /> Interpretasi Sistem
                       </h5>
                       <div className="space-y-2 text-[11px] text-slate-300 leading-relaxed">
                         {interpretation.level_assessment && (

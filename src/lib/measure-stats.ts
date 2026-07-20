@@ -677,21 +677,39 @@ export function calcAggregatedSigmaLevel(
 
   dataReqs.forEach(req => {
 
-    if (!req.raw_data || req.raw_data.length === 0) return
-    const colName = aggregationConfig.targetCols[req.id]
-    if (!colName) return
-
-    const values = extractNumericValues(req.raw_data, colName)
-    const sum = values.reduce((a, b) => a + b, 0)
-    const avg = values.length > 0 ? sum / values.length : 0
+    let sum = 0
+    let avg = 0
+    
+    if (req.raw_data && req.raw_data.length > 0) {
+      const colName = aggregationConfig.targetCols[req.id]
+      if (!colName) return
+      const values = extractNumericValues(req.raw_data, colName)
+      sum = values.reduce((a, b) => a + b, 0)
+      avg = values.length > 0 ? sum / values.length : 0
+    } else if ((req as any).manual_data !== undefined && (req as any).manual_data !== '') {
+      const num = Number((req as any).manual_data)
+      if (!isNaN(num)) {
+        sum = num
+        avg = num // Untuk input manual, sum dan avg sama (karena n = 1)
+      } else {
+        return
+      }
+    } else {
+      return
+    }
 
     if (req.group === 'primary_defect') {
       totalDefects += sum
     } else if (req.group === 'primary_volume') {
       totalVolume += sum
     } else if (req.group === 'primary_ctq') {
-      const uniqueVals = new Set(req.raw_data.map(r => r[colName])).size
-      ctqOpportunities = Math.max(ctqOpportunities, uniqueVals)
+      if (req.raw_data && req.raw_data.length > 0) {
+        const cName = aggregationConfig.targetCols[req.id]
+        if (cName) {
+          const uniqueVals = new Set(req.raw_data.map(r => r[cName])).size
+          ctqOpportunities = Math.max(ctqOpportunities, uniqueVals)
+        }
+      }
     } else if (req.group === 'supporting') {
       const nameLower = req.name.toLowerCase()
       const isAverage = nameLower.includes('kepuasan') || nameLower.includes('satisfaction') || nameLower.includes('waktu') || nameLower.includes('lead time') || nameLower.includes('skor') || nameLower.includes('score') || nameLower.includes('rata')
@@ -742,7 +760,7 @@ export function calcAggregatedSigmaLevel(
       }
     } else {
       warnings.push('Total unit/volume produksi (Data Utama - Volume) adalah 0, dan sistem tidak dapat menemukan Data Utama lain untuk dianalisis secara dinamis. Pastikan minimal satu file "Data Utama - Volume" atau "Data Utama" lainnya sudah diupload.')
-      return { type: 'sigma', overall_sigma_level: 0, overall_dpmo: 0, total_defects: totalDefects, total_volume: 0, opportunities_per_unit: ctqOpportunities, supporting_kpis: supportingKpis, warnings }
+      return { type: 'sigma', overall_sigma_level: undefined, overall_dpmo: undefined, total_defects: totalDefects, total_volume: 0, opportunities_per_unit: ctqOpportunities, supporting_kpis: supportingKpis, warnings }
     }
   }
 

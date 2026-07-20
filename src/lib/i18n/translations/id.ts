@@ -9,7 +9,7 @@ const id = {
     dmaicTitle: 'Tahapan DMAIC',
     define: '1. Define (Profil & Charter)',
     measure: '2. Measure (PQCDSM)',
-    analyze: '3. Analyze (RCA & AI)',
+    analyze: '3. Analyze (RCA & Analisis)',
     improve: '4. Improve (Action Plan)',
     control: '5. Control (KPI & PSI)',
     reports: '6. Laporan Akhir',
@@ -51,7 +51,7 @@ const id = {
     activeProjects: 'Proyek Aktif',
     avgProductivity: 'Rata-rata Produktivitas',
     companiesGuided: 'Perusahaan Didampingi',
-    aiInsights: 'Insight AI',
+    aiInsights: 'Insight Analisis',
     startProject: 'Mulai Proyek Baru',
     recentActivities: 'Aktivitas Terkini',
     quickStats: 'Statistik Cepat',
@@ -122,7 +122,7 @@ const id = {
   // Analyze page
   analyze: {
     title: 'Fase ANALYZE',
-    subtitle: 'Root Cause Analysis & AI Recommendations',
+    subtitle: 'Root Cause Analysis & Recommendations',
   },
 
   // Improve page

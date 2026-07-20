@@ -3,14 +3,15 @@
 // Local state/localStorage database manager for Smart Productive.
 // Provides realistic mockup data when Supabase connection is not fully loaded or for instant demoing.
 
-export interface ControlChangeRequest {
+export interface GenericApprovalRequest {
   id: string
   project_id: string
-  target_id: string
+  entity_type: 'efficiency_target' | 'action_plan_step' | 'kpi_support_data' | 'tier_override'
+  entity_id: string
   requested_by: string
   requested_at: string
-  changes: any // { baseline_value?: string, target_value?: string, duration?: string, duration_unit?: string, actuals?: any[] }
-  status: 'pending' | 'approved' | 'rejected' | 'cancelled'
+  changes: any // Flexible payload per entity_type
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'resolved'
   reviewed_by?: string
   reviewed_at?: string
   reject_reason?: string
@@ -46,6 +47,9 @@ export interface Company {
   tier_source?: 'auto' | 'manual'
   classification_answers?: any
   jumlah_tenaga_kerja?: number
+  onboarding_completed?: boolean
+  onboarding_completed_at?: string
+  tier_set_at?: string
 }
 
 export interface CompanyBaselineAssessment {
@@ -208,6 +212,7 @@ export interface ActionPlan {
   end_date: string
   status: 'belum_mulai' | 'sedang_berjalan' | 'selesai' | 'tertunda'
   progress_percentage: number
+  is_deleted?: boolean
   /** Hasil analisis AI (Persiapan, Biaya, ROI, dll) */
   ai_analysis?: ImproveAiAnalysis
 }
@@ -302,7 +307,7 @@ export interface MeasureDataRequirement {
   reason: string
   expected_format: string
   example_columns: string[]
-  status: 'Belum diupload' | 'Sudah diupload' | 'Tervalidasi'
+  status: 'Belum diupload' | 'Sudah diupload' | 'Tervalidasi' | 'Menunggu Persetujuan Konsultan'
   parsed_summary?: any
   recommended_methods?: Array<{ method: string; reason: string }>
   source: 'ai' | 'manual'
@@ -354,6 +359,9 @@ export interface ActionPlanStep {
   pic: string
   timeline: string
   is_completed?: boolean
+  self_marked_done?: boolean
+  verification_status?: 'pending' | 'approved' | 'rejected'
+  file_url?: string
 }
 
 export interface PriorityItem {
@@ -689,4 +697,15 @@ export const updateMockDB = (key: string, data: any) => {
   if (typeof window !== 'undefined') {
     localStorage.setItem(`smartproductive_${key}`, JSON.stringify(data))
   }
+}
+
+export interface TierReviewRequest {
+  id: string
+  company_id: string
+  requested_by: string
+  requested_at: string
+  message?: string
+  status: 'open' | 'resolved'
+  resolved_by?: string
+  resolved_at?: string
 }

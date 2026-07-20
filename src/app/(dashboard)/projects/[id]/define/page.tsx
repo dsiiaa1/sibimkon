@@ -46,7 +46,7 @@ export default function DefinePage() {
     if (!isAuto) {
       const hasEdited = Object.values(fieldSources).includes('user_edited')
       if (hasEdited) {
-        const confirm = window.confirm('Beberapa kolom sudah Anda edit manual. Yakin ingin menimpa dengan draf AI?')
+        const confirm = window.confirm('Beberapa kolom sudah Anda edit manual. Yakin ingin menimpa dengan draf otomatis?')
         if (!confirm) return
       }
     }
@@ -74,7 +74,7 @@ export default function DefinePage() {
         setCharterSource('ai_generated')
         if (!isAuto) showSave('Draf berhasil disusun ulang dari kuesioner.')
       } else {
-        if (!isAuto) alert(data.error || 'Gagal menyusun draf AI.')
+        if (!isAuto) alert(data.error || 'Gagal menyusun draf otomatis.')
       }
     } catch (err) {
       if (!isAuto) alert('Terjadi kesalahan jaringan saat menyusun draf.')
@@ -113,6 +113,11 @@ export default function DefinePage() {
         setTeamMembers(chart.team_members || [])
         setCharterSource(chart.source || 'manual')
         setFieldSources(chart.field_sources || {})
+
+        // Auto trigger draft if the important fields are empty
+        if (!chart.objectives && !chart.productivity_target && !chart.scope) {
+          generateCharterDraft(true)
+        }
       } else {
         // Auto trigger draft if no charter exists
         generateCharterDraft(true)
@@ -378,11 +383,7 @@ export default function DefinePage() {
             <div className="flex items-center justify-between border-b border-slate-850 pb-3">
               <h2 className="text-lg font-bold text-slate-200">Productivity Project Charter</h2>
               <div className="flex gap-2 items-center">
-                <button onClick={() => generateCharterDraft(false)} disabled={isDrafting}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 text-xs font-bold cursor-pointer disabled:opacity-50 transition-colors">
-                  <BrainCircuit className="h-3.5 w-3.5" />
-                  {isDrafting ? 'Menyusun...' : 'Re-generate dari Kuesioner'}
-                </button>
+                {/* Button removed by user request */}
               </div>
             </div>
             
@@ -398,44 +399,28 @@ export default function DefinePage() {
                 <textarea value={charterProblem} onChange={(e) => handleFieldChange('problem_statement', e.target.value, setCharterProblem)}
                   placeholder="Detail kendala saat ini..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm h-24" />
-                {fieldSources['problem_statement'] === 'ai_draft' && (
-                  <span className="absolute top-[28px] right-2 flex items-center gap-1 text-[10px] font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 pointer-events-none">
-                    <BrainCircuit className="h-3 w-3" /> Drafted by AI
-                  </span>
-                )}
+
               </div>
               <div className="relative">
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Tujuan &amp; Sasaran (Objectives)</label>
                 <textarea value={charterObjectives} onChange={(e) => handleFieldChange('objectives', e.target.value, setCharterObjectives)}
                   placeholder="Tujuan terukur yang ingin dicapai..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm h-20" />
-                {fieldSources['objectives'] === 'ai_draft' && (
-                  <span className="absolute top-[28px] right-2 flex items-center gap-1 text-[10px] font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 pointer-events-none">
-                    <BrainCircuit className="h-3 w-3" /> Drafted by AI
-                  </span>
-                )}
+
               </div>
               <div className="relative">
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Target Produktivitas</label>
                 <textarea value={charterTarget} onChange={(e) => handleFieldChange('productivity_target', e.target.value, setCharterTarget)} rows={3}
                   placeholder="Misal: Kenaikan OPH 15%, Penurunan reject rate ke <2%"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm" />
-                {fieldSources['productivity_target'] === 'ai_draft' && (
-                  <span className="absolute top-[28px] right-2 flex items-center gap-1 text-[10px] font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 pointer-events-none">
-                    <BrainCircuit className="h-3 w-3" /> Drafted by AI
-                  </span>
-                )}
+
               </div>
               <div className="relative">
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Ruang Lingkup (Scope)</label>
                 <textarea value={charterScope} onChange={(e) => handleFieldChange('scope', e.target.value, setCharterScope)} rows={3}
                   placeholder="Batasan perbaikan..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm" />
-                {fieldSources['scope'] === 'ai_draft' && (
-                  <span className="absolute top-[28px] right-2 flex items-center gap-1 text-[10px] font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 pointer-events-none">
-                    <BrainCircuit className="h-3 w-3" /> Drafted by AI
-                  </span>
-                )}
+
               </div>
             </div>
 

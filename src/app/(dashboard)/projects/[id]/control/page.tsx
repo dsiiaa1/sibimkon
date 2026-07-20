@@ -8,10 +8,11 @@ import {
   Check, ArrowRight, Plus, Trash2, DollarSign, TrendingUp,
   Edit3, MessageSquare, Send, Lock, ChevronDown, ChevronRight, ChevronUp, Sparkles
 } from 'lucide-react'
+import { Tooltip } from '@/components/Tooltip'
 import {
   updateProjectPhase, getProjects, getActionPlans,
   getEfficiencyTargets, saveEfficiencyTargets, saveEfficiencyActuals,
-  getChangeRequests, submitChangeRequest, reviewChangeRequest, cancelChangeRequest
+  getApprovalRequests, submitApprovalRequest, reviewChangeRequest, cancelChangeRequest
 } from '@/lib/db'
 import { useUserRole } from '@/hooks/useUserRole'
 
@@ -63,7 +64,7 @@ export default function ControlPage() {
       setActionPlans(actions)
 
       let dbTargets = await getEfficiencyTargets(projectId)
-      const reqs = await getChangeRequests(projectId)
+      const reqs = await getApprovalRequests(projectId)
       setChangeRequests(reqs)
       
       const targetActionPlanIds = new Set(dbTargets.map((t: any) => t.action_plan_id))
@@ -90,12 +91,12 @@ export default function ControlPage() {
                const startDate = ap?.start_date ? new Date(ap.start_date) : new Date()
 
                let count = 1
-               if (t.duration_unit === 'bulan' && t.duration > 1) {
-                  count = t.duration
-               } else if (t.duration_unit === 'minggu' && t.duration > 4) {
-                  count = Math.ceil(t.duration / 4)
-               } else if (t.duration_unit === 'tahun' && t.duration > 0) {
-                  count = t.duration * 12
+               if (ap?.start_date && ap?.end_date) {
+                 const start = new Date(ap.start_date)
+                 const end = new Date(ap.end_date)
+                 const diffTime = Math.abs(end.getTime() - start.getTime())
+                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+                 count = Math.max(1, Math.round(diffDays / 30))
                }
 
                for(let i=1; i<=count; i++) {
@@ -124,7 +125,7 @@ export default function ControlPage() {
         }
       }
       setTargets(dbTargets)
-      setChangeRequests(await getChangeRequests(projectId))
+      setChangeRequests(await getApprovalRequests(projectId))
     }
     loadData()
   }, [projectId, router])
@@ -143,7 +144,7 @@ export default function ControlPage() {
   })
 
   const getPendingRequest = (targetId: string) => {
-    return changeRequests.find(r => r.target_id === targetId && r.status === 'pending')
+    return changeRequests.find(r => r.entity_id === targetId && r.status === 'pending')
   }
 
   const getPendingActual = (targetId: string, actualId: string) => {
@@ -215,15 +216,14 @@ export default function ControlPage() {
     const req = {
       id: crypto.randomUUID(),
       project_id: projectId,
-      target_id: editingTarget.id,
+      entity_type: 'efficiency_target',
+      entity_id: editingTarget.id,
       requested_by: userInfo?.id || 'unknown',
       requested_at: new Date().toISOString(),
       changes: {
         raw_text: editForm.raw_text,
         metric_name: editForm.metric_name,
-        target_value: editForm.target_value === '' ? null : Number(editForm.target_value),
-        duration: editForm.duration === '' ? null : Number(editForm.duration),
-        duration_unit: editForm.duration_unit
+        target_value: editForm.target_value === '' ? null : Number(editForm.target_value)
       } as any,
       status: 'pending' as const
     }
@@ -236,8 +236,6 @@ export default function ControlPage() {
     const hasOtherChanges = req.changes.raw_text !== editingTarget.raw_text ||
                             req.changes.metric_name !== editingTarget.metric_name ||
                             req.changes.target_value !== editingTarget.target_value ||
-                            req.changes.duration !== editingTarget.duration ||
-                            req.changes.duration_unit !== editingTarget.duration_unit ||
                             (!isFirstTimeBaseline && req.changes.baseline_value !== editingTarget.baseline_value);
 
     if (!hasOtherChanges) {
@@ -247,7 +245,7 @@ export default function ControlPage() {
     }
 
     try {
-      await submitChangeRequest(req)
+      await submitApprovalRequest(req)
       setChangeRequests([req, ...changeRequests])
       setEditingTarget(null)
       showSave('Perubahan diajukan, menunggu persetujuan Konsultan')
@@ -265,7 +263,7 @@ export default function ControlPage() {
       if (status === 'approved') {
         // Apply changes locally to target and actuals
         const updatedTargets = targets.map(t => {
-          if (t.id !== req.target_id) return t
+          if (t.id !== req.entity_id) return t
           
           let newT = { ...t }
           if (req.changes.baseline_value !== undefined) newT.baseline_value = req.changes.baseline_value
@@ -289,7 +287,7 @@ export default function ControlPage() {
         setTargets(updatedTargets)
 
         // Save to DB (Targets and Actuals)
-        const theTarget = updatedTargets.find(t => t.id === req.target_id)
+        const theTarget = updatedTargets.find(t => t.id === req.entity_id)
         if (theTarget) {
           const ap = actionPlans.find(a => a.id === theTarget.action_plan_id)
           const startDate = ap?.start_date ? new Date(ap.start_date) : new Date()
@@ -414,7 +412,7 @@ export default function ControlPage() {
               <h1 className="text-2xl font-bold text-white">Target Efisiensi &amp; Pencapaian</h1>
             </div>
             <p className="text-slate-400 text-sm">
-              Fase Control memastikan implementasi solusi benar-benar menghasilkan efisiensi yang ditargetkan AI.
+              Fase Control memastikan implementasi solusi benar-benar menghasilkan efisiensi yang ditargetkan sebelumnya.
             </p>
           </div>
           <button
@@ -429,7 +427,7 @@ export default function ControlPage() {
         {isGenerating && (
           <div className="p-8 text-center bg-slate-900/50 border border-indigo-500/30 rounded-2xl">
             <Sparkles className="w-10 h-10 text-indigo-400 animate-pulse mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-white mb-2">AI Sedang Mengekstrak Target...</h3>
+            <h3 className="text-lg font-bold text-white mb-2">Sistem Sedang Mengekstrak Target...</h3>
             <p className="text-slate-400 text-sm">Sistem sedang merumuskan metrik &amp; target terukur dari rencana efisiensi Anda.</p>
           </div>
         )}
@@ -437,7 +435,7 @@ export default function ControlPage() {
         {!isGenerating && Object.keys(groupedTargets).length === 0 && (
           <div className="p-8 text-center bg-slate-900/50 border border-slate-800/60 rounded-2xl">
             <h3 className="text-lg font-bold text-slate-300">Belum ada Target Efisiensi</h3>
-            <p className="text-slate-500 text-sm mt-2">AI tidak menemukan target efisiensi dari hasil Improve Anda, atau belum di-generate.</p>
+            <p className="text-slate-500 text-sm mt-2">Sistem tidak menemukan target efisiensi dari hasil Improve Anda, atau belum di-generate.</p>
           </div>
         )}
 
@@ -451,27 +449,27 @@ export default function ControlPage() {
 
         {/* KONSULTAN REVIEW SECTION */}
         {isKonsultan && changeRequests.filter(r => r.status === 'pending').length > 0 && (
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-6">
-            <h2 className="text-lg font-bold text-amber-400 flex items-center gap-2 mb-4">
-              <AlertTriangle className="w-5 h-5" />
-              Pengajuan Menunggu Persetujuan
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+            <h2 className="text-sm font-bold text-amber-400 flex items-center gap-2 mb-3">
+              <AlertTriangle className="w-4 h-4" />
+              Menunggu Persetujuan ({changeRequests.filter(r => r.status === 'pending').length})
             </h2>
-            <div className="space-y-4">
+            <div className="space-y-2">
               {changeRequests.filter(r => r.status === 'pending').map(req => {
                 const relatedTarget = targets.find(t => t.id === req.target_id)
                 const relatedAp = actionPlans.find(ap => ap.id === relatedTarget?.action_plan_id)
                 return (
-                  <div key={req.id} className="bg-slate-900 border border-amber-500/20 p-4 rounded-xl shadow-lg">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div key={req.id} className="bg-slate-900 border border-amber-500/20 p-3 rounded-lg flex flex-col gap-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-white mb-1">Target: {relatedTarget?.metric_name}</p>
-                        <p className="text-xs text-slate-400 mb-2">Action Plan: {relatedAp?.title}</p>
+                        <p className="text-xs font-semibold text-white">Target: {relatedTarget?.metric_name}</p>
+                        <p className="text-[10px] text-slate-400">AP: {relatedAp?.title}</p>
                       </div>
-                      <div className="flex gap-2 shrink-0">
-                        <button onClick={() => toggleRequest(req.id)} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded shadow flex items-center gap-1">
-                           {expandedRequests.has(req.id) ? 'Sembunyikan Detail' : 'Lihat Detail'}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button onClick={() => toggleRequest(req.id)} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold rounded flex items-center gap-1">
+                           {expandedRequests.has(req.id) ? 'Tutup' : 'Detail'}
                         </button>
-                        <button onClick={() => handleReviewRequest(req, 'approved')} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded shadow">
+                        <button onClick={() => handleReviewRequest(req, 'approved')} className="px-2 py-1 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600 hover:text-white border border-emerald-500/30 text-[10px] font-semibold rounded">
                           Setujui
                         </button>
                         <button 
@@ -479,52 +477,44 @@ export default function ControlPage() {
                             const note = window.prompt("Alasan penolakan (opsional):")
                             if (note !== null) handleReviewRequest(req, 'rejected', note)
                           }} 
-                          className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-semibold rounded shadow">
+                          className="px-2 py-1 bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white border border-red-500/30 text-[10px] font-semibold rounded">
                           Tolak
                         </button>
                       </div>
                     </div>
 
                     {expandedRequests.has(req.id) && (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 pt-4 border-t border-slate-800">
+                      <div className="flex flex-wrap gap-3 mt-1 pt-2 border-t border-slate-800">
                         {req.changes.baseline_value !== undefined && (
-                          <div className="bg-slate-950 p-2 rounded">
-                            <p className="text-[10px] text-slate-500 uppercase">Baseline</p>
-                            <p className="text-sm text-amber-400 line-through opacity-70">{relatedTarget?.baseline_value ?? '-'}</p>
-                            <p className="text-sm text-emerald-400 font-bold">{req.changes.baseline_value}</p>
+                          <div className="text-[10px]">
+                            <span className="text-slate-500">Baseline: </span>
+                            <span className="text-amber-400 line-through">{relatedTarget?.baseline_value ?? '-'}</span> <span className="text-emerald-400 font-bold">{req.changes.baseline_value}</span>
                           </div>
                         )}
                         {req.changes.target_value !== undefined && (
-                          <div className="bg-slate-950 p-2 rounded">
-                            <p className="text-[10px] text-slate-500 uppercase">Target</p>
-                            <p className="text-sm text-amber-400 line-through opacity-70">{relatedTarget?.target_value ?? '-'}</p>
-                            <p className="text-sm text-emerald-400 font-bold">{req.changes.target_value}</p>
+                          <div className="text-[10px]">
+                            <span className="text-slate-500">Target: </span>
+                            <span className="text-amber-400 line-through">{relatedTarget?.target_value ?? '-'}</span> <span className="text-emerald-400 font-bold">{req.changes.target_value}</span>
                           </div>
                         )}
                         {req.changes.duration !== undefined && (
-                          <div className="bg-slate-950 p-2 rounded">
-                            <p className="text-[10px] text-slate-500 uppercase">Durasi</p>
-                            <p className="text-sm text-amber-400 line-through opacity-70">{relatedTarget?.duration} {relatedTarget?.duration_unit}</p>
-                            <p className="text-sm text-emerald-400 font-bold">{req.changes.duration} {req.changes.duration_unit}</p>
+                          <div className="text-[10px]">
+                            <span className="text-slate-500">Durasi: </span>
+                            <span className="text-amber-400 line-through">{relatedTarget?.duration}</span> <span className="text-emerald-400 font-bold">{req.changes.duration}</span>
                           </div>
                         )}
                         {req.changes.actuals && req.changes.actuals.length > 0 && (
-                          <div className="bg-slate-950 p-2 rounded col-span-2 md:col-span-4">
-                            <p className="text-[10px] text-slate-500 uppercase mb-2">Pembaruan Nilai Aktual</p>
+                          <div className="text-[10px] w-full mt-1">
                             {req.changes.actuals.map((actChange: any) => {
                                const originalAct = relatedTarget?.actuals?.find((a:any) => a.id === actChange.id)
                                return (
-                                 <div key={actChange.id} className="flex flex-wrap gap-4 text-xs mt-1">
-                                   <span className="font-semibold text-slate-300">CP {originalAct?.checkpoint_number}:</span>
+                                 <div key={actChange.id} className="flex flex-wrap gap-2">
+                                   <span className="text-slate-400">CP {originalAct?.checkpoint_number}:</span>
                                    {actChange.actual_value !== undefined && (
-                                     <span>
-                                       Aktual: <span className="text-amber-400 line-through opacity-70">{originalAct?.actual_value ?? '-'}</span> <span className="text-emerald-400 font-bold">{actChange.actual_value}</span>
-                                     </span>
+                                     <span>Aktual <span className="text-amber-400 line-through">{originalAct?.actual_value ?? '-'}</span> <span className="text-emerald-400">{actChange.actual_value}</span></span>
                                    )}
                                    {actChange.note !== undefined && (
-                                     <span>
-                                       Catatan: <span className="text-amber-400 line-through opacity-70">{originalAct?.note || '-'}</span> <span className="text-emerald-400 font-bold">{actChange.note}</span>
-                                     </span>
+                                     <span>Note <span className="text-amber-400 line-through">{originalAct?.note || '-'}</span> <span className="text-emerald-400">{actChange.note}</span></span>
                                    )}
                                  </div>
                                )
@@ -617,12 +607,12 @@ export default function ControlPage() {
                       </div>
                     )}
                     <div className="flex-1 mt-6 md:mt-0">
-                      <p className="text-xs font-medium text-slate-500 mb-1">DARI ACTION PLAN:</p>
-                      <p className="text-sm text-slate-300 font-bold mb-1">{ap?.title}</p>
+                      <p className="text-xs font-medium text-slate-500 mb-1 flex items-center gap-2">DARI ACTION PLAN: {ap?.is_deleted && <span className="bg-red-500/20 text-red-400 px-2 py-0.5 rounded text-[10px] font-bold">DIHAPUS / ARSIP</span>}</p>
+                      <p className={`text-sm font-bold mb-1 ${ap?.is_deleted ? 'text-slate-500 line-through' : 'text-slate-300'}`}>{ap?.title}</p>
                       <p className="text-sm text-slate-400 mb-3 whitespace-pre-line">{ap?.description}</p>
                       
                       <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50 mb-3">
-                        <p className="text-xs font-semibold text-slate-400 mb-1 flex items-center gap-1"><Sparkles className="w-3 h-3 text-indigo-400"/> Ekstraksi Target AI / Keterangan:</p>
+                        <p className="text-xs font-semibold text-slate-400 mb-1 flex items-center gap-1"><Sparkles className="w-3 h-3 text-indigo-400"/> Ekstraksi Target / Keterangan:</p>
                         <p className="text-sm text-slate-300 italic">"{t.raw_text}"</p>
                         {getPendingRequest(t.id)?.changes?.raw_text !== undefined && (
                            <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/30 mt-2 inline-block" title="Menunggu Persetujuan">⏳ Perubahan: "{getPendingRequest(t.id)?.changes?.raw_text}"</span>
@@ -638,7 +628,7 @@ export default function ControlPage() {
                            )}
                         </div>
                         <div className="bg-slate-900 border border-slate-800 p-2.5 rounded-lg flex flex-col justify-center">
-                           <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Baseline (Wajib)</p>
+                           <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1"><Tooltip text="Nilai awal sebelum perbaikan dilakukan">Baseline</Tooltip> (Wajib)</p>
                            {isKonsultan || t.baseline_value === null || t.baseline_value === undefined ? (
                              <input 
                                type="number"
@@ -657,7 +647,7 @@ export default function ControlPage() {
                            )}
                         </div>
                         <div className="bg-slate-900 border border-slate-800 p-2.5 rounded-lg border-b-2 border-b-indigo-500/50">
-                           <p className="text-[10px] text-indigo-400 uppercase tracking-wider mb-1" title="Target Hasil Bisnis">Target Bisnis</p>
+                           <div className="text-[10px] text-indigo-400 uppercase tracking-wider mb-1"><Tooltip text="Target nilai atau capaian yang ingin diraih setelah implementasi perbaikan">Target Bisnis</Tooltip></div>
                            <p className="text-sm font-bold text-white flex items-center gap-2">
                              {t.target_value}
                              {getPendingRequest(t.id)?.changes?.target_value !== undefined && (
@@ -666,12 +656,20 @@ export default function ControlPage() {
                            </p>
                         </div>
                         <div className="bg-slate-900 border border-slate-800 p-2.5 rounded-lg">
-                           <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1" title="Durasi Target Bisnis">Durasi</p>
+                           <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1" title="Durasi Target Bisnis">Durasi (Dari Timeline)</p>
                            <p className="text-xs font-medium text-slate-300 flex items-center gap-2">
-                             {t.duration} {t.duration_unit}
-                             {getPendingRequest(t.id)?.changes?.duration !== undefined && (
-                               <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1 py-0.5 rounded border border-amber-500/30" title="Menunggu Persetujuan">⏳ {getPendingRequest(t.id)?.changes?.duration} {getPendingRequest(t.id)?.changes?.duration_unit}</span>
-                             )}
+                             {(() => {
+                               if (!ap?.start_date || !ap?.end_date) return '-'
+                               const start = new Date(ap.start_date)
+                               const end = new Date(ap.end_date)
+                               const diffTime = Math.abs(end.getTime() - start.getTime())
+                               const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+                               if (diffDays < 30) {
+                                  return Math.ceil(diffDays / 7) + ' minggu'
+                               } else {
+                                  return Math.round(diffDays / 30) + ' bulan'
+                               }
+                             })()}
                            </p>
                         </div>
                       </div>
@@ -849,7 +847,7 @@ export default function ControlPage() {
               </div>
               <div className="p-6 overflow-y-auto flex-1 space-y-4">
                 <div className="md:col-span-2">
-                    <label className="text-xs font-semibold text-slate-400 block mb-1">Ekstraksi Target AI / Keterangan</label>
+                    <label className="text-xs font-semibold text-slate-400 block mb-1">Ekstraksi Target / Keterangan</label>
                     <textarea 
                       placeholder="Contoh: Penghematan biaya energi sebesar 10% per tahun"
                       className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-indigo-500/50 min-h-[60px]"
@@ -908,17 +906,16 @@ export default function ControlPage() {
                          }
                          try {
                            await saveEfficiencyTargets(projectId, [newTarget])
-                           await submitChangeRequest({
+                           await submitApprovalRequest({
                              project_id: editingTarget.project_id,
-                             target_id: newTargetId,
+                             entity_type: 'efficiency_target',
+                             entity_id: newTargetId,
                              requested_by: userInfo?.id || 'unknown',
                              changes: {
                                raw_text: editForm.raw_text,
                                metric_name: editForm.metric_name,
                                baseline_value: Number(editForm.baseline_value),
-                               target_value: Number(editForm.target_value),
-                               duration: Number(editForm.duration),
-                               duration_unit: editForm.duration_unit
+                               target_value: Number(editForm.target_value)
                              }
                            })
                            setTargets([...targets, { ...newTarget, actuals: [] }])
@@ -934,29 +931,7 @@ export default function ControlPage() {
                    </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-400 block mb-1">Durasi</label>
-                    <input
-                      type="number"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-indigo-500"
-                      value={editForm.duration}
-                      onChange={(e) => setEditForm({...editForm, duration: e.target.value})}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-slate-400 block mb-1">Satuan</label>
-                    <select
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-indigo-500"
-                      value={editForm.duration_unit}
-                      onChange={(e) => setEditForm({...editForm, duration_unit: e.target.value})}
-                    >
-                      <option value="minggu">Minggu</option>
-                      <option value="bulan">Bulan</option>
-                      <option value="tahun">Tahun</option>
-                    </select>
-                  </div>
-                </div>
+                {/* Durasi removed: calculated automatically from Improve Timeline */}
                 
                 <div className="bg-indigo-500/10 border border-indigo-500/20 p-3 rounded-lg flex gap-3 text-sm text-indigo-300">
                   <AlertTriangle className="w-5 h-5 flex-shrink-0" />

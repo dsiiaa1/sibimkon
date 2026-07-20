@@ -11,7 +11,7 @@ const en: TranslationKeys = {
     dmaicTitle: 'DMAIC Stages',
     define: '1. Define (Profile & Charter)',
     measure: '2. Measure (PQCDSM)',
-    analyze: '3. Analyze (RCA & AI)',
+    analyze: '3. Analyze (RCA & Analysis)',
     improve: '4. Improve (Action Plan)',
     control: '5. Control (KPI & PSI)',
     reports: '6. Final Report',
@@ -53,7 +53,7 @@ const en: TranslationKeys = {
     activeProjects: 'Active Projects',
     avgProductivity: 'Avg. Productivity',
     companiesGuided: 'Companies Guided',
-    aiInsights: 'AI Insights',
+    aiInsights: 'Analysis Insights',
     startProject: 'Start New Project',
     recentActivities: 'Recent Activities',
     quickStats: 'Quick Stats',
@@ -124,7 +124,7 @@ const en: TranslationKeys = {
   // Analyze page
   analyze: {
     title: 'ANALYZE Phase',
-    subtitle: 'Root Cause Analysis & AI Recommendations',
+    subtitle: 'Root Cause Analysis & Recommendations',
   },
 
   // Improve page

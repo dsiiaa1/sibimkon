@@ -56,6 +56,7 @@ export default function DashboardShell({
   const [showNotifDropdown, setShowNotifDropdown] = useState(false)
   const [loading, setLoading] = useState(true)
   const [activeCompanyTier, setActiveCompanyTier] = useState<string>('menengah')
+  const [showFullDmaic, setShowFullDmaic] = useState(false)
   
   const activeProjectMatch = pathname.match(/\/projects\/([^/]+)/)
   const activeProjectId = activeProjectMatch ? activeProjectMatch[1] : null
@@ -147,6 +148,18 @@ export default function DashboardShell({
         router.push('/login')
       } else {
         setUser(currentUser)
+
+        // Check if onboarding is completed for Perusahaan
+        if (currentUser.role === 'perusahaan') {
+          const { getCompanies } = await import('@/lib/db')
+          const companies = await getCompanies()
+          const myComp = companies.find(c => c.name === currentUser?.organization || c.id === currentUser?.organization)
+          if (myComp && !myComp.onboarding_completed && !pathname.includes('/onboarding')) {
+            router.push(`/companies/${myComp.id}/onboarding`)
+            return
+          }
+        }
+        
         
         // Base notifications — generic, tidak menyebut data perusahaan tertentu
         const baseNotifications: any[] = []
@@ -259,11 +272,11 @@ export default function DashboardShell({
   // If a project is active, display the DMAIC stages in sidebar
   let dmaicStages: any[] = []
   if (activeProjectId) {
-    if (activeCompanyTier === 'simple') {
+    if (activeCompanyTier === 'simple' && !showFullDmaic) {
       dmaicStages = [
-        { name: 'Perencanaan & Baseline', href: `/projects/${activeProjectId}/define`, icon: FileCheck },
-        { name: 'Analisis & Rencana Solusi', href: `/projects/${activeProjectId}/analyze`, icon: Sparkles },
-        { name: 'Monitoring', href: `/projects/${activeProjectId}/control`, icon: Activity },
+        { name: 'Cari Tahu Masalah', href: `/projects/${activeProjectId}/define`, icon: FileCheck },
+        { name: 'Jalankan Perbaikan', href: `/projects/${activeProjectId}/improve`, icon: TrendingUp },
+        { name: 'Pantau Hasilnya', href: `/projects/${activeProjectId}/control`, icon: Activity },
         { name: t('nav.reports'), href: `/projects/${activeProjectId}/reports`, icon: FileText }
       ]
     } else {
@@ -434,6 +447,17 @@ export default function DashboardShell({
                   )
                 })}
               </div>
+              
+              {activeCompanyTier === 'simple' && !isCollapsed && (
+                <div className="mt-4 px-3 flex justify-center">
+                  <button 
+                    onClick={() => setShowFullDmaic(!showFullDmaic)}
+                    className="text-[10px] uppercase tracking-wider text-slate-500 hover:text-[var(--gold-400)] transition-colors underline"
+                  >
+                    {showFullDmaic ? "Tampilkan 3 Langkah" : "Lihat Tahapan Lengkap"}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </nav>
@@ -563,6 +587,37 @@ export default function DashboardShell({
 
         {/* Page body section */}
         <main className="flex-1 w-full min-w-0 p-4 md:p-8 overflow-x-hidden">
+          {activeProjectId && activeCompanyTier && (
+            <div className={`mb-6 p-4 rounded-xl border flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+              activeCompanyTier === 'simple' 
+                ? 'bg-indigo-500/10 border-indigo-500/20' 
+                : activeCompanyTier === 'menengah'
+                ? 'bg-amber-500/10 border-amber-500/20'
+                : 'bg-emerald-500/10 border-emerald-500/20'
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-lg ${
+                  activeCompanyTier === 'simple' ? 'bg-indigo-500/20 text-indigo-400' :
+                  activeCompanyTier === 'menengah' ? 'bg-amber-500/20 text-amber-400' :
+                  'bg-emerald-500/20 text-emerald-400'
+                }`}>
+                  <Building className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className={`text-sm font-bold capitalize ${
+                    activeCompanyTier === 'simple' ? 'text-indigo-400' :
+                    activeCompanyTier === 'menengah' ? 'text-amber-400' :
+                    'text-emerald-400'
+                  }`}>Status Perusahaan: Skala {activeCompanyTier === 'simple' ? 'Kecil / UMKM (Tier Simple)' : activeCompanyTier}</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {activeCompanyTier === 'simple' 
+                      ? 'Antarmuka DMAIC disederhanakan menjadi 3 tahap utama dan input file data kompleks diminimalkan.' 
+                      : 'Antarmuka DMAIC berjalan dalam mode penuh dengan semua kelengkapan analisis data.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
           {children}
         </main>
       </div>

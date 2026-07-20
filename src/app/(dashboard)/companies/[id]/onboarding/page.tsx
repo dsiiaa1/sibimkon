@@ -3,9 +3,11 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { getCompanies, getCompanyBaselineAssessment, saveCompanyBaselineAssessment } from '@/lib/db'
+import { getCompanies, getCompanyBaselineAssessment, saveCompanyBaselineAssessment, updateCompany } from '@/lib/db'
 import { CompanyBaselineAssessment, Company } from '@/lib/mockData'
 import { ArrowLeft, CheckCircle2, Save, Send, Building, Users, Activity, BarChart, Settings, ListChecks } from 'lucide-react'
+import { Tooltip } from '@/components/Tooltip'
+import { determineTier } from '@/lib/utils'
 
 const RadioYesNo = ({ 
   value, 
@@ -27,7 +29,7 @@ const RadioYesNo = ({
   disabled?: boolean, 
   required?: boolean, 
   name: string,
-  label: string,
+  label: React.ReactNode,
   requiredMark?: boolean,
   children?: React.ReactNode,
   showReason?: boolean,
@@ -252,8 +254,21 @@ export default function OnboardingPage() {
     setAssessment(updated)
     
     if (status === 'submitted') {
-      alert('Kuesioner berhasil dikirim dan dikunci.')
-      router.push(`/profile`)
+      // Menghitung tier
+      const numJamKerja = parseInt(jamKerja, 10) || 0;
+      const finalTier = determineTier(numJamKerja)
+      
+      // Update data company
+      await updateCompany(companyId, {
+        tier: finalTier,
+        tier_source: 'auto',
+        jumlah_tenaga_kerja: numJamKerja,
+        onboarding_completed: true,
+        onboarding_completed_at: new Date().toISOString(),
+        tier_set_at: new Date().toISOString()
+      })
+      
+      router.push(`/companies/${companyId}/onboarding/reveal`)
     } else {
       alert('Draft berhasil disimpan.')
     }
@@ -617,10 +632,10 @@ export default function OnboardingPage() {
               <RadioYesNo name="qual_paham" label="Perusahaan memahami keinginan pelanggan dan memiliki keinginan yang tinggi untuk mempertahankan pelanggan" value={dimensiQuality.paham_pelanggan} onChange={v => updatePQCDSM('quality', 'paham_pelanggan', v)} disabled={isLocked} requiredMark={false} required={false} />
               <RadioYesNo name="qual_survei" label="Survei teratur untuk memperoleh masukan dari pelanggan" value={dimensiQuality.survei_pelanggan} onChange={v => updatePQCDSM('quality', 'survei_pelanggan', v)} disabled={isLocked} requiredMark={false} required={false} />
               <RadioYesNo name="qual_kebijakan" label="Ada kebijakan tentang mutu (yang sudah dijelaskan secara terperinci, dan diterapkan dan dipahami oleh para karyawan)" value={dimensiQuality.kebijakan_mutu} onChange={v => updatePQCDSM('quality', 'kebijakan_mutu', v)} disabled={isLocked} requiredMark={true} required={true} />
-              <RadioYesNo name="qual_telusur" label="Perusahaan menelusuri Indikator Kinerja Utama (KPI) tentang mutu produksi" value={dimensiQuality.telusur_kpi} onChange={v => updatePQCDSM('quality', 'telusur_kpi', v)} disabled={isLocked} requiredMark={false} required={false} />
+              <RadioYesNo name="qual_telusur" label={<span>Perusahaan menelusuri <Tooltip text="Indikator Kinerja Utama: Metrik atau nilai terukur yang berfungsi untuk mengevaluasi keberhasilan dalam mencapai target">Indikator Kinerja Utama (KPI)</Tooltip> tentang mutu produksi</span>} value={dimensiQuality.telusur_kpi} onChange={v => updatePQCDSM('quality', 'telusur_kpi', v)} disabled={isLocked} requiredMark={false} required={false} />
               <RadioYesNo name="qual_sampaikan" label="Perusahaan menyampaikan data kinerja yang bermutu (dalam bentuk tabel, grafik dll.) kepada karyawan" value={dimensiQuality.sampaikan_data} onChange={v => updatePQCDSM('quality', 'sampaikan_data', v)} disabled={isLocked} requiredMark={true} required={true} />
               <RadioYesNo name="qual_faktor" label="Faktor penyebab terjadinya barang cacat dianalisa dan diatasi secara sistematis" value={dimensiQuality.faktor_cacat_diatasi} onChange={v => updatePQCDSM('quality', 'faktor_cacat_diatasi', v)} disabled={isLocked} requiredMark={false} required={false} />
-              <RadioYesNo name="qual_sop" label="Prosedur pengoperasian standar (SOP) digunakan secara teratur" value={dimensiQuality.sop_digunakan} onChange={v => updatePQCDSM('quality', 'sop_digunakan', v)} disabled={isLocked} requiredMark={false} required={false} />
+              <RadioYesNo name="qual_sop" label={<span><Tooltip text="Standar Operasional Prosedur: Dokumen yang berisi petunjuk tertulis mengenai langkah-langkah kerja">Prosedur pengoperasian standar (SOP)</Tooltip> digunakan secara teratur</span>} value={dimensiQuality.sop_digunakan} onChange={v => updatePQCDSM('quality', 'sop_digunakan', v)} disabled={isLocked} requiredMark={false} required={false} />
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
@@ -678,7 +693,7 @@ export default function OnboardingPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-sm text-slate-400 font-medium">Rata-rata waktu penyelesaian produk/cycle time (jam/menit/detik)</label>
+                  <label className="text-sm text-slate-400 font-medium">Rata-rata waktu penyelesaian produk/<Tooltip text="Cycle Time: Waktu yang dihabiskan untuk menyelesaikan satu siklus penuh dari sebuah proses produksi (dari awal hingga akhir)">cycle time</Tooltip> (jam/menit/detik)</label>
                   <input type="text" value={dimensiDelivery.cycle_time || ''} onChange={e => updatePQCDSM('delivery', 'cycle_time', e.target.value)} disabled={isLocked} className="w-full bg-slate-950/50 border border-slate-800 rounded p-2 text-sm text-slate-200" />
                 </div>
                 <div className="space-y-1">
@@ -720,7 +735,7 @@ export default function OnboardingPage() {
             <h4 className="font-bold text-indigo-400">5. Kenyamanan dan Keselamatan (Safety/K3)</h4>
             <div className="space-y-4">
               <RadioYesNo name="safe_penting" label="Kesehatan dan keselamatan karyawan adalah persoalan penting bagi perusahaan" value={dimensiSafety.k3_penting} onChange={v => updatePQCDSM('safety', 'k3_penting', v)} showReason={true} reasonValue={dimensiSafety.k3_penting_alasan} onReasonChange={v => updatePQCDSM('safety', 'k3_penting_alasan', v)} disabled={isLocked} requiredMark={false} required={false} />
-              <RadioYesNo name="safe_komite" label="Sudah dibentuk Komite K3/ P2K3 yang melibatkan karyawan dan manajer (secara aktif)" value={dimensiSafety.komite_k3} onChange={v => updatePQCDSM('safety', 'komite_k3', v)} showReason={true} reasonValue={dimensiSafety.komite_k3_alasan} onReasonChange={v => updatePQCDSM('safety', 'komite_k3_alasan', v)} disabled={isLocked} requiredMark={true} required={true} />
+              <RadioYesNo name="safe_komite" label={<span>Sudah dibentuk <Tooltip text="Panitia Pembina Keselamatan dan Kesehatan Kerja: Badan pembantu di tempat kerja yang bertugas memberikan saran dan pertimbangan terkait K3">Komite K3/ P2K3</Tooltip> yang melibatkan karyawan dan manajer (secara aktif)</span>} value={dimensiSafety.komite_k3} onChange={v => updatePQCDSM('safety', 'komite_k3', v)} showReason={true} reasonValue={dimensiSafety.komite_k3_alasan} onReasonChange={v => updatePQCDSM('safety', 'komite_k3_alasan', v)} disabled={isLocked} requiredMark={true} required={true} />
               <RadioYesNo name="safe_kebijakan" label="Sudah ada kebijakan tentang K3 (yang sudah dijelaskan secara terperinci, diterapkan, dan dipahami oleh karyawan)" value={dimensiSafety.kebijakan_k3} onChange={v => updatePQCDSM('safety', 'kebijakan_k3', v)} showReason={true} reasonValue={dimensiSafety.kebijakan_k3_alasan} onReasonChange={v => updatePQCDSM('safety', 'kebijakan_k3_alasan', v)} disabled={isLocked} requiredMark={true} required={true} />
               <RadioYesNo name="safe_gender" label="Ketentuan tentang K3 berisi resiko-resiko spesifik gender yang sudah diidentifikasi (misalnya ketentuan khusus untuk perempuan hamil)" value={dimensiSafety.resiko_gender} onChange={v => updatePQCDSM('safety', 'resiko_gender', v)} showReason={true} reasonValue={dimensiSafety.resiko_gender_alasan} onReasonChange={v => updatePQCDSM('safety', 'resiko_gender_alasan', v)} disabled={isLocked} requiredMark={false} required={false} />
               
@@ -738,7 +753,7 @@ export default function OnboardingPage() {
 
               <RadioYesNo name="safe_risiko" label="Penilaian resiko digunakan secara teratur (penilaian dilaksanakan minimal dua kali setahun)" value={dimensiSafety.penilaian_resiko} onChange={v => updatePQCDSM('safety', 'penilaian_resiko', v)} showReason={true} reasonValue={dimensiSafety.penilaian_resiko_alasan} onReasonChange={v => updatePQCDSM('safety', 'penilaian_resiko_alasan', v)} disabled={isLocked} requiredMark={true} required={true} />
               <RadioYesNo name="safe_pintu" label="Disediakan pintu keluar darurat dan diberi tanda secara jelas" value={dimensiSafety.pintu_darurat} onChange={v => updatePQCDSM('safety', 'pintu_darurat', v)} showReason={true} reasonValue={dimensiSafety.pintu_darurat_alasan} onReasonChange={v => updatePQCDSM('safety', 'pintu_darurat_alasan', v)} disabled={isLocked} requiredMark={true} required={true} />
-              <RadioYesNo name="safe_apd" label="Alat Pelindung Diri (APD) disediakan untuk digunakan oleh karyawan" value={dimensiSafety.apd_disediakan} onChange={v => updatePQCDSM('safety', 'apd_disediakan', v)} showReason={true} reasonValue={dimensiSafety.apd_disediakan_alasan} onReasonChange={v => updatePQCDSM('safety', 'apd_disediakan_alasan', v)} disabled={isLocked} requiredMark={true} required={true} />
+              <RadioYesNo name="safe_apd" label={<span><Tooltip text="Alat Pelindung Diri: Kelengkapan keselamatan yang wajib digunakan saat bekerja (seperti helm, sarung tangan, sepatu boots, kacamata)">Alat Pelindung Diri (APD)</Tooltip> disediakan untuk digunakan oleh karyawan</span>} value={dimensiSafety.apd_disediakan} onChange={v => updatePQCDSM('safety', 'apd_disediakan', v)} showReason={true} reasonValue={dimensiSafety.apd_disediakan_alasan} onReasonChange={v => updatePQCDSM('safety', 'apd_disediakan_alasan', v)} disabled={isLocked} requiredMark={true} required={true} />
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">

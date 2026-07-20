@@ -27,7 +27,7 @@ function GenericAnalyzeComponent({
   const { structure_type, data } = recommendation
 
   if (!structure_type || !data) {
-    return <div className="text-xs text-slate-500 italic mt-2">Data analisis belum di-generate. Silakan klik "Generate Ulang AI" di atas.</div>
+    return <div className="text-xs text-slate-500 italic mt-2">Data analisis belum di-generate. Silakan klik "Generate Ulang Rekomendasi" di atas.</div>
   }
 
   const uid = () => Math.random().toString(36).substr(2, 9)
@@ -357,7 +357,7 @@ export default function AnalyzePage() {
 
       setAnalyzeResult(newResult)
     } catch (err: any) {
-      setAiError(err.message || 'Gagal melakukan analisis AI.')
+      setAiError(err.message || 'Gagal melakukan analisis otomatis.')
     } finally {
       setAiLoading(false)
     }
@@ -513,7 +513,7 @@ export default function AnalyzePage() {
       <div className="flex items-center justify-between px-5 py-3.5 rounded-2xl bg-indigo-500/5 border border-indigo-500/15 phase-banner">
         <div>
           <p className="text-xs font-semibold text-indigo-300">Fase Saat Ini: <span className="uppercase font-black">ANALYZE</span></p>
-          <p className="text-[10px] text-slate-500 mt-0.5">Selesaikan analisis AI dan identifikasi kebutuhan sebelum lanjut ke IMPROVE.</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">Selesaikan analisis otomatis dan identifikasi kebutuhan sebelum lanjut ke IMPROVE.</p>
         </div>
         <button
           onClick={async () => {
@@ -534,9 +534,9 @@ export default function AnalyzePage() {
           <div className="space-y-6">
             <div className="border-b border-slate-850 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
-                <h2 className="text-lg font-bold text-slate-200">Rekomendasi & Analisis Akar Masalah (AI)</h2>
+                <h2 className="text-lg font-bold text-slate-200">Rekomendasi & Analisis Akar Masalah</h2>
                 <p className="text-xs text-slate-500">
-                  AI merekomendasikan metode sekaligus melakukan generate struktur datanya secara otomatis.
+                  Sistem merekomendasikan metode sekaligus melakukan generate struktur datanya secara otomatis.
                 </p>
               </div>
 
@@ -586,7 +586,7 @@ export default function AnalyzePage() {
             {aiLoading && (
               <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
                 <Loader2 className="w-10 h-10 text-indigo-400 animate-spin" />
-                <h3 className="text-sm font-bold text-slate-300">Menjalankan Analisis AI...</h3>
+                <h3 className="text-sm font-bold text-slate-300">Menjalankan Analisis...</h3>
                 <p className="text-xs text-slate-500 max-w-sm leading-relaxed">
                   Menganalisis data, merekomendasikan metode, dan menyusun data RCA Anda...
                 </p>
@@ -598,7 +598,7 @@ export default function AnalyzePage() {
               <div className="flex flex-col items-center justify-center py-16 text-center space-y-5 bg-slate-950/40 border border-slate-850 rounded-3xl p-6">
                 <Sparkles className="w-12 h-12 text-indigo-400 opacity-60" />
                 <div className="space-y-1">
-                  <h3 className="text-base font-bold text-slate-200">Mulai Analisis Akar Masalah berbasis AI</h3>
+                  <h3 className="text-base font-bold text-slate-200">Mulai Analisis Akar Masalah Otomatis</h3>
                   <p className="text-xs text-slate-500 max-w-lg leading-relaxed">
                     Sistem akan membuat rekomendasi Root Cause Analysis beserta simulasinya (Fishbone/Pareto/5Whys) dalam satu langkah.
                   </p>
@@ -615,7 +615,7 @@ export default function AnalyzePage() {
                     }`}
                   >
                     <Sparkles className="w-4 h-4" />
-                    Jalankan AI Analisis
+                    Jalankan Analisis Otomatis
                   </button>
 
                   {!isMeasureSaved && (
@@ -650,7 +650,7 @@ export default function AnalyzePage() {
                       className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-xs font-semibold rounded-lg text-indigo-400 border border-indigo-500/20 transition-all cursor-pointer"
                     >
                       <RefreshCw className="h-3.5 w-3.5" />
-                      Generate Ulang AI
+                      Generate Ulang Rekomendasi
                     </button>
                   </div>
                 </div>
@@ -703,7 +703,7 @@ export default function AnalyzePage() {
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${
                             rec.source === 'ai' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'bg-slate-800 text-slate-400 border border-slate-700'
                           }`}>
-                            {rec.source === 'ai' ? <><Sparkles className="w-3 h-3 inline mr-1" /> AI Generated</> : 'Manual'}
+                            {rec.source === 'ai' ? <><Sparkles className="w-3 h-3 inline mr-1" /> Auto Generated</> : 'Manual'}
                           </span>
                           <span className="text-[10px] text-slate-500 font-mono">Prioritas {rec.priority}</span>
                         </div>
@@ -758,7 +758,7 @@ export default function AnalyzePage() {
 
                 {(analyzeResult.recommendations || []).length === 0 && (
                   <div className="text-center py-10 text-xs text-slate-500 border border-dashed border-slate-800 rounded-2xl">
-                    Belum ada data analisis. Klik "Tambah Manual" atau "Generate Ulang AI".
+                    Belum ada data analisis. Klik "Tambah Manual" atau "Generate Ulang Rekomendasi".
                   </div>
                 )}
 

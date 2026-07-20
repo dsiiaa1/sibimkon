@@ -2,6 +2,7 @@
 
 import { createClient } from './supabase/client'
 import { getMockDB, updateMockDB, Project, Company, ProjectCharter, Assessment, ActionPlan, MeasureProblem, AnalyzeNeed, EvidenceItem, ConsultantControlNote, MeasureDataRequirement, AnalyzeResult, CompanyBaselineAssessment, AiIdentifiedProblem } from './mockData'
+import { determineTier } from './utils'
 
 function handleDbError(error: any): never {
   console.error('[DB Error]', error)
@@ -1611,54 +1612,68 @@ export async function saveEfficiencyActuals(actuals: any[]): Promise<void> {
   }
 }
 
-// ── CONTROL: Change Requests (Approval Workflow) ──────────────────────────────
+// ── CONTROL & IMPROVE: Generic Approval Workflow ──────────────────────────────
 
-export async function getChangeRequests(projectId: string): Promise<any[]> {
+export interface GenericApprovalRequest {
+  id: string
+  project_id: string
+  entity_type: 'efficiency_target' | 'action_plan_step' | string
+  entity_id: string
+  requested_by: string
+  requested_at: string
+  changes: Record<string, any>
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled'
+  reviewed_by?: string
+  reviewed_at?: string
+  reject_reason?: string
+}
+
+export async function getApprovalRequests(projectId: string): Promise<GenericApprovalRequest[]> {
   try {
     const sb = getSupabase()
     if (!sb) throw new Error('No Supabase client')
 
-    const { data, error } = await sb.from('control_change_requests')
+    const { data, error } = await sb.from('approval_requests')
       .select('*')
       .eq('project_id', projectId)
       .order('requested_at', { ascending: false })
 
-    if (error) handleDbError(error)
+    if (error) throw error
     return data || []
   } catch (err) {
-    console.warn('[getChangeRequests] fallback to mockDB or empty:', err)
+    console.warn('[getApprovalRequests] fallback to mockDB or empty:', err)
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(`smartproductive_controlChangeRequests`)
+      const saved = localStorage.getItem(`smartproductive_approvalRequests`)
       if (saved) {
         const parsed = JSON.parse(saved)
         const projReqs = Object.values(parsed).flat().filter((r: any) => r.project_id === projectId)
-        return projReqs
+        return projReqs as GenericApprovalRequest[]
       }
     }
     return []
   }
 }
 
-export async function submitChangeRequest(request: any): Promise<void> {
+export async function submitApprovalRequest(request: GenericApprovalRequest): Promise<void> {
   try {
     const sb = getSupabase()
     if (!sb) throw new Error('No Supabase client')
 
-    const { error } = await sb.from('control_change_requests').insert([request])
-    if (error) handleDbError(error)
+    const { error } = await sb.from('approval_requests').insert([request])
+    if (error) throw error
   } catch (err) {
-    console.warn('[submitChangeRequest] fallback to localStorage:', err)
+    console.warn('[submitApprovalRequest] fallback to localStorage:', err)
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(`smartproductive_controlChangeRequests`)
+      const saved = localStorage.getItem(`smartproductive_approvalRequests`)
       const parsed = saved ? JSON.parse(saved) : {}
       if (!parsed[request.project_id]) parsed[request.project_id] = []
       parsed[request.project_id].push(request)
-      localStorage.setItem(`smartproductive_controlChangeRequests`, JSON.stringify(parsed))
+      localStorage.setItem(`smartproductive_approvalRequests`, JSON.stringify(parsed))
     }
   }
 }
 
-export async function reviewChangeRequest(id: string, status: 'approved' | 'rejected', reviewerId: string, rejectReason?: string): Promise<void> {
+export async function reviewApprovalRequest(id: string, status: 'approved' | 'rejected', reviewerId: string, rejectReason?: string): Promise<void> {
   try {
     const sb = getSupabase()
     if (!sb) throw new Error('No Supabase client')
@@ -1670,12 +1685,12 @@ export async function reviewChangeRequest(id: string, status: 'approved' | 'reje
       reject_reason: rejectReason || null
     }
 
-    const { error } = await sb.from('control_change_requests').update(updates).eq('id', id)
+    const { error } = await sb.from('approval_requests').update(updates).eq('id', id)
     if (error) handleDbError(error)
   } catch (err) {
-    console.warn('[reviewChangeRequest] fallback to localStorage:', err)
+    console.warn('[reviewApprovalRequest] fallback to localStorage:', err)
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(`smartproductive_controlChangeRequests`)
+      const saved = localStorage.getItem(`smartproductive_approvalRequests`)
       if (saved) {
         const parsed = JSON.parse(saved)
         for (const projId in parsed) {
@@ -1687,23 +1702,23 @@ export async function reviewChangeRequest(id: string, status: 'approved' | 'reje
             parsed[projId][idx].reject_reason = rejectReason || null
           }
         }
-        localStorage.setItem(`smartproductive_controlChangeRequests`, JSON.stringify(parsed))
+        localStorage.setItem(`smartproductive_approvalRequests`, JSON.stringify(parsed))
       }
     }
   }
 }
 
-export async function cancelChangeRequest(id: string): Promise<void> {
+export async function cancelApprovalRequest(id: string): Promise<void> {
   try {
     const sb = getSupabase()
     if (!sb) throw new Error('No Supabase client')
 
-    const { error } = await sb.from('control_change_requests').update({ status: 'cancelled' }).eq('id', id)
+    const { error } = await sb.from('approval_requests').update({ status: 'cancelled' }).eq('id', id)
     if (error) handleDbError(error)
   } catch (err) {
-    console.warn('[cancelChangeRequest] fallback to localStorage:', err)
+    console.warn('[cancelApprovalRequest] fallback to localStorage:', err)
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(`smartproductive_controlChangeRequests`)
+      const saved = localStorage.getItem(`smartproductive_approvalRequests`)
       if (saved) {
         const parsed = JSON.parse(saved)
         for (const projId in parsed) {
@@ -1712,7 +1727,7 @@ export async function cancelChangeRequest(id: string): Promise<void> {
             parsed[projId][idx].status = 'cancelled'
           }
         }
-        localStorage.setItem(`smartproductive_controlChangeRequests`, JSON.stringify(parsed))
+        localStorage.setItem(`smartproductive_approvalRequests`, JSON.stringify(parsed))
       }
     }
   }
@@ -1879,31 +1894,38 @@ export async function syncAllTiers(): Promise<{ updatedCount: number }> {
       // Jalankan logika sinkronisasi di sisi klien untuk MockDB (localStorage)
       const db = getMockDB()
       let updatedCount = 0
-      const assessments = Object.values(db.companyBaselineAssessments).filter((a: any) => a.status === 'submitted')
       
-      for (const assessment of assessments as any[]) {
-        if (!assessment.struktur_staf) continue
+      for (let i = 0; i < db.companies.length; i++) {
+        const comp = db.companies[i]
         
-        const staf = assessment.struktur_staf
-        let totalKaryawan = 0
-        if (staf.karyawan_tetap?.jumlah) totalKaryawan += Number(staf.karyawan_tetap.jumlah)
-        if (staf.manajer?.jumlah) totalKaryawan += Number(staf.manajer.jumlah)
-        if (staf.supervisor?.jumlah) totalKaryawan += Number(staf.supervisor.jumlah)
-        if (staf.karyawan_tetap_lain?.jumlah) totalKaryawan += Number(staf.karyawan_tetap_lain.jumlah)
-        if (staf.karyawan_kontrak?.jumlah) totalKaryawan += Number(staf.karyawan_kontrak.jumlah)
+        // Cari apakah ada assessment
+        const assessment = Object.values(db.companyBaselineAssessments).find(
+          (a: any) => a.company_id === comp.id && a.status === 'submitted'
+        ) as any
         
-        let calculatedTier = 'menengah'
-        if (totalKaryawan < 30) calculatedTier = 'simple'
-        else if (totalKaryawan > 150) calculatedTier = 'besar'
-
-        const compIdx = db.companies.findIndex((c: any) => c.id === assessment.company_id)
-        if (compIdx >= 0) {
-          db.companies[compIdx].jumlah_tenaga_kerja = totalKaryawan
-          db.companies[compIdx].tier = calculatedTier
-          db.companies[compIdx].tier_source = 'auto_calculated'
-          updatedCount++
+        let totalKaryawan = comp.jumlah_tenaga_kerja || comp.total_employees || 0
+        
+        if (assessment && assessment.struktur_staf) {
+          const staf = assessment.struktur_staf
+          let totalDariStaf = 0
+          if (staf.karyawan_tetap?.jumlah) totalDariStaf += Number(staf.karyawan_tetap.jumlah)
+          if (staf.manajer?.jumlah) totalDariStaf += Number(staf.manajer.jumlah)
+          if (staf.supervisor?.jumlah) totalDariStaf += Number(staf.supervisor.jumlah)
+          if (staf.karyawan_tetap_lain?.jumlah) totalDariStaf += Number(staf.karyawan_tetap_lain.jumlah)
+          if (staf.karyawan_kontrak?.jumlah) totalDariStaf += Number(staf.karyawan_kontrak.jumlah)
+          if (totalDariStaf > 0) {
+            totalKaryawan = totalDariStaf
+          }
         }
+        
+        const calculatedTier = determineTier(totalKaryawan)
+
+        db.companies[i].total_employees = totalKaryawan
+        db.companies[i].tier = calculatedTier
+        db.companies[i].tier_source = 'auto_calculated'
+        updatedCount++
       }
+      
       updateMockDB('companies', db.companies)
       return { updatedCount }
     }
