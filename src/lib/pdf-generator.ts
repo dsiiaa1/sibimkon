@@ -79,7 +79,7 @@ async function embedNotoSans(_doc: jsPDF): Promise<boolean> {
 // ============================================================
 function getDimLabel(dim: string): string {
   const map: Record<string, string> = {
-    productivity: 'Productivity (P)',
+    productivity: 'Production (P)',
     quality: 'Quality (Q)',
     cost: 'Cost (C)',
     delivery: 'Delivery (D)',

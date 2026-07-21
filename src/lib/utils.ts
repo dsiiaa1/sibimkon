@@ -81,7 +81,7 @@ export function sanitizeInt(value: string | number, min = 0, max = 999_999_999):
 }
 
 export const PQCDSM_LABELS: Record<string, { label: string; color: string; icon: string }> = {
-  productivity: { label: 'Productivity', color: '#6366f1', icon: '⚡' },
+  productivity: { label: 'Production', color: '#6366f1', icon: '⚡' },
   quality: { label: 'Quality', color: '#8b5cf6', icon: '✨' },
   cost: { label: 'Cost', color: '#ec4899', icon: '💰' },
   delivery: { label: 'Delivery', color: '#f59e0b', icon: '🚚' },

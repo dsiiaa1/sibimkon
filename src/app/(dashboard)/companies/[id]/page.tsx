@@ -80,6 +80,7 @@ export default function CompanyDetailPage() {
   const [aiProblems, setAiProblems] = useState<AiIdentifiedProblem[]>([])
   const [aiAnalyzing, setAiAnalyzing] = useState(false)
   const [activeDimFilter, setActiveDimFilter] = useState<string | null>(null)
+  const [activeProjDimFilter, setActiveProjDimFilter] = useState<string | null>(null)
 
   useEffect(() => {
     async function loadData() {
@@ -297,7 +298,7 @@ export default function CompanyDetailPage() {
 
         {isKonsultan && aiProblems.length > 0 && (() => {
           const PQCDSM_OPTIONS = [
-            { key: 'productivity', label: 'Productivity', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+            { key: 'productivity', label: 'Production', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
             { key: 'quality', label: 'Quality', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
             { key: 'cost', label: 'Cost', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
             { key: 'delivery', label: 'Delivery', color: 'bg-sky-500/20 text-sky-400 border-sky-500/30' },
@@ -413,57 +414,157 @@ export default function CompanyDetailPage() {
 
         {projects.length === 0 ? (
           <div className="text-center py-10 text-slate-500 text-sm border border-dashed border-slate-800 rounded-2xl">
-            Belum ada proyek terdaftar untuk perusahaan ini. Klik "Mulai Proyek Baru" di atas.
+            Belum ada proyek terdaftar untuk perusahaan ini. Klik &quot;Mulai Proyek Baru&quot; di atas.
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {projects.map(proj => {
-              const statusInfo = PROJECT_STATUS_LABELS[proj.status] || { label: proj.status, color: 'bg-slate-550' }
-              return (
-                <div key={proj.id} className="glass-card rounded-2xl border border-slate-800/60 bg-slate-950/35 p-5 flex flex-col justify-between hover:border-slate-700 transition-all group hover:-translate-y-0.5">
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-indigo-400">{proj.project_code}</span>
-                        {isKonsultan && (
-                          <button onClick={() => setEditingProject(proj)} className="p-1 rounded bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-indigo-400 transition-colors" title="Edit Proyek">
-                            <Pencil className="w-3 h-3" />
-                          </button>
-                        )}
-                      </div>
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-white ${statusInfo.color}`}>
-                        {statusInfo.label}
-                      </span>
+        ) : (() => {
+          const PROJ_DIM_OPTIONS = [
+            { key: 'productivity', label: 'Production', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', dot: 'bg-blue-400' },
+            { key: 'quality', label: 'Quality', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', dot: 'bg-emerald-400' },
+            { key: 'cost', label: 'Cost', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30', dot: 'bg-amber-400' },
+            { key: 'delivery', label: 'Delivery', color: 'bg-sky-500/20 text-sky-400 border-sky-500/30', dot: 'bg-sky-400' },
+            { key: 'safety', label: 'Safety', color: 'bg-red-500/20 text-red-400 border-red-500/30', dot: 'bg-red-400' },
+            { key: 'morale', label: 'Morale', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30', dot: 'bg-purple-400' },
+          ]
+
+          const activeProjDimensions = new Set(projects.map(p => p.dimensi_pqcdsm?.toLowerCase()).filter(Boolean))
+          const filteredProjects = activeProjDimFilter
+            ? projects.filter(p => p.dimensi_pqcdsm?.toLowerCase() === activeProjDimFilter)
+            : projects
+
+          // Kelompokkan proyek yang difilter berdasarkan dimensi
+          const grouped: Record<string, typeof projects> = {}
+          filteredProjects.forEach(p => {
+            const dim = p.dimensi_pqcdsm?.toLowerCase() || 'lainnya'
+            if (!grouped[dim]) grouped[dim] = []
+            grouped[dim].push(p)
+          })
+          const groupKeys = Object.keys(grouped)
+
+          const ProjectCard = ({ proj }: { proj: typeof projects[0] }) => {
+            const statusInfo = PROJECT_STATUS_LABELS[proj.status] || { label: proj.status, color: 'bg-slate-550' }
+            return (
+              <div className="glass-card rounded-2xl border border-slate-800/60 bg-slate-950/35 p-5 flex flex-col justify-between hover:border-slate-700 transition-all group hover:-translate-y-0.5">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-indigo-400">{proj.project_code}</span>
+                      {isKonsultan && (
+                        <button onClick={() => setEditingProject(proj)} className="p-1 rounded bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-indigo-400 transition-colors" title="Edit Proyek">
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                      )}
                     </div>
-                    <div className="space-y-1">
-                      <h3 className="text-base font-bold text-slate-200 group-hover:text-indigo-400 transition-colors">{proj.title}</h3>
-                      <p className="text-xs text-slate-450 line-clamp-2 leading-relaxed">{proj.description}</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-850 text-xs text-slate-400">
-                      <div>
-                        <span>Mulai</span>
-                        <p className="font-semibold text-slate-300 mt-0.5">{proj.start_date}</p>
-                      </div>
-                      <div>
-                        <span>Selesai</span>
-                        <p className="font-semibold text-slate-300 mt-0.5">{proj.target_end_date}</p>
-                      </div>
-                    </div>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-white ${statusInfo.color}`}>
+                      {statusInfo.label}
+                    </span>
                   </div>
-                  <div className="mt-5 pt-3.5 border-t border-slate-850 flex items-center justify-between">
-                    <div className="text-xs font-semibold text-slate-400">
-                      Index: <span className="text-emerald-400 font-bold">{proj.current_score || 0}%</span>
+                  <div className="space-y-1">
+                    <h3 className="text-base font-bold text-slate-200 group-hover:text-indigo-400 transition-colors">{proj.title}</h3>
+                    <p className="text-xs text-slate-450 line-clamp-2 leading-relaxed">{proj.description}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-850 text-xs text-slate-400">
+                    <div>
+                      <span>Mulai</span>
+                      <p className="font-semibold text-slate-300 mt-0.5">{proj.start_date}</p>
                     </div>
-                    <Link href={`/projects/${proj.id}/define`} className="inline-flex items-center gap-1 text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors">
-                      Kelola DMAIC <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
-                    </Link>
+                    <div>
+                      <span>Selesai</span>
+                      <p className="font-semibold text-slate-300 mt-0.5">{proj.target_end_date}</p>
+                    </div>
                   </div>
                 </div>
-              )
-            })}
-          </div>
-        )}
+                <div className="mt-5 pt-3.5 border-t border-slate-850 flex items-center justify-between">
+                  <div className="text-xs font-semibold text-slate-400">
+                    Index: <span className="text-emerald-400 font-bold">{proj.current_score || 0}%</span>
+                  </div>
+                  <Link href={`/projects/${proj.id}/define`} className="inline-flex items-center gap-1 text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors">
+                    Kelola DMAIC <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
+                  </Link>
+                </div>
+              </div>
+            )
+          }
+
+          return (
+            <div className="space-y-5">
+              {/* Filter Pills */}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setActiveProjDimFilter(null)}
+                  className={`px-3 py-1 rounded-full text-[10px] font-bold border transition-all ${
+                    activeProjDimFilter === null
+                      ? 'bg-slate-200 text-slate-900 border-slate-200'
+                      : 'bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500'
+                  }`}
+                >
+                  Semua ({projects.length})
+                </button>
+                {PROJ_DIM_OPTIONS.filter(opt => activeProjDimensions.has(opt.key)).map(opt => {
+                  const count = projects.filter(p => p.dimensi_pqcdsm?.toLowerCase() === opt.key).length
+                  const isActive = activeProjDimFilter === opt.key
+                  return (
+                    <button
+                      key={opt.key}
+                      onClick={() => setActiveProjDimFilter(isActive ? null : opt.key)}
+                      className={`px-3 py-1 rounded-full text-[10px] font-bold border transition-all ${
+                        isActive
+                          ? opt.color + ' border-current scale-105 shadow-sm'
+                          : 'bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500'
+                      }`}
+                    >
+                      {opt.label} ({count})
+                    </button>
+                  )
+                })}
+                {/* Proyek tanpa dimensi */}
+                {projects.some(p => !p.dimensi_pqcdsm) && (
+                  <button
+                    onClick={() => setActiveProjDimFilter(activeProjDimFilter === 'lainnya' ? null : 'lainnya')}
+                    className={`px-3 py-1 rounded-full text-[10px] font-bold border transition-all ${
+                      activeProjDimFilter === 'lainnya'
+                        ? 'bg-slate-500/20 text-slate-300 border-slate-400 scale-105'
+                        : 'bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500'
+                    }`}
+                  >
+                    Lainnya ({projects.filter(p => !p.dimensi_pqcdsm).length})
+                  </button>
+                )}
+              </div>
+
+              {/* Grouped by dimension */}
+              {activeProjDimFilter ? (
+                // Mode filter aktif — flat grid
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {filteredProjects.map(proj => <ProjectCard key={proj.id} proj={proj} />)}
+                </div>
+              ) : (
+                // Mode "Semua" — tampilkan per grup dimensi
+                <div className="space-y-6">
+                  {groupKeys.map(dim => {
+                    const dimConfig = PROJ_DIM_OPTIONS.find(o => o.key === dim)
+                    return (
+                      <div key={dim}>
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className={`w-2 h-2 rounded-full ${dimConfig?.dot || 'bg-slate-500'}`} />
+                          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                            {dimConfig?.label || 'Lainnya'}
+                          </span>
+                          <span className="text-[10px] text-slate-600">({grouped[dim].length} proyek)</span>
+                          <div className="flex-1 h-px bg-slate-800/60" />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {grouped[dim].map(proj => <ProjectCard key={proj.id} proj={proj} />)}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })()}
       </div>
+
 
       {showNewProjectModal && company && (
         <CreateProjectModal
