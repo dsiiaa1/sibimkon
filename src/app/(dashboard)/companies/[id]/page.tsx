@@ -14,15 +14,25 @@ function EditProjectModal({ project, onClose, onSave }: { project: Project, onCl
   const [desc, setDesc] = useState(project.description)
   const [startDate, setStartDate] = useState(project.start_date)
   const [endDate, setEndDate] = useState(project.target_end_date)
+  const [dimensi, setDimensi] = useState(project.dimensi_pqcdsm || '')
   const [saving, setSaving] = useState(false)
   
+  const PQCDSM_OPTS = [
+    { key: 'productivity', label: 'Production' },
+    { key: 'quality', label: 'Quality' },
+    { key: 'cost', label: 'Cost' },
+    { key: 'delivery', label: 'Delivery' },
+    { key: 'safety', label: 'Safety' },
+    { key: 'morale', label: 'Morale' },
+  ]
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     if (startDate !== project.start_date || endDate !== project.target_end_date) {
       if (!confirm('Anda mengubah jadwal proyek. Apakah Anda yakin?')) return
     }
     setSaving(true)
-    await onSave({ title, description: desc, start_date: startDate, target_end_date: endDate })
+    await onSave({ title, description: desc, start_date: startDate, target_end_date: endDate, dimensi_pqcdsm: dimensi || undefined })
     setSaving(false)
     onClose()
   }
@@ -35,6 +45,13 @@ function EditProjectModal({ project, onClose, onSave }: { project: Project, onCl
           <button onClick={onClose} className="text-slate-400 hover:text-slate-200 transition-colors"><X className="w-5 h-5" /></button>
         </div>
         <form onSubmit={handleSave} className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Dimensi PQCDSM</label>
+            <select value={dimensi} onChange={(e) => setDimensi(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 text-sm focus:border-indigo-500">
+              <option value="">-- Pilih Dimensi --</option>
+              {PQCDSM_OPTS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+            </select>
+          </div>
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Judul Proyek</label>
             <input type="text" required value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-200 text-sm focus:border-indigo-500" />
@@ -168,7 +185,9 @@ export default function CompanyDetailPage() {
       start_date: new Date().toISOString().split('T')[0],
       target_end_date: new Date(Date.now() + 90*24*60*60*1000).toISOString().split('T')[0],
       baseline_score: 0,
-      current_score: 0
+      current_score: 0,
+      dimensi_pqcdsm: prob.pqcdsm_dimensions?.[0] || undefined,
+      urgency_indicator: prob.urgency_indicator || undefined,
     })
     
     // Create Draft Charter
@@ -426,19 +445,28 @@ export default function CompanyDetailPage() {
             { key: 'morale', label: 'Morale', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30', dot: 'bg-purple-400' },
           ]
 
-          const activeProjDimensions = new Set(projects.map(p => p.dimensi_pqcdsm?.toLowerCase()).filter(Boolean))
+          // Fungsi resolve dimensi: prioritaskan dari AI Recommendation → fallback ke field project → 'lainnya'
+          const getProjectDim = (proj: typeof projects[0]): string => {
+            const fromAI = aiProblems.find(ap => ap.project_id === proj.id)
+            if (fromAI?.pqcdsm_dimensions?.[0]) return fromAI.pqcdsm_dimensions[0].toLowerCase()
+            if (proj.dimensi_pqcdsm) return proj.dimensi_pqcdsm.toLowerCase()
+            return 'lainnya'
+          }
+
+          const activeProjDimensions = new Set(projects.map(p => getProjectDim(p)).filter(d => d !== 'lainnya'))
           const filteredProjects = activeProjDimFilter
-            ? projects.filter(p => p.dimensi_pqcdsm?.toLowerCase() === activeProjDimFilter)
+            ? projects.filter(p => getProjectDim(p) === activeProjDimFilter)
             : projects
 
           // Kelompokkan proyek yang difilter berdasarkan dimensi
           const grouped: Record<string, typeof projects> = {}
           filteredProjects.forEach(p => {
-            const dim = p.dimensi_pqcdsm?.toLowerCase() || 'lainnya'
+            const dim = getProjectDim(p)
             if (!grouped[dim]) grouped[dim] = []
             grouped[dim].push(p)
           })
           const groupKeys = Object.keys(grouped)
+
 
           const ProjectCard = ({ proj }: { proj: typeof projects[0] }) => {
             const statusInfo = PROJECT_STATUS_LABELS[proj.status] || { label: proj.status, color: 'bg-slate-550' }
@@ -500,7 +528,7 @@ export default function CompanyDetailPage() {
                   Semua ({projects.length})
                 </button>
                 {PROJ_DIM_OPTIONS.filter(opt => activeProjDimensions.has(opt.key)).map(opt => {
-                  const count = projects.filter(p => p.dimensi_pqcdsm?.toLowerCase() === opt.key).length
+                  const count = projects.filter(p => getProjectDim(p) === opt.key).length
                   const isActive = activeProjDimFilter === opt.key
                   return (
                     <button
@@ -516,8 +544,8 @@ export default function CompanyDetailPage() {
                     </button>
                   )
                 })}
-                {/* Proyek tanpa dimensi */}
-                {projects.some(p => !p.dimensi_pqcdsm) && (
+                {/* Proyek tanpa dimensi (tidak bisa diidentifikasi dari AI maupun field) */}
+                {projects.some(p => getProjectDim(p) === 'lainnya') && (
                   <button
                     onClick={() => setActiveProjDimFilter(activeProjDimFilter === 'lainnya' ? null : 'lainnya')}
                     className={`px-3 py-1 rounded-full text-[10px] font-bold border transition-all ${
@@ -526,7 +554,7 @@ export default function CompanyDetailPage() {
                         : 'bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500'
                     }`}
                   >
-                    Lainnya ({projects.filter(p => !p.dimensi_pqcdsm).length})
+                    Lainnya ({projects.filter(p => getProjectDim(p) === 'lainnya').length})
                   </button>
                 )}
               </div>

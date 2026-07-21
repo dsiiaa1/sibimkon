@@ -94,6 +94,8 @@ export async function updateProjectDetails(projectId: string, updates: Partial<P
       description: updates.description,
       start_date: updates.start_date,
       target_end_date: updates.target_end_date,
+      ...(updates.dimensi_pqcdsm !== undefined && { dimensi_pqcdsm: updates.dimensi_pqcdsm }),
+      ...(updates.urgency_indicator !== undefined && { urgency_indicator: updates.urgency_indicator }),
       updated_at: new Date().toISOString()
     }).eq('id', projectId)
     if (error) handleDbError(error)
