@@ -5,8 +5,10 @@ import Link from 'next/link'
 import { getCompanies, getProjects, createCompany, syncAllTiers } from '@/lib/db'
 import { Company, Project } from '@/lib/mockData'
 import { Building, Search, Plus, User, Phone, Mail, ArrowRight } from 'lucide-react'
+import { useDialog } from '@/hooks/useDialog'
 
 export default function CompaniesPage() {
+  const { showAlert } = useDialog()
   const [companies, setCompanies] = useState<Company[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [searchQuery, setSearchQuery] = useState('')
@@ -83,12 +85,12 @@ export default function CompaniesPage() {
     setIsSyncing(true)
     try {
       const data = await syncAllTiers()
-      alert(`Berhasil menyinkronkan tier untuk ${data.updatedCount} perusahaan.`)
+      await showAlert(`Berhasil menyinkronkan tier untuk ${data.updatedCount} perusahaan.`)
       // Refresh data
       const comps = await getCompanies()
       setCompanies(comps)
     } catch (err: any) {
-      alert(err.message || 'Gagal menyinkronkan tier')
+      await showAlert(err.message || 'Gagal menyinkronkan tier')
     } finally {
       setIsSyncing(false)
     }

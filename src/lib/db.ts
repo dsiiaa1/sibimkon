@@ -1,14 +1,13 @@
 'use client'
 
 import { createClient } from './supabase/client'
-import { getMockDB, updateMockDB, Project, Company, ProjectCharter, Assessment, ActionPlan, MeasureProblem, AnalyzeNeed, EvidenceItem, ConsultantControlNote, MeasureDataRequirement, AnalyzeResult, CompanyBaselineAssessment, AiIdentifiedProblem } from './mockData'
+import { getMockDB, updateMockDB, Project, Company, ProjectCharter, Assessment, ActionPlan, MeasureProblem, AnalyzeNeed, EvidenceItem, ConsultantControlNote, MeasureDataRequirement, AnalyzeResult, CompanyBaselineAssessment, AiIdentifiedProblem, ProjectEditLog } from './mockData'
 import { determineTier } from './utils'
 
 function handleDbError(error: any): never {
   console.error('[DB Error]', error)
-  if (typeof window !== 'undefined') {
-    alert(`Gagal menyimpan ke database Supabase:\n${error.message || JSON.stringify(error)}\n\n(Pastikan struktur tabel dan RLS di Supabase sudah sesuai)`)
-  }
+  // Jangan gunakan alert() di sini — error dilempar ke caller yang bertanggung jawab
+  // menampilkan pesan via useDialog atau UI lainnya.
   throw error
 }
 
@@ -80,6 +79,33 @@ export async function createProject(project: Omit<Project, 'id' | 'project_code'
     updateMockDB('projects', [...db.projects, newProj])
     return newProj
   }
+}
+
+export async function updateProjectDetails(projectId: string, updates: Partial<Project>): Promise<void> {
+  const db = getMockDB()
+  const updatedProjects = db.projects.map((p: Project) => p.id === projectId ? { ...p, ...updates } : p)
+  updateMockDB('projects', updatedProjects)
+  
+  try {
+    const sb = getSupabase()
+    if (!sb) return
+    const { error } = await sb.from('bimkon_projects').update({
+      title: updates.title,
+      description: updates.description,
+      start_date: updates.start_date,
+      target_end_date: updates.target_end_date,
+      updated_at: new Date().toISOString()
+    }).eq('id', projectId)
+    if (error) handleDbError(error)
+  } catch (err) {
+    console.warn('[updateProjectDetails] fallback to mockDB only:', err)
+  }
+}
+
+export async function saveProjectEditLog(log: Omit<ProjectEditLog, 'id'>): Promise<void> {
+  const db = getMockDB()
+  const newLog = { ...log, id: 'log-' + Math.random().toString(36).substr(2, 9) }
+  updateMockDB('projectEditLogs', [...(db.projectEditLogs || []), newLog])
 }
 
 export async function setProjectPhaseLock(projectId: string, phase: 'define' | 'measure' | 'analyze' | 'improve' | 'control', isLocked: boolean): Promise<void> {
@@ -1863,24 +1889,27 @@ export async function getAiIdentifiedProblems(companyId: string): Promise<AiIden
 export async function saveAiIdentifiedProblems(problems: AiIdentifiedProblem[]): Promise<void> {
   if (problems.length === 0) return
   const companyId = problems[0].company_id
+
+  // Always save to mockDB (persists sumber_jawaban locally)
+  const db = getMockDB()
+  const existing = db.aiIdentifiedProblems[companyId] || []
+  const existingMap = new Map(existing.map((p: any) => [p.id, p]))
+  problems.forEach((p: any) => existingMap.set(p.id, p))
+  db.aiIdentifiedProblems[companyId] = Array.from(existingMap.values())
+  updateMockDB('aiIdentifiedProblems', db.aiIdentifiedProblems)
+
   try {
     const sb = getSupabase()
-    if (!sb) throw new Error('No Supabase client')
-    const { error } = await sb.from('ai_identified_problems').upsert(problems)
-    if (error) handleDbError(error)
+    if (!sb) return
+    // Strip sumber_jawaban — kolom belum ada di Supabase schema
+    const forSupabase = problems.map(({ sumber_jawaban, ...rest }: any) => rest)
+    const { error } = await sb.from('ai_identified_problems').upsert(forSupabase)
+    if (error) console.warn('[saveAiIdentifiedProblems] Supabase error (data tetap tersimpan di lokal):', error)
   } catch (err) {
-    console.warn('[saveAiIdentifiedProblems] fallback to mockDB:', err)
-    const db = getMockDB()
-    const existing = db.aiIdentifiedProblems[companyId] || []
-    
-    // Merge updates
-    const existingMap = new Map(existing.map((p: any) => [p.id, p]))
-    problems.forEach((p: any) => existingMap.set(p.id, p))
-    
-    db.aiIdentifiedProblems[companyId] = Array.from(existingMap.values())
-    updateMockDB('aiIdentifiedProblems', db.aiIdentifiedProblems)
+    console.warn('[saveAiIdentifiedProblems] Supabase unavailable, data saved locally only:', err)
   }
 }
+
 
 export async function updateAiIdentifiedProblemStatus(id: string, status: string, projectId?: string, companyId?: string): Promise<void> {
   try {

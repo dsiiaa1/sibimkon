@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useState, useCallback, ReactNode } from 'react'
+import React, { createContext, useState, useCallback, useRef, ReactNode } from 'react'
 
 export interface DialogOptions {
   title?: string
@@ -23,12 +23,14 @@ export function DialogProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false)
   const [options, setOptions] = useState<DialogOptions | null>(null)
   const [inputValue, setInputValue] = useState('')
-  const [resolvePromise, setResolvePromise] = useState<((value: any) => void) | null>(null)
+  // useRef agar React tidak memperlakukan function sebagai updater callback
+  // (React setState dengan function argument dipanggil sebagai updater, bukan disimpan)
+  const resolveRef = useRef<((value: any) => void) | null>(null)
 
   const showAlert = useCallback((message: string, title = 'Informasi') => {
     return new Promise<void>((resolve) => {
       setOptions({ type: 'alert', message, title, confirmText: 'OK' })
-      setResolvePromise(() => resolve)
+      resolveRef.current = resolve
       setIsOpen(true)
     })
   }, [])
@@ -36,7 +38,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
   const showConfirm = useCallback((message: string, title = 'Konfirmasi') => {
     return new Promise<boolean>((resolve) => {
       setOptions({ type: 'confirm', message, title, confirmText: 'Ya', cancelText: 'Batal' })
-      setResolvePromise(() => resolve)
+      resolveRef.current = resolve
       setIsOpen(true)
     })
   }, [])
@@ -45,34 +47,36 @@ export function DialogProvider({ children }: { children: ReactNode }) {
     return new Promise<string | null>((resolve) => {
       setOptions({ type: 'prompt', message, title, defaultValue, confirmText: 'Simpan', cancelText: 'Batal' })
       setInputValue(defaultValue)
-      setResolvePromise(() => resolve)
+      resolveRef.current = resolve
       setIsOpen(true)
     })
   }, [])
 
   const handleConfirm = () => {
     setIsOpen(false)
-    if (resolvePromise) {
+    if (resolveRef.current) {
       if (options?.type === 'prompt') {
-        resolvePromise(inputValue)
+        resolveRef.current(inputValue)
       } else if (options?.type === 'confirm') {
-        resolvePromise(true)
+        resolveRef.current(true)
       } else {
-        resolvePromise(undefined)
+        resolveRef.current(undefined)
       }
+      resolveRef.current = null
     }
   }
 
   const handleCancel = () => {
     setIsOpen(false)
-    if (resolvePromise) {
+    if (resolveRef.current) {
       if (options?.type === 'prompt') {
-        resolvePromise(null)
+        resolveRef.current(null)
       } else if (options?.type === 'confirm') {
-        resolvePromise(false)
+        resolveRef.current(false)
       } else {
-        resolvePromise(undefined)
+        resolveRef.current(undefined)
       }
+      resolveRef.current = null
     }
   }
 

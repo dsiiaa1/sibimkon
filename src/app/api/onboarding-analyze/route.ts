@@ -42,6 +42,9 @@ Dimensi PQCDSM (Masalah-masalah terkait Kelancaran, Kualitas, Biaya, dll): ${JSO
 Ringkasan Manajemen: ${JSON.stringify(assessment_data.summary_data)}
 
 Tugas Anda adalah menganalisis data kuesioner yang sangat detail di atas, mengidentifikasi akar-akar masalah utama (kandidat masalah), dan merumuskan daftar potensi proyek perbaikan produktivitas (Project Charters draft) untuk perusahaan ini.
+PENTING:
+- Evaluasi setiap masalah yang terdeteksi secara independen. Jika dari satu dimensi (misal Quality) terdapat 2 akar masalah yang berbeda (contoh: masalah bahan cacat dan keluhan pelanggan), buatlah menjadi 2 item rekomendasi terpisah (TIDAK dibatasi jumlah masalah per dimensi).
+- Sertakan sumber_jawaban, yang berisi array dari key JSON / nama field kuesioner yang menjadi dasar pengambilan kesimpulan (misalnya: "dimensi_quality.persen_cacat", "dimensi_production.info_kelancaran").
 
 KEMBALIKAN OUTPUT SEBAGAI JSON ARRAY OBJECT SAJA, TANPA TEKS LAIN.
 Setiap object mewakili 1 masalah/proyek, dan harus memiliki atribut:
@@ -49,11 +52,12 @@ Setiap object mewakili 1 masalah/proyek, dan harus memiliki atribut:
 - "description": (string) Deskripsi masalah / draft problem statement yang jelas (mengandung angka persentase/data spesifik jika ada di dalam kuesioner).
 - "pqcdsm_dimension": (string) Pilih salah satu dominan: "productivity", "quality", "cost", "delivery", "safety", "morale". Huruf kecil semua.
 - "urgency": (string) Pilih salah satu: "Tinggi", "Sedang", atau "Rendah" berdasarkan dampaknya.
+- "sumber_jawaban": (array of string) Daftar field yang menjadi dasar kesimpulan.
 
 CONTOH FORMAT OUTPUT:
 [
-  { "title": "Reduksi Defek Proses Packaging", "description": "Tingkat defect packaging mencapai 8% melebihi toleransi...", "pqcdsm_dimension": "quality", "urgency": "Tinggi" },
-  { "title": "Peningkatan Efisiensi Line Sewing", "description": "Sering terjadi bottleneck pada stasiun 4...", "pqcdsm_dimension": "productivity", "urgency": "Sedang" }
+  { "title": "Reduksi Defek Proses Packaging", "description": "Tingkat defect packaging mencapai 8% melebihi toleransi...", "pqcdsm_dimension": "quality", "urgency": "Tinggi", "sumber_jawaban": ["dimensi_quality.persen_cacat", "dimensi_quality.penyebab_utama"] },
+  { "title": "Peningkatan Efisiensi Line Sewing", "description": "Sering terjadi bottleneck pada stasiun 4...", "pqcdsm_dimension": "productivity", "urgency": "Sedang", "sumber_jawaban": ["dimensi_production.info_kelancaran"] }
 ]`
 
     const aiRes = await generateWithFallback(prompt, {

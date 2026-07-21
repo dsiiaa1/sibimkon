@@ -100,6 +100,7 @@ export interface AiIdentifiedProblem {
   description: string
   pqcdsm_dimensions: string[]
   urgency_indicator: string
+  sumber_jawaban?: string[]
   status: 'pending' | 'approved' | 'dismissed'
   reviewed_by?: string
   approved_at?: string
@@ -118,6 +119,8 @@ export interface Project {
   status: 'draft' | 'define' | 'measure' | 'analyze' | 'improve' | 'control' | 'completed'
   start_date: string
   target_end_date: string
+  dimensi_pqcdsm?: string
+  urgency_indicator?: string
   baseline_score?: number
   baseline_reasoning?: string
   current_score?: number
@@ -280,6 +283,14 @@ export interface ImproveAiAnalysis {
 }
 
 // ── Tipe baru untuk revisi 2026 ───────────────────────────────────────────────
+
+export interface ProjectEditLog {
+  id: string
+  project_id: string
+  edited_by: string
+  edited_at: string
+  changes: Record<string, any>
+}
 
 /** Rekomendasi metode per masalah */
 export interface MethodRecommendation {
@@ -671,6 +682,7 @@ export const getMockDB = () => {
       controlChangeRequests: {} as Record<string, GenericApprovalRequest[]>,
       companyBaselineAssessments: {} as Record<string, CompanyBaselineAssessment>,
       aiIdentifiedProblems: {} as Record<string, AiIdentifiedProblem[]>,
+      projectEditLogs: {} as Record<string, ProjectEditLog[]>,
     }
   }
 
@@ -697,6 +709,7 @@ export const getMockDB = () => {
     controlChangeRequests: getOrSet('controlChangeRequests', {}),
     companyBaselineAssessments: getOrSet('companyBaselineAssessments', {}),
     aiIdentifiedProblems: getOrSet('aiIdentifiedProblems', {}),
+    projectEditLogs: getOrSet('projectEditLogs', {}),
   }
 }
 

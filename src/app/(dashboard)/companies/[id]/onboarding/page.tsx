@@ -22,7 +22,8 @@ const RadioYesNo = ({
   reasonValue = '',
   onReasonChange,
   yesLabel = "Ya",
-  noLabel = "Tidak"
+  noLabel = "Tidak",
+  helpText
 }: { 
   value: boolean | undefined, 
   onChange: (val: boolean) => void, 
@@ -36,15 +37,19 @@ const RadioYesNo = ({
   reasonValue?: string,
   onReasonChange?: (val: string) => void,
   yesLabel?: string,
-  noLabel?: string
+  noLabel?: string,
+  helpText?: React.ReactNode
 }) => {
   return (
     <div className="flex flex-col gap-2 bg-slate-900/20 p-3 rounded-xl border border-slate-800/50">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <label className="text-sm text-slate-300 font-medium">
-          {label} {requiredMark && <span className="text-amber-500">*</span>}
-        </label>
-        <div className="flex items-center gap-4 shrink-0">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div>
+          <label className="text-sm text-slate-300 font-medium block">
+            {label} {requiredMark && <span className="text-amber-500">*</span>}
+          </label>
+          {helpText && <p className="text-xs text-slate-500 mt-1">{helpText}</p>}
+        </div>
+        <div className="flex items-center gap-4 shrink-0 pt-1">
           <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
             <input 
               type="radio" 
@@ -640,7 +645,8 @@ export default function OnboardingPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-sm text-slate-400 font-medium">% Jumlah Produk Cacat dari total Produk</label>
-                  <input type="number" step="0.01" value={dimensiQuality.persen_cacat || ''} onChange={e => updatePQCDSM('quality', 'persen_cacat', e.target.value)} disabled={isLocked} className="w-full bg-slate-950/50 border border-slate-800 rounded p-2 text-sm text-slate-200" />
+                  <p className="text-xs text-slate-500">Persentase barang defect / reject dibandingkan total produksi per bulan.</p>
+                  <input type="number" step="0.01" value={dimensiQuality.persen_cacat || ''} onChange={e => updatePQCDSM('quality', 'persen_cacat', e.target.value)} disabled={isLocked} className="w-full bg-slate-950/50 border border-slate-800 rounded p-2 text-sm text-slate-200 mt-1" />
                 </div>
               </div>
               
@@ -662,7 +668,7 @@ export default function OnboardingPage() {
             <div className="space-y-4">
               <RadioYesNo name="cost_pantau" label="Pemakaian sumber daya dipantau secara baik (bahan mentah, listrik, air dll.)" value={dimensiCost.pantau_sumber_daya} onChange={v => updatePQCDSM('cost', 'pantau_sumber_daya', v)} showReason={true} reasonValue={dimensiCost.pantau_sumber_daya_alasan} onReasonChange={v => updatePQCDSM('cost', 'pantau_sumber_daya_alasan', v)} disabled={isLocked} requiredMark={false} required={false} />
               <RadioYesNo name="cost_kurangi_bahan" label="Ada proses/prosedur untuk mengurangi pemakaian bahan dan ada tindakan yang sudah dilaksanakan" value={dimensiCost.proses_kurangi_bahan} onChange={v => updatePQCDSM('cost', 'proses_kurangi_bahan', v)} showReason={true} reasonValue={dimensiCost.proses_kurangi_bahan_alasan} onReasonChange={v => updatePQCDSM('cost', 'proses_kurangi_bahan_alasan', v)} disabled={isLocked} requiredMark={false} required={false} />
-              <RadioYesNo name="cost_kurangi_energi" label="Ada proses untuk mengurangi pemakaian energy dan ada tindakan yang sudah dilaksanakan" value={dimensiCost.proses_kurangi_energi} onChange={v => updatePQCDSM('cost', 'proses_kurangi_energi', v)} showReason={true} reasonValue={dimensiCost.proses_kurangi_energi_alasan} onReasonChange={v => updatePQCDSM('cost', 'proses_kurangi_energi_alasan', v)} disabled={isLocked} requiredMark={true} required={true} />
+              <RadioYesNo name="cost_kurangi_energi" label="Ada proses untuk mengurangi pemakaian energy dan ada tindakan yang sudah dilaksanakan" helpText="Contoh: Pengaturan suhu AC, pergantian lampu LED, atau penghematan bahan bakar genset." value={dimensiCost.proses_kurangi_energi} onChange={v => updatePQCDSM('cost', 'proses_kurangi_energi', v)} showReason={true} reasonValue={dimensiCost.proses_kurangi_energi_alasan} onReasonChange={v => updatePQCDSM('cost', 'proses_kurangi_energi_alasan', v)} disabled={isLocked} requiredMark={true} required={true} />
               <RadioYesNo name="cost_mesin" label="Mesin diperiksa secara teratur untuk mencegah kerusakan dan untuk memantau bagian-bagian yang sudah aus serta mematau pemakaian bahan bakar" value={dimensiCost.mesin_diperiksa} onChange={v => updatePQCDSM('cost', 'mesin_diperiksa', v)} showReason={true} reasonValue={dimensiCost.mesin_diperiksa_alasan} onReasonChange={v => updatePQCDSM('cost', 'mesin_diperiksa_alasan', v)} disabled={isLocked} requiredMark={false} required={false} />
               <RadioYesNo name="cost_rawat" label="Ada sistem perawatan mesin" value={dimensiCost.sistem_perawatan} onChange={v => updatePQCDSM('cost', 'sistem_perawatan', v)} showReason={true} reasonValue={dimensiCost.sistem_perawatan_alasan} onReasonChange={v => updatePQCDSM('cost', 'sistem_perawatan_alasan', v)} disabled={isLocked} requiredMark={true} required={true} />
               
@@ -694,7 +700,8 @@ export default function OnboardingPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-sm text-slate-400 font-medium">Rata-rata waktu penyelesaian produk/<Tooltip text="Cycle Time: Waktu yang dihabiskan untuk menyelesaikan satu siklus penuh dari sebuah proses produksi (dari awal hingga akhir)">cycle time</Tooltip> (jam/menit/detik)</label>
-                  <input type="text" value={dimensiDelivery.cycle_time || ''} onChange={e => updatePQCDSM('delivery', 'cycle_time', e.target.value)} disabled={isLocked} className="w-full bg-slate-950/50 border border-slate-800 rounded p-2 text-sm text-slate-200" />
+                  <p className="text-xs text-slate-500">Sertakan satuannya (misal: "5 jam" atau "30 menit").</p>
+                  <input type="text" value={dimensiDelivery.cycle_time || ''} onChange={e => updatePQCDSM('delivery', 'cycle_time', e.target.value)} disabled={isLocked} className="w-full bg-slate-950/50 border border-slate-800 rounded p-2 text-sm text-slate-200 mt-1" />
                 </div>
                 <div className="space-y-1">
                   <label className="text-sm text-slate-400 font-medium">Rata-rata keterlambatan waktu (jam/menit/detik)</label>
