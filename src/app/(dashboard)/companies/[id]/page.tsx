@@ -211,14 +211,18 @@ export default function CompanyDetailPage() {
 
   const handleSaveEditProject = async (updates: Partial<Project>) => {
     if (!editingProject) return
-    await updateProjectDetails(editingProject.id, updates)
-    await saveProjectEditLog({
+    
+    // Optimistic UI Update - langsung perbarui state agar UI terasa instan
+    setProjects(prev => prev.map(p => p.id === editingProject.id ? { ...p, ...updates } : p))
+    
+    // Update ke database berjalan di background (tidak memblokir UI)
+    updateProjectDetails(editingProject.id, updates).catch(e => console.error(e))
+    saveProjectEditLog({
       project_id: editingProject.id,
       edited_by: currentUserId,
       edited_at: new Date().toISOString(),
       changes: updates
-    })
-    setProjects(prev => prev.map(p => p.id === editingProject.id ? { ...p, ...updates } : p))
+    }).catch(e => console.error(e))
   }
 
   if (!company) {

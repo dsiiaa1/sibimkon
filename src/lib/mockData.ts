@@ -105,6 +105,7 @@ export interface AiIdentifiedProblem {
   reviewed_by?: string
   approved_at?: string
   project_charter_id?: string
+  project_id?: string
   created_at?: string
 }
 

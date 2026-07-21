@@ -38,7 +38,9 @@ export async function getProjects(): Promise<Project[]> {
       measure_is_locked: !!p.measure_is_locked,
       analyze_is_locked: !!p.analyze_is_locked,
       improve_is_locked: !!p.improve_is_locked,
-      control_is_locked: !!p.control_is_locked
+      control_is_locked: !!p.control_is_locked,
+      dimensi_pqcdsm: p.dimensi_pqcdsm,
+      urgency_indicator: p.urgency_indicator
     }))
   } catch (err) {
     console.warn('[getProjects] fallback to mockDB:', err)
@@ -57,7 +59,9 @@ export async function createProject(project: Omit<Project, 'id' | 'project_code'
       title: project.title, description: project.description,
       company_id: project.company_id, consultant_id: project.consultant_id,
       status: project.status, start_date: project.start_date,
-      target_end_date: project.target_end_date, current_phase: 'define'
+      target_end_date: project.target_end_date, current_phase: 'define',
+      dimensi_pqcdsm: (project as any).dimensi_pqcdsm,
+      urgency_indicator: (project as any).urgency_indicator
     }).select('*, companies(name)').single()
     if (error) handleDbError(error)
     return {
