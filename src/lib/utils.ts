@@ -106,3 +106,19 @@ export const ACTION_STATUS_LABELS: Record<string, { label: string; color: string
   selesai: { label: 'Selesai', color: 'bg-green-500' },
   tertunda: { label: 'Tertunda', color: 'bg-red-500' },
 }
+
+/**
+ * Mencoba menebak dimensi PQCDSM dari judul dan deskripsi jika tidak tersedia
+ */
+export function inferPQCDSMDimension(title: string, description: string): string {
+  const text = (title + ' ' + description).toLowerCase()
+  
+  if (/(produktivitas|output|cycle time|downtime|efisiensi|throughput|yield|produksi|optimasi)/.test(text)) return 'productivity'
+  if (/(kualitas|cacat|defect|reject|rework|keluhan|garansi|akurasi|error|mutu)/.test(text)) return 'quality'
+  if (/(biaya|cost|pengeluaran|inventory|stok|material|waste|energi|budget)/.test(text)) return 'cost'
+  if (/(waktu|keterlambatan|delay|lead time|pengiriman|jadwal|antrean|delivery)/.test(text)) return 'delivery'
+  if (/(k3|kecelakaan|safety|aman|bahaya|risiko|insiden|ergonomi|cedera|keselamatan)/.test(text)) return 'safety'
+  if (/(motivasi|absensi|turnover|disiplin|kepuasan kerja|pelatihan|morale|karyawan)/.test(text)) return 'morale'
+  
+  return 'lainnya'
+}

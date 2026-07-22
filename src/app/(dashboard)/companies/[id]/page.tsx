@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { getCompanies, getProjects, getCompanyBaselineAssessment, getAiIdentifiedProblems, saveAiIdentifiedProblems, updateAiIdentifiedProblemStatus, createProject, saveProjectCharter, updateProjectDetails, saveProjectEditLog } from '@/lib/db'
 import { Company, Project, CompanyBaselineAssessment, AiIdentifiedProblem } from '@/lib/mockData'
 import { Building, ArrowLeft, Plus, User, Phone, Mail, ArrowRight, BrainCircuit, FileText, CheckCircle2, Pencil, X } from 'lucide-react'
-import { PROJECT_STATUS_LABELS } from '@/lib/utils'
+import { PROJECT_STATUS_LABELS, inferPQCDSMDimension } from '@/lib/utils'
 import CreateProjectModal from '@/components/CreateProjectModal'
 
 function EditProjectModal({ project, onClose, onSave }: { project: Project, onClose: () => void, onSave: (p: Partial<Project>) => void }) {
@@ -449,12 +449,14 @@ export default function CompanyDetailPage() {
             { key: 'morale', label: 'Morale', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30', dot: 'bg-purple-400' },
           ]
 
-          // Fungsi resolve dimensi: prioritaskan dari AI Recommendation → fallback ke field project → 'lainnya'
+          // Fungsi resolve dimensi: prioritaskan dari AI Recommendation → fallback ke field project → deteksi otomatis teks → 'lainnya'
           const getProjectDim = (proj: typeof projects[0]): string => {
             const fromAI = aiProblems.find(ap => ap.project_id === proj.id)
             if (fromAI?.pqcdsm_dimensions?.[0]) return fromAI.pqcdsm_dimensions[0].toLowerCase()
             if (proj.dimensi_pqcdsm) return proj.dimensi_pqcdsm.toLowerCase()
-            return 'lainnya'
+            
+            // Deteksi otomatis jika dimensi kosong (terutama untuk data lama)
+            return inferPQCDSMDimension(proj.title, proj.description)
           }
 
           const activeProjDimensions = new Set(projects.map(p => getProjectDim(p)).filter(d => d !== 'lainnya'))
