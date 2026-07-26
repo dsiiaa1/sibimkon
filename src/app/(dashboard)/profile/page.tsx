@@ -179,16 +179,24 @@ export default function CompanyProfilePage() {
             <h2 className="text-lg font-bold text-slate-200 flex items-center gap-2">
               <Building className="h-5 w-5 text-indigo-400" /> Data Profil Perusahaan
             </h2>
-            <Link 
-              href={`/companies/${company.id}/onboarding`}
-              className="inline-flex items-center gap-2 rounded-xl px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-colors"
-            >
-              📝 {assessment?.status === 'submitted' || assessment?.status === 'locked' 
-                ? 'Lihat Kuesioner (Terkunci)' 
-                : assessment?.status === 'draft' 
-                ? 'Lanjutkan Draft' 
-                : 'Isi Kuesioner Onboarding'}
-            </Link>
+            <div className="flex gap-2">
+              <Link 
+                href={`/companies/${company.id}/readiness`}
+                className="inline-flex items-center gap-2 rounded-xl px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition-colors"
+              >
+                📋 Fase Kesiapan
+              </Link>
+              <Link 
+                href={`/companies/${company.id}/onboarding`}
+                className="inline-flex items-center gap-2 rounded-xl px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-colors"
+              >
+                📝 {assessment?.status === 'submitted' || assessment?.status === 'locked' 
+                  ? 'Lihat Kuesioner (Terkunci)' 
+                  : assessment?.status === 'draft' 
+                  ? 'Lanjutkan Draft' 
+                  : 'Isi Kuesioner Onboarding'}
+              </Link>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

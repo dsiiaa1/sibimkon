@@ -199,7 +199,8 @@ main .dark-section {
   --border-active: var(--gold-400) !important;
 }
 
-@theme inline {
+/* Theme color mappings — resolved via CSS custom properties */
+:root {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
 }

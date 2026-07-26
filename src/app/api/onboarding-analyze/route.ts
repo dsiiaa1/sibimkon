@@ -36,10 +36,30 @@ export async function POST(req: Request) {
     const prompt = `Anda adalah konsultan ahli operasional Lean Six Sigma (Master Black Belt). Anda ditugaskan untuk melakukan "Baseline Assessment & Problem Identification" berdasarkan data kuesioner onboarding perusahaan.
 
 Data Perusahaan: ${company_name || 'Tidak diketahui'}, Bidang: ${business_field || '-'}, Karyawan: ${total_employees || '-'}
-Profil: ${JSON.stringify(assessment_data.profile_data)}
-Struktur Staf: ${JSON.stringify(assessment_data.staff_data)}
-Dimensi PQCDSM (Masalah-masalah terkait Kelancaran, Kualitas, Biaya, dll): ${JSON.stringify(assessment_data.pqcdsm_data)}
-Ringkasan Manajemen: ${JSON.stringify(assessment_data.summary_data)}
+Profil: ${JSON.stringify({
+  tahun_pendirian: assessment_data.tahun_pendirian,
+  kepemilikan: assessment_data.kepemilikan,
+  pemilik_gender: assessment_data.pemilik_gender,
+  asal_investasi: assessment_data.asal_investasi,
+  konsumen_utama: assessment_data.konsumen_utama,
+  ekspor: assessment_data.ekspor,
+  ekspor_persen_produksi: assessment_data.ekspor_persen_produksi
+})}
+Struktur Staf: ${JSON.stringify(assessment_data.struktur_staf)}
+Dimensi PQCDSM (Masalah-masalah terkait Kelancaran, Kualitas, Biaya, dll): ${JSON.stringify({
+  production: assessment_data.dimensi_production,
+  quality: assessment_data.dimensi_quality,
+  cost: assessment_data.dimensi_cost,
+  delivery: assessment_data.dimensi_delivery,
+  safety: assessment_data.dimensi_safety,
+  morale: assessment_data.dimensi_morale
+})}
+Ringkasan Manajemen: ${JSON.stringify({
+  masalah_utama: assessment_data.ringkasan_masalah_utama,
+  rencana_program: assessment_data.ringkasan_rencana_program,
+  training: assessment_data.ringkasan_kegiatan_training,
+  proses_produksi: assessment_data.proses_produksi
+})}
 
 Tugas Anda adalah menganalisis data kuesioner yang sangat detail di atas, mengidentifikasi akar-akar masalah utama (kandidat masalah), dan merumuskan daftar potensi proyek perbaikan produktivitas (Project Charters draft) untuk perusahaan ini.
 PENTING:

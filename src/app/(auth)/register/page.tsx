@@ -115,6 +115,15 @@ export default function RegisterPage() {
         throw new Error(signUpError.message || JSON.stringify(signUpError))
       }
 
+      // Supabase mengembalikan identities: [] jika email sudah terdaftar
+      // (termasuk akun yang sudah dihapus secara soft-delete di Auth Dashboard).
+      // Ini BUKAN pendaftaran berhasil — harus ditangani sebagai error.
+      if (data?.user?.identities?.length === 0) {
+        throw new Error(
+          'Email ini sudah pernah terdaftar. Silakan login menggunakan email tersebut, atau gunakan email lain untuk mendaftar.'
+        )
+      }
+
       if (data?.user) {
         try {
           const { error: profileErr } = await supabase.from('profiles').upsert({
@@ -154,11 +163,7 @@ export default function RegisterPage() {
 
       }
 
-      setSuccess(
-        data?.user?.identities?.length === 0
-          ? 'Email ini sudah terdaftar. Silakan login.'
-          : 'Pendaftaran berhasil! Akun Anda sudah aktif. Silakan login.'
-      )
+      setSuccess('Pendaftaran berhasil! Akun Anda sudah aktif. Silakan login.')
 
       setTimeout(() => {
         router.push('/login?registered=true')

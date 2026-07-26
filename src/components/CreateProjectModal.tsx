@@ -12,6 +12,8 @@ interface Props {
   /** Untuk mode company detail — langsung terkunci ke 1 company */
   fixedCompanyId?: string
   fixedCompanyName?: string
+  /** §6.3 PRD — gate status untuk tier simple */
+  readinessGateOpen?: boolean | null
   onCreated: (project: Project) => void
   onClose: () => void
 }
@@ -22,6 +24,7 @@ export default function CreateProjectModal({
   currentUserId,
   fixedCompanyId,
   fixedCompanyName,
+  readinessGateOpen = null,
   onCreated,
   onClose,
 }: Props) {
@@ -36,6 +39,15 @@ export default function CreateProjectModal({
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // §6.3 PRD — cek readiness gate sebelum submit
+  const selectedCompanyObj = fixedCompanyId
+    ? companies.find(c => c.id === fixedCompanyId)
+    : companies.find(c => c.id === companyId)
+
+  const isGateBlocked =
+    selectedCompanyObj?.tier === 'simple' &&
+    readinessGateOpen === false
 
   // Untuk role perusahaan: set companyId dari companies list berdasarkan organization
   useEffect(() => {
@@ -57,6 +69,10 @@ export default function CreateProjectModal({
     if (!title.trim()) return
     if (!companyId) {
       setError('Pilih perusahaan terlebih dahulu')
+      return
+    }
+    if (isGateBlocked) {
+      setError('Fase Kesiapan perusahaan ini belum selesai atau belum disetujui Konsultan. Selesaikan Readiness Phase terlebih dahulu.')
       return
     }
     if (endDate <= startDate) {
@@ -229,6 +245,16 @@ export default function CreateProjectModal({
             </div>
           </div>
 
+          {/* §6.3 PRD — Readiness Gate warning banner */}
+          {isGateBlocked && (
+            <div className="px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-400 flex items-start gap-2">
+              <span className="shrink-0 mt-0.5">🔒</span>
+              <span>
+                <strong>Readiness Gate belum terbuka.</strong> Perusahaan tier Simple harus menyelesaikan Fase Kesiapan dan mendapat persetujuan Konsultan sebelum proyek dapat dibuat.
+              </span>
+            </div>
+          )}
+
           <div className="pt-4 flex justify-end gap-3 border-t border-slate-800">
             <button
               type="button"
@@ -239,7 +265,7 @@ export default function CreateProjectModal({
             </button>
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || !!isGateBlocked}
               className="px-5 py-2.5 rounded-xl bg-indigo-650 text-sm font-semibold text-white hover:bg-indigo-600 transition-all cursor-pointer shadow-md disabled:opacity-50"
             >
               {saving ? 'Membuat...' : 'Buat Proyek'}

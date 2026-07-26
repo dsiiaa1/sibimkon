@@ -60,7 +60,11 @@ export default function DashboardShell({
   const [showFullDmaic, setShowFullDmaic] = useState(false)
   
   const activeProjectMatch = pathname.match(/\/projects\/([^/]+)/)
-  const activeProjectId = activeProjectMatch ? activeProjectMatch[1] : null
+  const activeProjectId = activeProjectMatch && activeProjectMatch[1] !== 'new' ? activeProjectMatch[1] : null
+
+  const activeCompanyMatch = pathname.match(/\/companies\/([^/]+)/)
+  // Ensure it's not a generic sub-route like 'assessments' or 'new'
+  const activeCompanyId = activeCompanyMatch && !['assessments', 'new'].includes(activeCompanyMatch[1]) ? activeCompanyMatch[1] : null
 
   // Fetch company tier for active project
   useEffect(() => {
@@ -292,6 +296,16 @@ export default function DashboardShell({
     }
   }
 
+  // If a company is active, display company-specific stages in sidebar
+  let companyStages: any[] = []
+  if (activeCompanyId && !activeProjectId) {
+    companyStages = [
+      { name: 'Profil Perusahaan', href: `/companies/${activeCompanyId}`, icon: Building },
+      { name: 'Fase Kesiapan', href: `/companies/${activeCompanyId}/readiness`, icon: FileCheck },
+      { name: 'Data Anomali', href: `/companies/${activeCompanyId}/data-anomali`, icon: Bell, roles: ['konsultan', 'admin'] }
+    ]
+  }
+
   const unreadCount = notifications.filter(n => n.unread).length
 
   return (
@@ -377,7 +391,7 @@ export default function DashboardShell({
           {navigation
             .filter(item => !item.roles || item.roles.includes(user.role))
             .map(item => {
-              const active = pathname === item.href
+              const active = pathname === item.href || (item.href === '/companies' && pathname.startsWith('/companies') && !activeProjectId && !activeCompanyId)
               return (
                 <Link
                   key={item.name}
@@ -407,6 +421,44 @@ export default function DashboardShell({
               )
             })}
 
+          {/* Company Stages Section */}
+          {companyStages.length > 0 && (
+            <div className={`mt-6 mb-2 ${isCollapsed ? 'px-0' : 'px-3'}`}>
+              {!isCollapsed && (
+                <h3 className="mb-2 px-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Menu Perusahaan
+                </h3>
+              )}
+              <div className="space-y-1">
+                {companyStages
+                  .filter(stage => !stage.roles || stage.roles.includes(user.role))
+                  .map(stage => {
+                  const active = pathname === stage.href || (stage.href === '/data-anomali' && pathname.startsWith('/data-anomali'))
+                  return (
+                    <Link
+                      key={stage.name}
+                      href={stage.href}
+                      style={active ? {
+                        background: 'rgba(212,160,23,0.12)',
+                        color: 'var(--gold-400)',
+                        borderLeft: '3px solid var(--gold-400)',
+                      } : {
+                        color: 'var(--text-muted)',
+                        borderLeft: '3px solid transparent',
+                      }}
+                      className={`group flex items-center text-sm font-medium transition-all hover:bg-slate-800/50 hover:text-slate-200 ${isCollapsed ? 'justify-center p-2.5 rounded-xl mx-2' : 'gap-3 px-3 py-2 rounded-r-xl'}`}
+                      title={isCollapsed ? stage.name : undefined}
+                    >
+                      <stage.icon className={`h-4 w-4 flex-shrink-0 ${active ? 'text-gold-400' : 'text-slate-500 group-hover:text-slate-400'}`} />
+                      {!isCollapsed && <span>{stage.name}</span>}
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* DMAIC Stages Section */}
           {dmaicStages.length > 0 && (
             <div className="mt-6 pt-6" style={{borderTop: '1px solid var(--border-base)'}}>
               {!isCollapsed ? (

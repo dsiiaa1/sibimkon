@@ -1166,6 +1166,8 @@ export default function MeasurePage() {
         </div>
       )}
 
+      </fieldset>
+
       {/* ── Footer Actions ── */}
       <div className="flex justify-between items-center pt-8 border-t border-slate-800 mt-8">
         {dataReqs.length > 0 && !analyzing && (
@@ -1182,7 +1184,6 @@ export default function MeasurePage() {
           </button>
         )}
       </div>
-      </fieldset>
     </div>
   )
 }

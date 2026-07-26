@@ -40,7 +40,7 @@ export async function POST() {
             if (totalDariStaf > 0) totalKaryawan = totalDariStaf
           }
           
-          let calculatedTier = determineTier(totalKaryawan)
+          let calculatedTier = determineTier(totalKaryawan, comp.annual_revenue_idr)
 
           const { error: updateErr } = await sb.from('companies').update({
             total_employees: totalKaryawan,
@@ -75,7 +75,7 @@ export async function POST() {
           if (totalDariStaf > 0) totalKaryawan = totalDariStaf
         }
 
-        let calculatedTier = determineTier(totalKaryawan)
+        let calculatedTier = determineTier(totalKaryawan, comp.annual_revenue_idr)
 
         db.companies[i].total_employees = totalKaryawan
         db.companies[i].tier = calculatedTier

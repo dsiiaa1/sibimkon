@@ -117,6 +117,7 @@ export default function OnboardingPage() {
   // New specific fields
   const [tahunPendirian, setTahunPendirian] = useState('')
   const [kepemilikan, setKepemilikan] = useState('')
+  const [annualRevenueIdr, setAnnualRevenueIdr] = useState('')
   const [pemilikGender, setPemilikGender] = useState('L')
   const [asalInvestasi, setAsalInvestasi] = useState('')
   const [konsumenUtama, setKonsumenUtama] = useState('')
@@ -205,6 +206,7 @@ export default function OnboardingPage() {
       if (comp) {
         setEditablePhone(comp.pic_phone || '')
         setEditableEmail(comp.pic_email || '')
+        setAnnualRevenueIdr(comp.annual_revenue_idr?.toString() || '')
       }
 
       setLoading(false)
@@ -259,15 +261,23 @@ export default function OnboardingPage() {
     setAssessment(updated)
     
     if (status === 'submitted') {
-      // Menghitung tier
-      const numJamKerja = parseInt(jamKerja, 10) || 0;
-      const finalTier = determineTier(numJamKerja)
+      // Menghitung total karyawan dari struktur staf
+      let totalKaryawan = 0
+      if (strukturStaf.karyawan_tetap?.jumlah) totalKaryawan += Number(strukturStaf.karyawan_tetap.jumlah)
+      if (strukturStaf.manajer?.jumlah) totalKaryawan += Number(strukturStaf.manajer.jumlah)
+      if (strukturStaf.supervisor?.jumlah) totalKaryawan += Number(strukturStaf.supervisor.jumlah)
+      if (strukturStaf.karyawan_tetap_lain?.jumlah) totalKaryawan += Number(strukturStaf.karyawan_tetap_lain.jumlah)
+      if (strukturStaf.karyawan_kontrak?.jumlah) totalKaryawan += Number(strukturStaf.karyawan_kontrak.jumlah)
+      
+      const revenue = annualRevenueIdr ? Number(annualRevenueIdr) : null
+      const finalTier = determineTier(totalKaryawan, revenue)
       
       // Update data company
       await updateCompany(companyId, {
         tier: finalTier,
         tier_source: 'auto',
-        jumlah_tenaga_kerja: numJamKerja,
+        jumlah_tenaga_kerja: totalKaryawan,
+        annual_revenue_idr: revenue,
         onboarding_completed: true,
         onboarding_completed_at: new Date().toISOString(),
         tier_set_at: new Date().toISOString()
@@ -298,6 +308,20 @@ export default function OnboardingPage() {
   if (loading) return <div className="text-center py-20 text-slate-400 text-sm">Memuat form kuesioner...</div>
 
   const isLocked = assessment?.status === 'submitted' || assessment?.status === 'locked'
+
+  // Minimalist PQCDSM: hitung tier live agar field P/D/S/M opsional saat tier = simple
+  const liveTotalKaryawan = (() => {
+    let t = 0
+    if (strukturStaf.karyawan_tetap?.jumlah) t += Number(strukturStaf.karyawan_tetap.jumlah)
+    if (strukturStaf.manajer?.jumlah) t += Number(strukturStaf.manajer.jumlah)
+    if (strukturStaf.supervisor?.jumlah) t += Number(strukturStaf.supervisor.jumlah)
+    if (strukturStaf.karyawan_tetap_lain?.jumlah) t += Number(strukturStaf.karyawan_tetap_lain.jumlah)
+    if (strukturStaf.karyawan_kontrak?.jumlah) t += Number(strukturStaf.karyawan_kontrak.jumlah)
+    return t
+  })()
+  const liveRevenue = annualRevenueIdr ? Number(annualRevenueIdr) : null
+  const effectiveTier = company?.tier || determineTier(liveTotalKaryawan, liveRevenue)
+  const isSimpleTier = effectiveTier === 'simple'
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-20">
@@ -406,6 +430,11 @@ export default function OnboardingPage() {
                 <label className="text-xs font-semibold text-slate-400">Kepemilikan *</label>
                 <p className="text-xs text-slate-500">Status kepemilikan perusahaan. Contoh: Perorangan, PT, CV, Koperasi, PMA.</p>
                 <input required type="text" value={kepemilikan} onChange={e => setKepemilikan(e.target.value)} disabled={isLocked} className="w-full bg-slate-950/50 text-slate-200 border border-slate-800 rounded-lg p-2 text-sm focus:border-indigo-500" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-400">Omzet Tahunan (Rupiah)</label>
+                <p className="text-xs text-slate-500">Omzet penjualan kotor dalam setahun. Contoh: 15000000000 (tanpa titik/koma).</p>
+                <input type="number" value={annualRevenueIdr} onChange={e => setAnnualRevenueIdr(e.target.value)} disabled={isLocked} className="w-full bg-slate-950/50 text-slate-200 border border-slate-800 rounded-lg p-2 text-sm focus:border-indigo-500" />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-400">Pemilik (L/P) *</label>
@@ -573,7 +602,12 @@ export default function OnboardingPage() {
           
           {/* 1. Production */}
           <div className="space-y-4">
-            <h4 className="font-bold text-indigo-400">1. Kelancaran Produksi (Production)</h4>
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="font-bold text-indigo-400">1. Kelancaran Produksi (Production)</h4>
+              {isSimpleTier && (
+                <span className="text-xs bg-amber-500/10 border border-amber-500/30 text-amber-400 px-2 py-0.5 rounded-full">Opsional (Tier Simple)</span>
+              )}
+            </div>
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-300">Informasi tentang bahan dan mesin/sarana produksi: Informasi tentang Kelancaran Produksi mulai dari ketersediaan bahan dan Proses *</label>
@@ -725,7 +759,12 @@ export default function OnboardingPage() {
           
           {/* 4. Delivery */}
           <div className="space-y-4">
-            <h4 className="font-bold text-indigo-400">4. Waktu Penyerahan yang Tepat (Delivery Time)</h4>
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="font-bold text-indigo-400">4. Waktu Penyerahan yang Tepat (Delivery Time)</h4>
+              {isSimpleTier && (
+                <span className="text-xs bg-amber-500/10 border border-amber-500/30 text-amber-400 px-2 py-0.5 rounded-full">Opsional (Tier Simple)</span>
+              )}
+            </div>
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
@@ -775,7 +814,12 @@ export default function OnboardingPage() {
 
           {/* 5. Safety */}
           <div className="space-y-4 pt-8 border-t border-slate-800/50">
-            <h4 className="font-bold text-indigo-400">5. Kenyamanan dan Keselamatan (Safety/K3)</h4>
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="font-bold text-indigo-400">5. Kenyamanan dan Keselamatan (Safety/K3)</h4>
+              {isSimpleTier && (
+                <span className="text-xs bg-amber-500/10 border border-amber-500/30 text-amber-400 px-2 py-0.5 rounded-full">Opsional (Tier Simple)</span>
+              )}
+            </div>
             <div className="space-y-4">
               <RadioYesNo name="safe_penting" label="Kesehatan dan keselamatan karyawan adalah persoalan penting bagi perusahaan" helpText="Berikan alasan (Contoh: 'Perusahaan memprioritaskan K3 karena sifat bahan kimia yang digunakan sangat berbahaya')." value={dimensiSafety.k3_penting} onChange={v => updatePQCDSM('safety', 'k3_penting', v)} showReason={true} reasonValue={dimensiSafety.k3_penting_alasan} onReasonChange={v => updatePQCDSM('safety', 'k3_penting_alasan', v)} disabled={isLocked} requiredMark={false} required={false} />
               <RadioYesNo name="safe_komite" label={<span>Sudah dibentuk <Tooltip text="Panitia Pembina Keselamatan dan Kesehatan Kerja: Badan pembantu di tempat kerja yang bertugas memberikan saran dan pertimbangan terkait K3">Komite K3/ P2K3</Tooltip> yang melibatkan karyawan dan manajer (secara aktif)</span>} helpText="Berikan alasan (Contoh: 'Sudah terbentuk P2K3 namun belum disahkan oleh Disnaker setempat')." value={dimensiSafety.komite_k3} onChange={v => updatePQCDSM('safety', 'komite_k3', v)} showReason={true} reasonValue={dimensiSafety.komite_k3_alasan} onReasonChange={v => updatePQCDSM('safety', 'komite_k3_alasan', v)} disabled={isLocked} requiredMark={true} required={true} />
@@ -838,7 +882,12 @@ export default function OnboardingPage() {
 
           {/* 6. Morale */}
           <div className="space-y-4 pt-8 border-t border-slate-800/50">
-            <h4 className="font-bold text-indigo-400">6. Moral Kerja SDM dan Loyalitas (Morale)</h4>
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="font-bold text-indigo-400">6. Moral Kerja SDM dan Loyalitas (Morale)</h4>
+              {isSimpleTier && (
+                <span className="text-xs bg-amber-500/10 border border-amber-500/30 text-amber-400 px-2 py-0.5 rounded-full">Opsional (Tier Simple)</span>
+              )}
+            </div>
             <div className="space-y-4">
               <RadioYesNo name="moral_uu" label="Melaksnakan kebijakan dan praktek SDM sesuai dengan peraturan ketenagakerjaan nasional dan internasional" helpText="Berikan alasan (Contoh: 'Perusahaan sudah mematuhi UU Cipta Kerja')." value={dimensiMorale.penuhi_uu} onChange={v => updatePQCDSM('morale', 'penuhi_uu', v)} showReason={true} reasonValue={dimensiMorale.penuhi_uu_alasan} onReasonChange={v => updatePQCDSM('morale', 'penuhi_uu_alasan', v)} disabled={isLocked} requiredMark={false} required={false} />
               <RadioYesNo name="moral_kebijakan" label="Ada kebijakan SDM (yang sudah dijelaskan secara terperinci, diterapkan, diperbaharui dan dipahami oleh karyawan)" helpText="Berikan alasan (Contoh: 'Kebijakan SDM tertuang dalam Peraturan Perusahaan (PP)')." value={dimensiMorale.kebijakan_sdm} onChange={v => updatePQCDSM('morale', 'kebijakan_sdm', v)} showReason={true} reasonValue={dimensiMorale.kebijakan_sdm_alasan} onReasonChange={v => updatePQCDSM('morale', 'kebijakan_sdm_alasan', v)} disabled={isLocked} requiredMark={false} required={false} />

@@ -59,16 +59,34 @@ export function generateId(): string {
   return Math.random().toString(36).substring(2, 9)
 }
 
-/**
- * Menentukan tier perusahaan berdasarkan jumlah tenaga kerja.
- * < 30: simple (UMKM)
- * 30 - 100: menengah
- * > 100: besar
- */
-export function determineTier(jumlahTenagaKerja: number | undefined | null): 'simple' | 'menengah' | 'besar' {
+export type CompanyTier = 'simple' | 'menengah' | 'besar'
+
+const TIER_RANK: Record<CompanyTier, number> = { simple: 0, menengah: 1, besar: 2 }
+
+function tierFromEmployees(jumlahTenagaKerja: number | undefined | null): CompanyTier {
   if (!jumlahTenagaKerja || jumlahTenagaKerja < 30) return 'simple'
   if (jumlahTenagaKerja <= 100) return 'menengah'
   return 'besar'
+}
+
+function tierFromRevenue(annualRevenueIdr: number | undefined | null): CompanyTier {
+  if (!annualRevenueIdr || annualRevenueIdr <= 15_000_000_000) return 'simple'
+  if (annualRevenueIdr <= 50_000_000_000) return 'menengah'
+  return 'besar'
+}
+
+/**
+ * Menentukan tier perusahaan berdasarkan kombinasi jumlah tenaga kerja
+ * dan omzet tahunan. Mengikuti prinsip PP No. 7/2021: jika kedua kriteria
+ * menunjukkan kategori berbeda, kategori yang LEBIH TINGGI yang berlaku.
+ */
+export function determineTier(
+  jumlahTenagaKerja: number | undefined | null,
+  annualRevenueIdr?: number | undefined | null
+): CompanyTier {
+  const byEmployees = tierFromEmployees(jumlahTenagaKerja)
+  const byRevenue = tierFromRevenue(annualRevenueIdr)
+  return TIER_RANK[byEmployees] >= TIER_RANK[byRevenue] ? byEmployees : byRevenue
 }
 
 /**

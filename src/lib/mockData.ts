@@ -50,6 +50,13 @@ export interface Company {
   onboarding_completed?: boolean
   onboarding_completed_at?: string
   tier_set_at?: string
+  // §4 PRD Tier Simple — omzet tahunan (dual-kriteria determineTier)
+  annual_revenue_idr?: number | null
+  // §6.6 PRD — rekomendasi upgrade tier
+  tier_upgrade_recommended?: boolean
+  tier_recommended_value?: string
+  tier_upgrade_reviewed_by?: string
+  tier_upgrade_reviewed_at?: string
 }
 
 export interface CompanyBaselineAssessment {
