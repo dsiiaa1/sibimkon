@@ -49,31 +49,9 @@ export async function getProjects(): Promise<Project[]> {
 }
 
 export async function createProject(project: Omit<Project, 'id' | 'project_code'>): Promise<Project> {
-  try {
-    const sb = getSupabase()
-    if (!sb) throw new Error('No Supabase client')
-    const newProjectCode = `BK-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`
-
-    const { data, error } = await sb.from('bimkon_projects').insert({
-      project_code: newProjectCode,
-      title: project.title, description: project.description,
-      company_id: project.company_id, consultant_id: project.consultant_id,
-      status: project.status, start_date: project.start_date,
-      target_end_date: project.target_end_date, current_phase: 'define',
-      dimensi_pqcdsm: (project as any).dimensi_pqcdsm,
-      urgency_indicator: (project as any).urgency_indicator
-    }).select('*, companies(name)').single()
-    if (error) handleDbError(error)
-    return {
-      id: data.id, project_code: data.project_code, title: data.title,
-      description: data.description, company_id: data.company_id,
-      company_name: data.companies?.name || 'Unknown', consultant_id: data.consultant_id,
-      status: data.status, start_date: data.start_date, target_end_date: data.target_end_date,
-      baseline_score: Number(data.baseline_productivity_index || 0),
-      current_score: Number(data.current_productivity_index || 0)
-    }
-  } catch (err) {
-    console.warn('[createProject] fallback to mockDB:', err)
+  const sb = getSupabase()
+  if (!sb) {
+    console.warn('[createProject] fallback to mockDB (No Supabase Client)')
     const db = getMockDB()
     const newProj: Project = {
       ...project, id: 'proj-' + Math.random().toString(36).substr(2, 9),
@@ -82,6 +60,33 @@ export async function createProject(project: Omit<Project, 'id' | 'project_code'
     }
     updateMockDB('projects', [...db.projects, newProj])
     return newProj
+  }
+
+  const newProjectCode = `BK-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`
+
+  const { data, error } = await sb.from('bimkon_projects').insert({
+    project_code: newProjectCode,
+    title: project.title, 
+    description: project.description,
+    company_id: project.company_id, 
+    consultant_id: project.consultant_id === 'unknown' ? null : project.consultant_id,
+    status: project.status, 
+    start_date: project.start_date,
+    target_end_date: project.target_end_date, 
+    current_phase: 'define',
+    dimensi_pqcdsm: project.dimensi_pqcdsm,
+    urgency_indicator: project.urgency_indicator
+  }).select('*, companies(name)').single()
+  
+  if (error) handleDbError(error)
+  
+  return {
+    id: data.id, project_code: data.project_code, title: data.title,
+    description: data.description, company_id: data.company_id,
+    company_name: data.companies?.name || 'Unknown', consultant_id: data.consultant_id,
+    status: data.status, start_date: data.start_date, target_end_date: data.target_end_date,
+    baseline_score: Number(data.baseline_productivity_index || 0),
+    current_score: Number(data.current_productivity_index || 0)
   }
 }
 
@@ -193,6 +198,13 @@ export async function updateCompany(companyId: string, fields: Partial<Company> 
     ...(fields.tier !== undefined && { tier: fields.tier }),
     ...(fields.tier_source !== undefined && { tier_source: fields.tier_source }),
     ...(fields.tier_set_at !== undefined && { tier_set_at: fields.tier_set_at }),
+    // §4 PRD Tier Simple — omzet tahunan dan rekomendasi upgrade tier
+    ...(fields.annual_revenue_idr !== undefined && { annual_revenue_idr: fields.annual_revenue_idr }),
+    ...(fields.jumlah_tenaga_kerja !== undefined && { jumlah_tenaga_kerja: fields.jumlah_tenaga_kerja }),
+    ...(fields.tier_upgrade_recommended !== undefined && { tier_upgrade_recommended: fields.tier_upgrade_recommended }),
+    ...(fields.tier_recommended_value !== undefined && { tier_recommended_value: fields.tier_recommended_value }),
+    ...(fields.tier_upgrade_reviewed_by !== undefined && { tier_upgrade_reviewed_by: fields.tier_upgrade_reviewed_by }),
+    ...(fields.tier_upgrade_reviewed_at !== undefined && { tier_upgrade_reviewed_at: fields.tier_upgrade_reviewed_at }),
     updated_at: new Date().toISOString(),
   }).eq('id', companyId)
   if (error) handleDbError(error)
@@ -1980,7 +1992,7 @@ export async function syncAllTiers(): Promise<{ updatedCount: number }> {
           }
         }
         
-        const calculatedTier = determineTier(totalKaryawan)
+        const calculatedTier = determineTier(totalKaryawan, comp.annual_revenue_idr)
 
         db.companies[i].total_employees = totalKaryawan
         db.companies[i].tier = calculatedTier
