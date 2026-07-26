@@ -5,9 +5,10 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getCompanies, getProjects, getCompanyBaselineAssessment, getAiIdentifiedProblems, saveAiIdentifiedProblems, updateAiIdentifiedProblemStatus, createProject, saveProjectCharter, updateProjectDetails, saveProjectEditLog } from '@/lib/db'
 import { Company, Project, CompanyBaselineAssessment, AiIdentifiedProblem } from '@/lib/mockData'
-import { Building, ArrowLeft, Plus, User, Phone, Mail, ArrowRight, BrainCircuit, FileText, CheckCircle2, Pencil, X } from 'lucide-react'
+import { Building, ArrowLeft, Plus, User, Phone, Mail, ArrowRight, BrainCircuit, FileText, CheckCircle2, Pencil, X, MapPin, Trash2 } from 'lucide-react'
 import { PROJECT_STATUS_LABELS, inferPQCDSMDimension } from '@/lib/utils'
 import CreateProjectModal from '@/components/CreateProjectModal'
+import { useDialog } from '@/hooks/useDialog'
 
 function EditProjectModal({ project, onClose, onSave }: { project: Project, onClose: () => void, onSave: (p: Partial<Project>) => void }) {
   const [title, setTitle] = useState(project.title)
@@ -16,6 +17,7 @@ function EditProjectModal({ project, onClose, onSave }: { project: Project, onCl
   const [endDate, setEndDate] = useState(project.target_end_date)
   const [dimensi, setDimensi] = useState(project.dimensi_pqcdsm || '')
   const [saving, setSaving] = useState(false)
+  const { showConfirm } = useDialog()
   
   const PQCDSM_OPTS = [
     { key: 'productivity', label: 'Production' },
@@ -29,7 +31,8 @@ function EditProjectModal({ project, onClose, onSave }: { project: Project, onCl
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     if (startDate !== project.start_date || endDate !== project.target_end_date) {
-      if (!confirm('Anda mengubah jadwal proyek. Apakah Anda yakin?')) return
+      const ok = await showConfirm('Anda mengubah jadwal proyek. Apakah Anda yakin?')
+      if (!ok) return
     }
     setSaving(true)
     await onSave({ title, description: desc, start_date: startDate, target_end_date: endDate, dimensi_pqcdsm: dimensi || undefined })
@@ -86,6 +89,7 @@ export default function CompanyDetailPage() {
   const params = useParams()
   const router = useRouter()
   const companyId = params.id as string
+  const { showAlert, showConfirm, showPrompt } = useDialog()
 
   const [company, setCompany] = useState<Company | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
@@ -98,6 +102,8 @@ export default function CompanyDetailPage() {
   const [aiAnalyzing, setAiAnalyzing] = useState(false)
   const [activeDimFilter, setActiveDimFilter] = useState<string | null>(null)
   const [activeProjDimFilter, setActiveProjDimFilter] = useState<string | null>(null)
+  // §6.3 PRD — readiness gate state
+  const [readinessGateOpen, setReadinessGateOpen] = useState<boolean | null>(null)
 
   useEffect(() => {
     async function loadData() {
@@ -125,6 +131,18 @@ export default function CompanyDetailPage() {
       ])
       setAssessment(ass)
       setAiProblems(probs)
+
+      // §6.3 PRD — load readiness gate status untuk tier simple
+      if (comp?.tier === 'simple') {
+        try {
+          const { getReadinessGateStatus } = await import('@/app/actions/readiness')
+          const gate = await getReadinessGateStatus(companyId)
+          setReadinessGateOpen(gate.gateOpen)
+        } catch { setReadinessGateOpen(false) }
+      } else {
+        // Tier menengah/besar: gate selalu terbuka (tidak ada readiness phase)
+        setReadinessGateOpen(true)
+      }
     }
     loadData()
   }, [companyId, router])
@@ -149,7 +167,7 @@ export default function CompanyDetailPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Gagal analisis AI')
       
-      const newProblems = data.map((d: any, i: number) => ({
+      const newProblems = data.map((d: any) => ({
         id: crypto.randomUUID(),
         assessment_id: assessment.id,
         company_id: companyId,
@@ -163,50 +181,56 @@ export default function CompanyDetailPage() {
       
       await saveAiIdentifiedProblems(newProblems)
       setAiProblems(prev => [...prev, ...newProblems])
-      alert('Analisis selesai! Menemukan ' + newProblems.length + ' masalah potensial.')
+      await showAlert('Analisis selesai! Menemukan ' + newProblems.length + ' masalah potensial.')
     } catch (err: any) {
-      alert(err.message)
+      await showAlert(err.message)
     } finally {
       setAiAnalyzing(false)
     }
   }
 
   const handleApproveProblem = async (prob: AiIdentifiedProblem) => {
-    if (!confirm('Buat proyek baru dari masalah ini?')) return
+    const ok = await showConfirm('Buat proyek baru dari masalah ini?')
+    if (!ok) return
     
-    // Create new Project
-    const newProj = await createProject({
-      title: prob.title,
-      description: prob.description,
-      company_id: companyId,
-      company_name: company?.name || '',
-      consultant_id: currentUser?.id || 'unknown',
-      status: 'define',
-      start_date: new Date().toISOString().split('T')[0],
-      target_end_date: new Date(Date.now() + 90*24*60*60*1000).toISOString().split('T')[0],
-      baseline_score: 0,
-      current_score: 0,
-      dimensi_pqcdsm: prob.pqcdsm_dimensions?.[0] || undefined,
-      urgency_indicator: prob.urgency_indicator || undefined,
-    })
-    
-    // Create Draft Charter
-    await saveProjectCharter({
-      project_id: newProj.id,
-      problem_statement: prob.description,
-      objectives: '',
-      productivity_target: '',
-      scope: '',
-      team_members: [],
-      source: 'ai_generated',
-      source_problem_id: prob.id
-    })
-    
-    await updateAiIdentifiedProblemStatus(prob.id, 'approved', newProj.id, companyId)
-    setAiProblems(prev => prev.map(p => p.id === prob.id ? { ...p, status: 'approved', project_id: newProj.id } : p))
-    setProjects(prev => [...prev, newProj])
-    
-    router.push(`/projects/${newProj.id}/define`)
+    try {
+      // Create new Project
+      const newProj = await createProject({
+        title: prob.title,
+        description: prob.description,
+        company_id: companyId,
+        company_name: company?.name || '',
+        consultant_id: currentUser?.id || 'unknown',
+        status: 'define',
+        start_date: new Date().toISOString().split('T')[0],
+        target_end_date: new Date(Date.now() + 90*24*60*60*1000).toISOString().split('T')[0],
+        baseline_score: 0,
+        current_score: 0,
+        dimensi_pqcdsm: prob.pqcdsm_dimensions?.[0] || undefined,
+        urgency_indicator: prob.urgency_indicator || undefined,
+      })
+      
+      // Create Draft Charter
+      await saveProjectCharter({
+        project_id: newProj.id,
+        problem_statement: prob.description,
+        objectives: '',
+        productivity_target: '',
+        scope: '',
+        team_members: [],
+        source: 'ai_generated',
+        source_problem_id: prob.id
+      })
+      
+      await updateAiIdentifiedProblemStatus(prob.id, 'approved', newProj.id, companyId)
+      setAiProblems(prev => prev.map(p => p.id === prob.id ? { ...p, status: 'approved', project_id: newProj.id } : p))
+      setProjects(prev => [...prev, newProj])
+      
+      router.push(`/projects/${newProj.id}/define`)
+    } catch (error: any) {
+      console.error('Failed to approve problem and create project:', error);
+      await showAlert('Gagal membuat proyek: ' + (error.message || String(error)));
+    }
   }
 
   const handleSaveEditProject = async (updates: Partial<Project>) => {
@@ -225,17 +249,56 @@ export default function CompanyDetailPage() {
     }).catch(e => console.error(e))
   }
 
+  const handleDeleteCompany = async () => {
+    const confirmText = (company?.name || '').trim()
+    const userInput = await showPrompt(
+      `⚠️ PERINGATAN: Tindakan ini tidak dapat dibatalkan!\n\nSemua data perusahaan ini akan dihapus permanen, termasuk semua Proyek DMAIC, Baseline Assessment, Data PQCDSM, dan Fase Kesiapan.\n\nKetik nama perusahaan untuk konfirmasi:\n"${confirmText}"`,
+      'Konfirmasi Hapus Perusahaan'
+    )
+    if (userInput === null) return
+    if ((userInput || '').trim() !== confirmText) {
+      await showAlert('Nama perusahaan tidak cocok. Penghapusan dibatalkan.')
+      return
+    }
+    
+    try {
+      const { createClient } = await import('@/lib/supabase/client')
+      const supabase = createClient()
+      
+      const { error } = await supabase
+        .from('companies')
+        .delete()
+        .eq('id', companyId)
+      
+      if (error) throw error
+      
+      await showAlert('Perusahaan berhasil dihapus.')
+      router.push('/companies')
+    } catch (err: any) {
+      await showAlert('Gagal menghapus perusahaan: ' + (err.message || String(err)))
+    }
+  }
+
   if (!company) {
     return <div className="text-center py-20 text-slate-400 text-sm">Memuat profil perusahaan...</div>
   }
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
-      {/* Back link */}
-      <div>
+      {/* Back link + actions */}
+      <div className="flex items-center justify-between">
         <Link href="/companies" className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
           <ArrowLeft className="h-3.5 w-3.5" /> Kembali ke Daftar Perusahaan
         </Link>
+        {isKonsultan && (
+          <button
+            onClick={handleDeleteCompany}
+            className="inline-flex items-center gap-1.5 text-xs text-rose-500 hover:text-rose-400 hover:bg-rose-500/10 px-3 py-1.5 rounded-lg border border-rose-500/20 hover:border-rose-500/40 transition-all"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Hapus Perusahaan
+          </button>
+        )}
       </div>
 
       {/* Header Profile Panel */}
@@ -288,6 +351,109 @@ export default function CompanyDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Fase Kesiapan Card — hanya untuk tier simple */}
+      {company?.tier === 'simple' && (
+        <div className={`rounded-3xl border p-6 md:p-8 space-y-3 ${readinessGateOpen ? 'border-emerald-700/40 bg-emerald-950/10' : 'border-amber-800/40 bg-amber-950/10'}`}>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h2 className={`text-lg font-bold flex items-center gap-2 ${readinessGateOpen ? 'text-emerald-300' : 'text-amber-300'}`}>
+                <MapPin className="h-5 w-5" />
+                Fase Kesiapan (Readiness Phase)
+                {readinessGateOpen === true && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-400">
+                    ✓ Gate Terbuka
+                  </span>
+                )}
+                {readinessGateOpen === false && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-400">
+                    🔒 Belum Selesai
+                  </span>
+                )}
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {readinessGateOpen
+                  ? 'Fase Kesiapan sudah disetujui Konsultan. Proyek formal DMAIC bisa dimulai.'
+                  : 'Lengkapi dua modul ini sebelum memulai proyek formal DMAIC: Pemetaan Proses Bisnis dan Identifikasi Waste Cepat.'}
+              </p>
+            </div>
+            <Link
+              href={`/companies/${companyId}/readiness`}
+              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-white text-xs font-bold transition-colors ${readinessGateOpen ? 'bg-emerald-700 hover:bg-emerald-600' : 'bg-amber-600 hover:bg-amber-500'}`}
+            >
+              <MapPin className="h-4 w-4" />
+              {readinessGateOpen ? 'Lihat Detail' : 'Buka Fase Kesiapan'}
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* §6.6 PRD — Tier Upgrade Recommendation Banner (hanya untuk konsultan) */}
+      {isKonsultan && company?.tier_upgrade_recommended && (
+        <div className="rounded-3xl border border-blue-700/40 bg-blue-950/10 p-5 flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center flex-shrink-0">
+              <ArrowRight className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-blue-300">Rekomendasi Upgrade Tier</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Berdasarkan data terbaru, perusahaan ini memenuhi kriteria tier{' '}
+                <strong className="text-blue-300">{company.tier_recommended_value}</strong>.
+                Tier saat ini: <strong>{company.tier}</strong>.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={async () => {
+                const ok = await showConfirm(
+                  `Setujui upgrade tier perusahaan ini dari "${company.tier}" ke "${company.tier_recommended_value}"?`,
+                  'Konfirmasi Upgrade Tier'
+                )
+                if (!ok) return
+                try {
+                  const { updateCompany } = await import('@/lib/db')
+                  await updateCompany(companyId, {
+                    tier: company.tier_recommended_value as any,
+                    tier_source: 'manual',
+                    tier_upgrade_recommended: false,
+                    tier_upgrade_reviewed_by: currentUserId,
+                    tier_upgrade_reviewed_at: new Date().toISOString(),
+                  })
+                  await showAlert(`Tier berhasil diupdate ke ${company.tier_recommended_value}.`)
+                  window.location.reload()
+                } catch (err: any) {
+                  await showAlert('Gagal update tier: ' + err.message)
+                }
+              }}
+              className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-colors"
+            >
+              Setujui Upgrade
+            </button>
+            <button
+              onClick={async () => {
+                const ok = await showConfirm('Tolak rekomendasi upgrade tier ini?', 'Tolak Upgrade')
+                if (!ok) return
+                try {
+                  const { updateCompany } = await import('@/lib/db')
+                  await updateCompany(companyId, {
+                    tier_upgrade_recommended: false,
+                    tier_upgrade_reviewed_by: currentUserId,
+                    tier_upgrade_reviewed_at: new Date().toISOString(),
+                  })
+                  window.location.reload()
+                } catch (err: any) {
+                  await showAlert('Gagal: ' + err.message)
+                }
+              }}
+              className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold transition-colors"
+            >
+              Tolak
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Onboarding & AI Panel */}
       <div className="rounded-3xl border border-slate-850 bg-slate-950/20 p-6 md:p-8 space-y-4">
@@ -426,7 +592,17 @@ export default function CompanyDetailPage() {
             <p className="text-xs text-slate-500">Seluruh proyek Smart Productive aktif dan selesai untuk perusahaan ini</p>
           </div>
           <button 
-            onClick={() => setShowNewProjectModal(true)}
+            onClick={async () => {
+              // §6.3 PRD — Readiness Gate: blokir tier simple sampai gate terbuka
+              if (company?.tier === 'simple' && readinessGateOpen === false) {
+                await showAlert(
+                  'Fase Kesiapan belum selesai.\n\nSelesaikan Modul Pemetaan Proses Bisnis dan Identifikasi Waste Cepat, lalu dapatkan persetujuan Konsultan sebelum memulai proyek baru.',
+                  'Readiness Gate Belum Terbuka'
+                )
+                return
+              }
+              setShowNewProjectModal(true)
+            }}
             className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all cursor-pointer transform hover:-translate-y-0.5"
             style={{background: 'linear-gradient(135deg, #b8860b, #d4a017, #f4c430)', color: 'var(--navy-950)', boxShadow: '0 6px 20px rgba(212,160,23,0.15)'}}
           >
@@ -607,6 +783,7 @@ export default function CompanyDetailPage() {
           currentUserId={currentUserId}
           fixedCompanyId={company.id}
           fixedCompanyName={company.name}
+          readinessGateOpen={readinessGateOpen}
           onCreated={(proj) => setProjects(prev => [...prev, proj])}
           onClose={() => setShowNewProjectModal(false)}
         />
