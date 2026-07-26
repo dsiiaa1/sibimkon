@@ -73,9 +73,7 @@ export async function createProject(project: Omit<Project, 'id' | 'project_code'
     status: project.status, 
     start_date: project.start_date,
     target_end_date: project.target_end_date, 
-    current_phase: 'define',
-    dimensi_pqcdsm: project.dimensi_pqcdsm,
-    urgency_indicator: project.urgency_indicator
+    current_phase: 'define'
   }).select('*, companies(name)').single()
   
   if (error) handleDbError(error)
