@@ -336,7 +336,8 @@ export async function getMeasureDataRequirements(projectId: string): Promise<Mea
       return {
         ...row,
         group: row.data_group ?? row.group ?? 'context',
-        raw_data: localItem?.raw_data || undefined,
+        // Restore raw_data from parsed_summary._raw_data (persisted) or localStorage
+        raw_data: localItem?.raw_data || ps._raw_data || undefined,
         file_name: ps._file_name ?? localItem?.file_name ?? row.file_name,
         calculation_results_final: ps._calculation_results_final ?? localItem?.calculation_results_final ?? row.calculation_results_final,
         calculation_results: ps._calculation_results ?? localItem?.calculation_results ?? row.calculation_results,
@@ -390,7 +391,9 @@ export async function saveMeasureDataRequirements(projectId: string, reqs: Measu
         _file_name: r.file_name,
         _calculation_results_final: r.calculation_results_final,
         _calculation_results: r.calculation_results,
-        _upload_warning: r.upload_warning
+        _upload_warning: r.upload_warning,
+        // Persist raw_data so calculations work after page refresh
+        _raw_data: r.raw_data && r.raw_data.length > 0 ? r.raw_data : undefined,
       },
       recommended_methods: r.recommended_methods ?? null,
       source: r.source,
