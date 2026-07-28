@@ -73,7 +73,8 @@ export async function createProject(project: Omit<Project, 'id' | 'project_code'
     status: project.status, 
     start_date: project.start_date,
     target_end_date: project.target_end_date, 
-    current_phase: 'define'
+    current_phase: 'define',
+    urgency_indicator: project.urgency_indicator || null
   }).select('*, companies(name)').single()
   
   if (error) handleDbError(error)
@@ -84,7 +85,8 @@ export async function createProject(project: Omit<Project, 'id' | 'project_code'
     company_name: data.companies?.name || 'Unknown', consultant_id: data.consultant_id,
     status: data.status, start_date: data.start_date, target_end_date: data.target_end_date,
     baseline_score: Number(data.baseline_productivity_index || 0),
-    current_score: Number(data.current_productivity_index || 0)
+    current_score: Number(data.current_productivity_index || 0),
+    urgency_indicator: data.urgency_indicator || project.urgency_indicator
   }
 }
 
@@ -198,7 +200,7 @@ export async function updateCompany(companyId: string, fields: Partial<Company> 
     ...(fields.tier_set_at !== undefined && { tier_set_at: fields.tier_set_at }),
     // §4 PRD Tier Simple — omzet tahunan dan rekomendasi upgrade tier
     ...(fields.annual_revenue_idr !== undefined && { annual_revenue_idr: fields.annual_revenue_idr }),
-    ...(fields.jumlah_tenaga_kerja !== undefined && { jumlah_tenaga_kerja: fields.jumlah_tenaga_kerja }),
+    ...(fields.jumlah_tenaga_kerja !== undefined && { total_employees: fields.jumlah_tenaga_kerja }),
     ...(fields.tier_upgrade_recommended !== undefined && { tier_upgrade_recommended: fields.tier_upgrade_recommended }),
     ...(fields.tier_recommended_value !== undefined && { tier_recommended_value: fields.tier_recommended_value }),
     ...(fields.tier_upgrade_reviewed_by !== undefined && { tier_upgrade_reviewed_by: fields.tier_upgrade_reviewed_by }),

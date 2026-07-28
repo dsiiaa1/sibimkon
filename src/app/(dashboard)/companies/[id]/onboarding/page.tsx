@@ -280,6 +280,9 @@ export default function OnboardingPage() {
       pic_email: editableEmail,
       annual_revenue_idr: revenue,
       jumlah_tenaga_kerja: totalKaryawan,
+      kadin_membership: kadin ? 'kadin' : 'tidak_aktif',
+      labor_union: serikatPekerja ? serikatPekerjaNama : '',
+      pkb_status: pkb ? 'ada_aktif' : 'tidak_ada',
     }
 
     if (status === 'submitted') {

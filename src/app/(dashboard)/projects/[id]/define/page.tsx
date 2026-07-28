@@ -107,13 +107,23 @@ export default function DefinePage() {
       if (comp) {
         setCompany(comp)
         setCompName(comp.name)
-        setCompAddress(comp.address)
-        setCompEmployees(comp.total_employees)
-        setCompField(comp.business_field)
-        setCompProduct((comp as any).main_product || '')
-        setCompKadin((comp as any).kadin_membership || 'tidak_aktif')
-        setCompUnion((comp as any).labor_union || '')
-        setCompPkb((comp as any).pkb_status || 'tidak_ada')
+        setCompAddress(comp.address || '')
+        setCompEmployees((comp as any).jumlah_tenaga_kerja || comp.total_employees || 0)
+        setCompField(comp.business_field || '')
+        setCompProduct((comp as any).main_products || (comp as any).main_product || '')
+        
+        let kadinVal = (comp as any).kadin_membership || 'tidak_aktif'
+        if ((comp as any).kadin_member || (comp as any).apindo_member) {
+          const isKadin = (comp as any).kadin_member
+          const isApindo = (comp as any).apindo_member
+          if (isKadin && isApindo) kadinVal = 'keduanya'
+          else if (isKadin) kadinVal = 'kadin'
+          else if (isApindo) kadinVal = 'apindo'
+        }
+        setCompKadin(kadinVal)
+        
+        setCompUnion((comp as any).labor_union || ((comp as any).has_union ? 'Ada Serikat Pekerja' : ''))
+        setCompPkb((comp as any).pkb_status || ((comp as any).has_pkb ? 'ada_aktif' : 'tidak_ada'))
         setCompCertifications(comp.certifications || [])
       }
 

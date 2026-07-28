@@ -37,6 +37,7 @@ export default function CreateProjectModal({
     d.setMonth(d.getMonth() + 3)
     return d.toISOString().split('T')[0]
   })
+  const [urgency, setUrgency] = useState('Sedang')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -95,6 +96,7 @@ export default function CreateProjectModal({
         status: 'define',
         start_date: startDate,
         target_end_date: endDate,
+        urgency_indicator: urgency,
       })
       onCreated(newProj)
       onClose()
@@ -242,6 +244,20 @@ export default function CreateProjectModal({
               {endDate <= startDate && (
                 <p className="text-[10px] text-red-400 mt-1">Harus setelah tanggal mulai</p>
               )}
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                Kategori Urgensi
+              </label>
+              <select
+                value={urgency}
+                onChange={(e) => setUrgency(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-250 focus:outline-none focus:border-indigo-500 text-sm"
+              >
+                <option value="Rendah">Rendah</option>
+                <option value="Sedang">Sedang</option>
+                <option value="Tinggi">Tinggi</option>
+              </select>
             </div>
           </div>
 

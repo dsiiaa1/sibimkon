@@ -130,7 +130,17 @@ export default function ProjectsPage() {
             <div key={proj.id} className="glass-card rounded-2xl border border-slate-800/60 bg-slate-950/30 p-6 flex flex-col justify-between hover:border-slate-700 transition-all group hover:-translate-y-0.5">
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-mono text-indigo-400">{proj.project_code}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono text-indigo-400">{proj.project_code}</span>
+                    {proj.urgency_indicator && (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-white ${
+                        proj.urgency_indicator === 'Tinggi' ? 'bg-red-500' :
+                        proj.urgency_indicator === 'Sedang' ? 'bg-amber-500' : 'bg-emerald-500'
+                      }`}>
+                        Urgensi: {proj.urgency_indicator}
+                      </span>
+                    )}
+                  </div>
                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider text-white ${statusInfo.color}`}>
                     {statusInfo.label}
                   </span>
