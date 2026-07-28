@@ -658,6 +658,14 @@ export default function CompanyDetailPage() {
                   <div className="flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-indigo-400">{proj.project_code}</span>
+                      {proj.urgency_indicator && (
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-white ${
+                          proj.urgency_indicator === 'Tinggi' ? 'bg-red-500' :
+                          proj.urgency_indicator === 'Sedang' ? 'bg-amber-500' : 'bg-emerald-500'
+                        }`}>
+                          Urgensi: {proj.urgency_indicator}
+                        </span>
+                      )}
                       {isKonsultan && (
                         <button onClick={() => setEditingProject(proj)} className="p-1 rounded bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-indigo-400 transition-colors" title="Edit Proyek">
                           <Pencil className="w-3 h-3" />
