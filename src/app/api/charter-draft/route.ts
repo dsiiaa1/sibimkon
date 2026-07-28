@@ -24,15 +24,25 @@ function extractJson(raw: string): any {
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { projectId } = body
+    const { projectId, isRegenerate, userRole } = body
+
+    // ── Role check for regenerate ──────────────────────────────────────────────
+    if (isRegenerate && userRole !== 'konsultan') {
+      return NextResponse.json(
+        { error: 'Hanya konsultan yang dapat melakukan regenerate draft charter' },
+        { status: 403 }
+      )
+    }
 
     if (!projectId) {
       return NextResponse.json({ error: 'Project ID tidak disertakan' }, { status: 400 })
     }
 
-    let companyId = null
-    
-    // 1. Fetch project to get company_id
+    let companyId: string | null = null
+    let projectTitle: string | null = null
+    let projectDescription: string | null = null
+
+    // 1. Fetch project to get company_id, title, description (FIX: sebelumnya hanya company_id)
     let sb: any = null
     try {
       if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
@@ -41,30 +51,52 @@ export async function POST(req: Request) {
     } catch(e) {}
 
     if (sb) {
-      const { data: proj, error: projErr } = await sb.from('bimkon_projects').select('company_id').eq('id', projectId).maybeSingle()
+      const { data: proj, error: projErr } = await sb
+        .from('bimkon_projects')
+        .select('company_id, title, description')  // FIX: tambahkan title & description
+        .eq('id', projectId)
+        .maybeSingle()
       if (!projErr && proj) {
         companyId = proj.company_id
+        projectTitle = proj.title || null
+        projectDescription = proj.description || null
       }
     } else {
       const db = getMockDB()
       const proj = db.projects.find((p: any) => p.id === projectId)
-      if (proj) companyId = proj.company_id
+      if (proj) {
+        companyId = proj.company_id
+        projectTitle = proj.title || null
+        projectDescription = proj.description || null
+      }
     }
 
     if (!companyId) {
       return NextResponse.json({ error: 'Project tidak ditemukan atau tidak memiliki company_id' }, { status: 404 })
     }
 
+    // FIX: Validasi title/description proyek — wajib ada agar charter relevan
+    if (!projectTitle || !projectTitle.trim()) {
+      return NextResponse.json(
+        { error: 'Judul proyek belum diisi. Tidak bisa membuat draft charter tanpa judul proyek.' },
+        { status: 400 }
+      )
+    }
+
     // 2. Fetch company baseline assessment
-    let assessmentData = null
+    let assessmentData: any = null
     if (sb) {
-      const { data: assess, error: assessErr } = await sb.from('company_baseline_assessments').select('*').eq('company_id', companyId).maybeSingle()
+      const { data: assess, error: assessErr } = await sb
+        .from('company_baseline_assessments')
+        .select('*')
+        .eq('company_id', companyId)
+        .maybeSingle()
       if (!assessErr && assess) {
         assessmentData = assess
       }
     } else {
       const db = getMockDB()
-      assessmentData = db.companyBaselineAssessments[companyId]
+      assessmentData = db.companyBaselineAssessments?.[companyId]
     }
 
     if (!assessmentData) {
@@ -85,29 +117,40 @@ export async function POST(req: Request) {
       rencana_program: assessmentData.ringkasan_rencana_program
     }
 
-    const prompt = `Anda adalah konsultan ahli operasional Lean Six Sigma. Anda ditugaskan menyusun draf Project Charter berdasarkan data kuesioner onboarding perusahaan klien.
+    // FIX: Prompt baru — project title/description sebagai FOKUS UTAMA
+    const prompt = `Anda adalah konsultan ahli operasional Lean Six Sigma (Master Black Belt).
 
-Data Kuesioner:
+FOKUS PROYEK INI (WAJIB DIJADIKAN TOPIK UTAMA — JANGAN MENYIMPANG):
+Judul Proyek: ${projectTitle}
+Deskripsi Masalah Proyek: ${projectDescription || '(tidak ada deskripsi tambahan)'}
+
+Data pendukung dari kuesioner onboarding perusahaan (gunakan HANYA bagian yang relevan dengan topik proyek di atas; abaikan dimensi yang tidak berkaitan dengan "${projectTitle}"):
 Struktur Staf: ${JSON.stringify(assessmentData.struktur_staf)}
 Dimensi PQCDSM: ${JSON.stringify(pqcdsmData)}
 Ringkasan Manajemen: ${JSON.stringify(summaryData)}
 
-Tugas Anda: Buat draf untuk 4 kolom berikut dalam bentuk JSON (pastikan valid JSON, hanya kembalikan object JSON saja, tanpa tambahan kalimat pengantar atau markdown lainnya):
-- "problem_statement": (string) Pernyataan masalah yang spesifik berdasarkan data kuesioner (apa masalahnya, seberapa besar, dampaknya).
-- "objectives": (string) Tujuan proyek yang SMART (Specific, Measurable, Achievable, Relevant, Time-bound).
-- "productivity_target": (string) Target efisiensi/produktivitas atau perbaikan metrik yang diharapkan.
-- "scope": (string) Batasan masalah atau area kerja proyek ini (in scope & out of scope).
-- "business_case": (string) Alasan strategis mengapa proyek ini penting bagi perusahaan secara finansial atau kelangsungan bisnis.
+ATURAN PENTING:
+1. Seluruh isi charter (problem_statement, objectives, productivity_target, scope, business_case, timeline) HARUS membahas topik "${projectTitle}" secara spesifik dan relevan.
+2. JANGAN membahas dimensi PQCDSM lain yang tidak berkaitan dengan topik proyek ini. Misal jika proyek ini tentang keterlambatan pengiriman, fokus pada delivery — bukan quality/defect.
+3. Gunakan angka/fakta spesifik dari deskripsi proyek dan data pendukung yang relevan.
+4. Charter antar-proyek dalam perusahaan yang sama harus berbeda — buat konten yang benar-benar spesifik untuk proyek ini.
+
+Tugas Anda: Buat draf untuk 6 kolom berikut dalam bentuk JSON (hanya kembalikan object JSON saja, tanpa teks tambahan):
+- "problem_statement": (string) Pernyataan masalah yang spesifik tentang "${projectTitle}" (apa masalahnya, seberapa besar, dampaknya pada operasional).
+- "objectives": (string) Tujuan proyek yang SMART (Specific, Measurable, Achievable, Relevant, Time-bound) terkait "${projectTitle}".
+- "productivity_target": (string) Target efisiensi/produktivitas atau perbaikan metrik yang diharapkan dari penyelesaian masalah "${projectTitle}".
+- "scope": (string) Batasan masalah atau area kerja proyek ini (in scope & out of scope) terkait "${projectTitle}".
+- "business_case": (string) Alasan strategis mengapa masalah "${projectTitle}" penting diselesaikan secara finansial atau kelangsungan bisnis.
 - "timeline": (string) Estimasi garis waktu proyek dari awal hingga akhir dalam hitungan minggu atau bulan.
 
-CONTOH OUTPUT:
+FORMAT OUTPUT (WAJIB valid JSON object):
 {
-  "problem_statement": "Tingkat defect pada produk X mencapai 8% melebihi toleransi maksimal 2%...",
-  "objectives": "Menurunkan tingkat defect dari 8% menjadi 2% pada akhir kuartal 4.",
-  "productivity_target": "Peningkatan yield rate produksi sebesar 6%.",
-  "scope": "In scope: Proses produksi di Line 1. Out of scope: Pengiriman dan logistik.",
-  "business_case": "Mengurangi cacat produksi akan menghemat biaya material sebesar 15% per bulan.",
-  "timeline": "Bulan 1-2: Fase Measure & Analyze. Bulan 3: Improve & Control."
+  "problem_statement": "...",
+  "objectives": "...",
+  "productivity_target": "...",
+  "scope": "...",
+  "business_case": "...",
+  "timeline": "..."
 }`
 
     const aiRes = await generateWithFallback(prompt, {
@@ -115,7 +158,7 @@ CONTOH OUTPUT:
       temperature: 0.2,
       maxTokens: 2048
     })
-    
+
     const rawResponse = aiRes.text
     const result = extractJson(rawResponse)
 

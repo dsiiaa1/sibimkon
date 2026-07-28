@@ -51,10 +51,16 @@ export default function DefinePage() {
   const [fieldSources, setFieldSources] = useState<Record<string, string>>({})
   const [isDrafting, setIsDrafting] = useState(false)
 
-  const generateCharterDraft = async (isAuto = false) => {
+  const generateCharterDraft = async (isAuto = false, forceRegenerate = false) => {
     if (!isAuto) {
       const hasEdited = Object.values(fieldSources).includes('user_edited')
-      if (hasEdited) {
+      if (forceRegenerate) {
+        const ok = await showConfirm(
+          'Draft charter saat ini akan ditimpa dengan hasil generate ulang dari AI.\n\nKonten yang sudah diedit manual juga akan tertimpa. Lanjutkan?',
+          'Konfirmasi Regenerate Draft'
+        )
+        if (!ok) return
+      } else if (hasEdited) {
         const confirm = await showConfirm('Beberapa kolom sudah Anda edit manual. Yakin ingin menimpa dengan draf otomatis?')
         if (!confirm) return
       }
@@ -65,7 +71,11 @@ export default function DefinePage() {
       const res = await fetch('/api/charter-draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId })
+        body: JSON.stringify({
+          projectId,
+          isRegenerate: forceRegenerate,
+          userRole: localUser?.role || 'perusahaan'
+        })
       })
       const data = await res.json()
       if (res.ok) {
@@ -85,7 +95,7 @@ export default function DefinePage() {
           timeline: data.timeline ? 'ai_draft' : 'empty'
         })
         setCharterSource('ai_generated')
-        if (!isAuto) showSave('Draf berhasil disusun ulang dari kuesioner.')
+        if (!isAuto) showSave(forceRegenerate ? 'Draft charter berhasil di-generate ulang!' : 'Draf berhasil disusun ulang dari kuesioner.')
       } else {
         if (!isAuto) await showAlert(data.error || 'Gagal menyusun draf otomatis.')
       }
@@ -529,7 +539,18 @@ export default function DefinePage() {
             <div className="flex items-center justify-between border-b border-slate-850 pb-3">
               <h2 className="text-lg font-bold text-slate-200">Productivity Project Charter</h2>
               <div className="flex gap-2 items-center">
-                {/* Button removed by user request */}
+                {/* Tombol Regenerate Draft — hanya untuk konsultan */}
+                {isKonsultan && (
+                  <button
+                    onClick={() => generateCharterDraft(false, true)}
+                    disabled={isDrafting}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-400 text-xs font-bold transition-colors disabled:opacity-50"
+                    title="Generate ulang draft charter berdasarkan judul dan deskripsi proyek"
+                  >
+                    <BrainCircuit className="h-3.5 w-3.5" />
+                    {isDrafting ? 'Memproses...' : 'Regenerate Draft AI'}
+                  </button>
+                )}
               </div>
             </div>
             
