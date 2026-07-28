@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getCompanies, getCompanyBaselineAssessment, saveCompanyBaselineAssessment, updateCompany } from '@/lib/db'
@@ -159,6 +159,11 @@ export default function OnboardingPage() {
   const [baganOrganisasi, setBaganOrganisasi] = useState('')
   const [prosesProduksi, setProsesProduksi] = useState('')
 
+  const isInitialMount = useRef(true)
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [lastSaved, setLastSaved] = useState<Date | null>(null)
+
   useEffect(() => {
     async function loadData() {
       const companies = await getCompanies()
@@ -214,7 +219,7 @@ export default function OnboardingPage() {
     loadData()
   }, [companyId])
 
-  const handleSave = async (status: 'draft' | 'submitted') => {
+  const handleSave = async (status: 'draft' | 'submitted', isAutoSave = false) => {
     const updated: any = {
       ...(assessment?.id ? { id: assessment.id } : {}),
       company_id: companyId,
@@ -260,24 +265,31 @@ export default function OnboardingPage() {
     await saveCompanyBaselineAssessment(updated)
     setAssessment(updated)
     
+    // Menghitung total karyawan dari struktur staf (baik untuk draft maupun submit agar live update)
+    let totalKaryawan = 0
+    if (strukturStaf.karyawan_tetap?.jumlah) totalKaryawan += Number(strukturStaf.karyawan_tetap.jumlah)
+    if (strukturStaf.manajer?.jumlah) totalKaryawan += Number(strukturStaf.manajer.jumlah)
+    if (strukturStaf.supervisor?.jumlah) totalKaryawan += Number(strukturStaf.supervisor.jumlah)
+    if (strukturStaf.karyawan_tetap_lain?.jumlah) totalKaryawan += Number(strukturStaf.karyawan_tetap_lain.jumlah)
+    if (strukturStaf.karyawan_kontrak?.jumlah) totalKaryawan += Number(strukturStaf.karyawan_kontrak.jumlah)
+    
+    const revenue = annualRevenueIdr ? Number(annualRevenueIdr) : null
+
+    const companyUpdatePayload: any = {
+      pic_phone: editablePhone,
+      pic_email: editableEmail,
+      annual_revenue_idr: revenue,
+      jumlah_tenaga_kerja: totalKaryawan,
+    }
+
     if (status === 'submitted') {
-      // Menghitung total karyawan dari struktur staf
-      let totalKaryawan = 0
-      if (strukturStaf.karyawan_tetap?.jumlah) totalKaryawan += Number(strukturStaf.karyawan_tetap.jumlah)
-      if (strukturStaf.manajer?.jumlah) totalKaryawan += Number(strukturStaf.manajer.jumlah)
-      if (strukturStaf.supervisor?.jumlah) totalKaryawan += Number(strukturStaf.supervisor.jumlah)
-      if (strukturStaf.karyawan_tetap_lain?.jumlah) totalKaryawan += Number(strukturStaf.karyawan_tetap_lain.jumlah)
-      if (strukturStaf.karyawan_kontrak?.jumlah) totalKaryawan += Number(strukturStaf.karyawan_kontrak.jumlah)
-      
-      const revenue = annualRevenueIdr ? Number(annualRevenueIdr) : null
       const finalTier = determineTier(totalKaryawan, revenue)
       
       // Update data company
       await updateCompany(companyId, {
+        ...companyUpdatePayload,
         tier: finalTier,
         tier_source: 'auto',
-        jumlah_tenaga_kerja: totalKaryawan,
-        annual_revenue_idr: revenue,
         onboarding_completed: true,
         onboarding_completed_at: new Date().toISOString(),
         tier_set_at: new Date().toISOString()
@@ -285,9 +297,47 @@ export default function OnboardingPage() {
       
       router.push(`/companies/${companyId}/onboarding/reveal`)
     } else {
-      alert('Draft berhasil disimpan.')
+      // Simpan juga data profil di draft
+      await updateCompany(companyId, companyUpdatePayload)
+      if (!isAutoSave) {
+        alert('Draft berhasil disimpan.')
+      }
     }
   }
+
+  // Auto-save effect
+  useEffect(() => {
+    if (loading || isLocked) return;
+    
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    setIsSaving(true);
+    saveTimeoutRef.current = setTimeout(() => {
+      handleSave('draft', true).finally(() => {
+        setIsSaving(false);
+        setLastSaved(new Date());
+      });
+    }, 1500); // Save after 1.5 seconds of inactivity
+
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, [
+    editablePhone, editableEmail, tahunPendirian, kepemilikan, annualRevenueIdr, 
+    pemilikGender, asalInvestasi, konsumenUtama, ekspor, eksporPersen, 
+    kadin, kadinNama, serikatPekerja, serikatPekerjaNama, pkb, pkbTanggal, 
+    strukturStaf, jamKerja, upahDigital, upahDigitalPersen, 
+    dimensiProduction, dimensiQuality, dimensiCost, dimensiDelivery, 
+    dimensiSafety, dimensiMorale, ringkasanMasalah, ringkasanRencana, 
+    ringkasanTraining, baganOrganisasi, prosesProduksi
+  ]);
 
   const updateStruktur = (role: string, field: string, val: string) => {
     setStrukturStaf((prev: any) => ({
@@ -958,13 +1008,15 @@ export default function OnboardingPage() {
           <div className="pt-8 mt-8 border-t border-slate-800 flex justify-end gap-4">
             {!isLocked && (
               <>
-                <button 
-                  type="button"
-                  onClick={() => handleSave('draft')}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 font-semibold transition-colors"
-                >
-                  <Save className="h-4 w-4" /> Simpan Draft
-                </button>
+                <div className="flex items-center gap-2 px-4 py-2 text-sm text-slate-400 mr-auto">
+                  {isSaving ? (
+                    <><Save className="h-4 w-4 animate-pulse text-indigo-400" /> Menyimpan...</>
+                  ) : lastSaved ? (
+                    <><CheckCircle2 className="h-4 w-4 text-emerald-500" /> Tersimpan {lastSaved.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</>
+                  ) : (
+                    <span className="text-xs">Otomatis menyimpan...</span>
+                  )}
+                </div>
                 <button 
                   type="submit"
                   className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-all shadow-lg shadow-indigo-500/20"
