@@ -287,9 +287,11 @@ export default function MeasurePage() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [activeUploadId, setActiveUploadId] = useState<string | null>(null)
+  const activeUploadIdRef = useRef<string | null>(null)
 
   const handleUploadClick = (id: string) => {
     setActiveUploadId(id)
+    activeUploadIdRef.current = id
     if (fileInputRef.current) fileInputRef.current.click()
   }
 
@@ -328,11 +330,11 @@ export default function MeasurePage() {
 
   const processFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file || !activeUploadId) return
+    const currentUploadId = activeUploadIdRef.current || activeUploadId
+    if (!file || !currentUploadId) return
     e.target.value = ''
 
-    setUploadingId(activeUploadId)
-    const currentUploadId = activeUploadId
+    setUploadingId(currentUploadId)
 
     try {
       let parsedData: any[] = []
@@ -417,19 +419,29 @@ export default function MeasurePage() {
 
       // ── Hapus fetch ke AI di sini (dilakukan nanti saat Hitung Gabungan) ──
 
-      const updated = dataReqs.map(r =>
-        r.id === currentUploadId
-          ? { ...r, status: 'Sudah diupload' as const, parsed_summary: summary, recommended_methods: r.recommended_methods || [], raw_data: parsedData, file_url: fileUrl, file_name: file.name, upload_warning: uploadWarning }
-          : r
-      )
-      const synced = await saveMeasureDataRequirements(projectId, updated)
-      setDataReqs(synced)
+      // ── Update State & Database ──
+      setDataReqs(prev => {
+        const updated = prev.map(r =>
+          r.id === currentUploadId
+            ? { ...r, status: 'Sudah diupload' as const, parsed_summary: summary, recommended_methods: r.recommended_methods || [], raw_data: parsedData, file_url: fileUrl, file_name: file.name, upload_warning: uploadWarning }
+            : r
+        )
+        
+        // Save to DB in background, but immediately update UI
+        saveMeasureDataRequirements(projectId, updated)
+          .then(synced => setDataReqs(synced))
+          .catch(err => console.error('Failed to sync to DB after upload:', err))
+          
+        return updated
+      })
+      
       showToast('✅ File berhasil diupload dan diproses!')
     } catch (err: any) {
       await showAlert(`Gagal memproses file: ${err.message}`)
     } finally {
       setUploadingId(null)
       setActiveUploadId(null)
+      activeUploadIdRef.current = null
     }
   }
 

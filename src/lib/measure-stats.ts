@@ -653,7 +653,6 @@ export interface AggregatedResult {
   warnings: string[]
 }
 
-/**
 export const PROBLEM_METRIC_TEMPLATES: Record<string, {
   name: string
   unit: string
