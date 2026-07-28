@@ -406,7 +406,7 @@ export default function DefinePage() {
           style={{ width: '50%', transform: `translateX(${activeTab === 'profile' ? '0%' : '100%'})` }} />
       </div>
 
-      <fieldset disabled={isLocked && !isKonsultan} className="group disabled:opacity-80">
+      <div>
         {/* Tab Panels */}
         <div className="glass-card rounded-3xl border border-slate-800 bg-slate-950/20 p-6 md:p-8">
 
@@ -524,6 +524,7 @@ export default function DefinePage() {
 
         {/* ── TAB: PROJECT CHARTER ── */}
         {activeTab === 'charter' && (
+          <fieldset disabled={isLocked && !isKonsultan} className="group disabled:opacity-80">
           <div className="space-y-6">
             <div className="flex items-center justify-between border-b border-slate-850 pb-3">
               <h2 className="text-lg font-bold text-slate-200">Productivity Project Charter</h2>
@@ -671,9 +672,10 @@ export default function DefinePage() {
               </button>
             </div>
           </div>
+          </fieldset>
         )}
-      </div>
-      </fieldset>
+        </div>{/* close glass-card */}
+      </div>{/* close outer wrapper div */}
     </div>
   )
 }
