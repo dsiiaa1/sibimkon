@@ -40,7 +40,8 @@ export async function getProjects(): Promise<Project[]> {
       improve_is_locked: !!p.improve_is_locked,
       control_is_locked: !!p.control_is_locked,
       dimensi_pqcdsm: p.dimensi_pqcdsm,
-      urgency_indicator: p.urgency_indicator
+      urgency_indicator: p.urgency_indicator,
+      problem_category: p.problem_category
     }))
   } catch (err) {
     console.warn('[getProjects] fallback to mockDB:', err)
@@ -74,7 +75,8 @@ export async function createProject(project: Omit<Project, 'id' | 'project_code'
     start_date: project.start_date,
     target_end_date: project.target_end_date, 
     current_phase: 'define',
-    urgency_indicator: project.urgency_indicator || null
+    urgency_indicator: project.urgency_indicator || null,
+    problem_category: project.problem_category || null
   }).select('*, companies(name)').single()
   
   if (error) handleDbError(error)
@@ -86,7 +88,8 @@ export async function createProject(project: Omit<Project, 'id' | 'project_code'
     status: data.status, start_date: data.start_date, target_end_date: data.target_end_date,
     baseline_score: Number(data.baseline_productivity_index || 0),
     current_score: Number(data.current_productivity_index || 0),
-    urgency_indicator: data.urgency_indicator || project.urgency_indicator
+    urgency_indicator: data.urgency_indicator || project.urgency_indicator,
+    problem_category: data.problem_category || project.problem_category
   }
 }
 
@@ -105,6 +108,7 @@ export async function updateProjectDetails(projectId: string, updates: Partial<P
       target_end_date: updates.target_end_date,
       ...(updates.dimensi_pqcdsm !== undefined && { dimensi_pqcdsm: updates.dimensi_pqcdsm }),
       ...(updates.urgency_indicator !== undefined && { urgency_indicator: updates.urgency_indicator }),
+      ...(updates.problem_category !== undefined && { problem_category: updates.problem_category }),
       updated_at: new Date().toISOString()
     }).eq('id', projectId)
     if (error) handleDbError(error)

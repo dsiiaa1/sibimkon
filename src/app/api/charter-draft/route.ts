@@ -135,7 +135,8 @@ ATURAN PENTING:
 3. Gunakan angka/fakta spesifik dari deskripsi proyek dan data pendukung yang relevan.
 4. Charter antar-proyek dalam perusahaan yang sama harus berbeda — buat konten yang benar-benar spesifik untuk proyek ini.
 
-Tugas Anda: Buat draf untuk 6 kolom berikut dalam bentuk JSON (hanya kembalikan object JSON saja, tanpa teks tambahan):
+Tugas Anda: Buat draf untuk 7 kolom berikut dalam bentuk JSON (hanya kembalikan object JSON saja, tanpa teks tambahan):
+- "problem_category": (string) Klasifikasikan topik proyek ke SATU kategori paling dominan berikut: "quality", "delivery", "cost", "production", "safety", atau "morale".
 - "problem_statement": (string) Pernyataan masalah yang spesifik tentang "${projectTitle}" (apa masalahnya, seberapa besar, dampaknya pada operasional).
 - "objectives": (string) Tujuan proyek yang SMART (Specific, Measurable, Achievable, Relevant, Time-bound) terkait "${projectTitle}".
 - "productivity_target": (string) Target efisiensi/produktivitas atau perbaikan metrik yang diharapkan dari penyelesaian masalah "${projectTitle}".
@@ -145,6 +146,7 @@ Tugas Anda: Buat draf untuk 6 kolom berikut dalam bentuk JSON (hanya kembalikan 
 
 FORMAT OUTPUT (WAJIB valid JSON object):
 {
+  "problem_category": "...",
   "problem_statement": "...",
   "objectives": "...",
   "productivity_target": "...",
@@ -161,6 +163,21 @@ FORMAT OUTPUT (WAJIB valid JSON object):
 
     const rawResponse = aiRes.text
     const result = extractJson(rawResponse)
+
+    // Update project_category di tabel projects jika menggunakan supabase
+    if (sb && result.problem_category && projectId) {
+      await sb.from('bimkon_projects').update({
+        problem_category: result.problem_category,
+        updated_at: new Date().toISOString()
+      }).eq('id', projectId)
+    } else if (!sb && result.problem_category && projectId) {
+      // Mock db
+      const db = getMockDB()
+      const updatedProjects = db.projects.map((p: any) => p.id === projectId ? { ...p, problem_category: result.problem_category } : p)
+      import('@/lib/mockData').then(({ updateMockDB }) => {
+        updateMockDB('projects', updatedProjects)
+      })
+    }
 
     return NextResponse.json(result)
 

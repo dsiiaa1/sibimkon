@@ -543,7 +543,7 @@ export default function MeasurePage() {
       }
 
       // 3. Perform aggregation
-      const result = calcAggregatedSigmaLevel(dataReqs, { targetCols }, dynamicMetricResult)
+      const result = calcAggregatedSigmaLevel(dataReqs, { targetCols }, dynamicMetricResult, project?.problem_category)
 
       // 3. Call AI interpretation
       let aiInterpretation = null
@@ -1101,12 +1101,26 @@ export default function MeasurePage() {
                       </>
                     ) : (
                       <>
-                        <div className="text-4xl font-black text-indigo-400">{charter.measure_summary.overall_sigma_level !== undefined ? charter.measure_summary.overall_sigma_level : 'N/A'}{charter.measure_summary.overall_sigma_level !== undefined ? 'σ' : ''}</div>
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider"><Tooltip text="Tingkat kapabilitas dari seluruh proses (semakin tinggi, semakin baik)">Sigma Level Gabungan</Tooltip></p>
-                        <div className="mt-4 text-[10px] text-slate-500 space-y-1">
-                          <p>Total Defect: <span className="font-bold text-slate-300">{charter.measure_summary.total_defects}</span></p>
-                          <p>Total Volume: <span className="font-bold text-slate-300">{charter.measure_summary.total_volume}</span></p>
-                          <p><Tooltip text="Defects Per Million Opportunities: Jumlah cacat yang diperkirakan terjadi dalam 1 juta kesempatan">DPMO</Tooltip>: <span className="font-bold text-slate-300">{charter.measure_summary.overall_dpmo !== undefined ? charter.measure_summary.overall_dpmo : 'N/A'}</span></p>
+                        <div className="text-4xl font-black text-indigo-400">
+                          {charter.measure_summary.primary_metric?.value !== undefined ? charter.measure_summary.primary_metric.value : 'N/A'}
+                          <span className="text-2xl ml-1">{charter.measure_summary.primary_metric?.unit || ''}</span>
+                        </div>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                          <Tooltip text="Metrik kontekstual yang disesuaikan dengan kategori masalah proyek">
+                            {charter.measure_summary.primary_metric?.name || 'Sigma Level Gabungan'}
+                          </Tooltip>
+                        </p>
+                        <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded bg-slate-800 text-[10px] text-slate-400">
+                          <Gauge className="w-3 h-3" />
+                          Interpretasi: {charter.measure_summary.primary_metric?.interpretation?.interpretation || 'N/A'}
+                        </div>
+                        <div className="mt-4 text-[10px] text-slate-500 space-y-1 bg-slate-950 p-3 rounded-lg w-full">
+                          <p className="flex justify-between"><span>Kategori Masalah:</span> <span className="font-bold text-slate-300 capitalize">{project?.problem_category || 'N/A'}</span></p>
+                          <p className="flex justify-between"><span>Total Masalah/Defect:</span> <span className="font-bold text-slate-300">{charter.measure_summary.total_defects}</span></p>
+                          <p className="flex justify-between"><span>Total Keseluruhan (Volume):</span> <span className="font-bold text-slate-300">{charter.measure_summary.total_volume}</span></p>
+                          {charter.measure_summary.overall_dpmo !== undefined && (
+                            <p className="flex justify-between"><Tooltip text="Defects Per Million Opportunities">DPMO:</Tooltip> <span className="font-bold text-slate-300">{charter.measure_summary.overall_dpmo}</span></p>
+                          )}
                         </div>
                       </>
                     )}

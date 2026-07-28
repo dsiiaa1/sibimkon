@@ -137,6 +137,7 @@ export interface Project {
   analyze_is_locked?: boolean
   improve_is_locked?: boolean
   control_is_locked?: boolean
+  problem_category?: string
 }
 
 export interface ProjectCharter {

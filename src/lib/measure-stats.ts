@@ -654,18 +654,80 @@ export interface AggregatedResult {
 }
 
 /**
- * Menghitung satu angka Sigma Level gabungan dari seluruh file yang diunggah.
- * - primary_defect: Dijumlahkan totalnya (Sum)
- * - primary_volume: Dijumlahkan totalnya (Sum)
- * - primary_ctq: Menentukan jumlah opportunity per unit
- * - supporting: Dihitung terpisah sebagai KPI
- */
+export const PROBLEM_METRIC_TEMPLATES: Record<string, {
+  name: string
+  unit: string
+  formula: (data: any, totalVolume: number, totalDefects: number) => { value: number; label: string; }
+}> = {
+  quality: {
+    name: 'Sigma Level Gabungan',
+    unit: 'σ',
+    formula: (data, vol, def) => {
+      const opp = data.ctqOpportunities || 1
+      if (vol === 0) return { value: 0, label: 'Kritis' }
+      const dpmo = Math.round((def / (vol * opp)) * 1_000_000)
+      return { value: dpmoToSigmaLevel(dpmo), label: getLevelBadge({ method: 'defect_counting', sigma_level: dpmoToSigmaLevel(dpmo) } as any).label }
+    }
+  },
+  delivery: {
+    name: 'On-Time Delivery Rate',
+    unit: '%',
+    formula: (data, vol, def) => {
+      // def dianggap sebagai keterlambatan (late deliveries)
+      if (vol === 0) return { value: 0, label: 'Buruk' }
+      const otd = ((vol - def) / vol) * 100
+      return { value: Math.round(otd * 100) / 100, label: otd >= 95 ? 'Sangat Baik' : otd >= 90 ? 'Baik' : 'Buruk' }
+    }
+  },
+  cost: {
+    name: 'Cost Variance',
+    unit: '%',
+    formula: (data, vol, def) => {
+      // def = cost overrun, vol = planned budget
+      if (vol === 0) return { value: 0, label: 'N/A' }
+      const cv = (def / vol) * 100
+      return { value: Math.round(cv * 100) / 100, label: cv <= 0 ? 'Under Budget' : cv <= 5 ? 'Warning' : 'Over Budget' }
+    }
+  },
+  production: {
+    name: 'Downtime Rate',
+    unit: '%',
+    formula: (data, vol, def) => {
+      // def = downtime hours, vol = total planned production hours
+      if (vol === 0) return { value: 0, label: 'N/A' }
+      const dr = (def / vol) * 100
+      return { value: Math.round(dr * 100) / 100, label: dr <= 5 ? 'Sangat Baik' : dr <= 10 ? 'Wajar' : 'Buruk' }
+    }
+  },
+  safety: {
+    name: 'Incident Rate',
+    unit: '%',
+    formula: (data, vol, def) => {
+      // def = incidents, vol = total employees or hours
+      if (vol === 0) return { value: 0, label: 'N/A' }
+      const ir = (def / vol) * 100
+      return { value: Math.round(ir * 100) / 100, label: ir === 0 ? 'Sangat Baik' : 'Buruk' }
+    }
+  },
+  morale: {
+    name: 'Turnover Rate',
+    unit: '%',
+    formula: (data, vol, def) => {
+      // def = resigned, vol = total employees
+      if (vol === 0) return { value: 0, label: 'N/A' }
+      const tr = (def / vol) * 100
+      return { value: Math.round(tr * 100) / 100, label: tr <= 5 ? 'Sangat Baik' : tr <= 10 ? 'Wajar' : 'Tinggi' }
+    }
+  }
+}
+
 export function calcAggregatedSigmaLevel(
   dataReqs: { id: string; name: string; group?: string; raw_data?: Record<string, any>[] }[],
   aggregationConfig: {
     targetCols: Record<string, string> // mapping reqId -> nama kolom target yang dipilih user
   },
-  dynamicMetricResult?: { name: string; result: any }
+  dynamicMetricResult?: { name: string; result: any },
+  problemCategory: string = 'quality'
 ): AggregatedResult {
   let totalDefects = 0
   let totalVolume = 0
@@ -764,18 +826,25 @@ export function calcAggregatedSigmaLevel(
     }
   }
 
-  const dpmo = Math.round((totalDefects / (totalVolume * ctqOpportunities)) * 1_000_000)
-  const sigmaLevel = dpmoToSigmaLevel(dpmo)
+  const metricTemplate = PROBLEM_METRIC_TEMPLATES[problemCategory] || PROBLEM_METRIC_TEMPLATES['quality']
+  const resultData = metricTemplate.formula({ ctqOpportunities }, totalVolume, totalDefects)
 
   return {
     type: 'sigma',
-    overall_sigma_level: sigmaLevel,
-    overall_dpmo: dpmo,
+    overall_sigma_level: resultData.value, // kita pakai variabel ini untuk menyimpan nilai utama
+    overall_dpmo: problemCategory === 'quality' ? Math.round((totalDefects / (totalVolume * ctqOpportunities)) * 1_000_000) : undefined,
     total_defects: totalDefects,
     total_volume: totalVolume,
     opportunities_per_unit: ctqOpportunities,
     supporting_kpis: supportingKpis,
     warnings,
+    primary_metric: {
+      name: metricTemplate.name,
+      value: resultData.value,
+      unit: metricTemplate.unit,
+      method_used: 'Kalkulasi Kontekstual',
+      interpretation: { interpretation: resultData.label }
+    }
   }
 }
 
