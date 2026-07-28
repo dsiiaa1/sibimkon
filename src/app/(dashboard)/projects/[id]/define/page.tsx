@@ -161,6 +161,18 @@ export default function DefinePage() {
 
   const handleSaveCompany = async () => {
     if (!company) return
+    
+    // Validasi field wajib sebelum simpan
+    const missing: string[] = []
+    if (!compField.trim()) missing.push('Bidang Usaha')
+    if (!compProduct.trim()) missing.push('Produk Utama')
+    if (!compAddress.trim()) missing.push('Alamat')
+    
+    if (missing.length > 0) {
+      showSave(`⚠ Field berikut wajib diisi: ${missing.join(', ')}`)
+      return
+    }
+    
     setSaving(true)
     try {
       // updateCompany sudah sync mockDB + Supabase secara otomatis di dalam db.ts
@@ -412,15 +424,25 @@ export default function DefinePage() {
                 <p className="text-[10px] text-slate-600 mt-1">Untuk mengubah nama, buka halaman <a href="/profile" className="text-indigo-400 hover:underline">Profil</a>.</p>
               </div>
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Bidang Usaha</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Bidang Usaha <span className="text-red-400">*</span>
+                </label>
                 <input type="text" value={compField} onChange={(e) => setCompField(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm" />
+                  className={`w-full bg-slate-950 border rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm ${
+                    !compField.trim() ? 'border-red-500/60 bg-red-950/10' : 'border-slate-800'
+                  }`} />
+                {!compField.trim() && <p className="text-[10px] text-red-400 mt-1">⚠ Wajib diisi</p>}
               </div>
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Produk Utama</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Produk Utama <span className="text-red-400">*</span>
+                </label>
                 <input type="text" value={compProduct} onChange={(e) => setCompProduct(e.target.value)}
                   placeholder="Misal: Pakaian Jadi, Keripik Tempe"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm" />
+                  className={`w-full bg-slate-950 border rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm ${
+                    !compProduct.trim() ? 'border-red-500/60 bg-red-950/10' : 'border-slate-800'
+                  }`} />
+                {!compProduct.trim() && <p className="text-[10px] text-red-400 mt-1">⚠ Wajib diisi</p>}
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Jumlah Karyawan</label>
@@ -428,9 +450,14 @@ export default function DefinePage() {
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm" />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Alamat</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Alamat <span className="text-red-400">*</span>
+                </label>
                 <textarea value={compAddress} onChange={(e) => setCompAddress(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm h-16" />
+                  className={`w-full bg-slate-950 border rounded-xl px-4 py-2.5 text-slate-300 focus:outline-none focus:border-indigo-500 text-sm h-16 ${
+                    !compAddress.trim() ? 'border-red-500/60 bg-red-950/10' : 'border-slate-800'
+                  }`} />
+                {!compAddress.trim() && <p className="text-[10px] text-red-400 mt-1">⚠ Wajib diisi</p>}
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Keanggotaan KADIN/APINDO</label>
@@ -478,12 +505,19 @@ export default function DefinePage() {
                 )}
               </div>
             </div>
-            <div className="pt-4 flex justify-end border-t border-slate-850/80">
-              <button onClick={handleSaveCompany} disabled={saving}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-650 text-sm font-semibold rounded-xl text-white hover:bg-indigo-600 transition-colors cursor-pointer shadow-md disabled:opacity-50">
-                <Save className="h-4 w-4" />
-                {saving ? 'Menyimpan...' : 'Simpan Profil'}
-              </button>
+            <div className="pt-4 flex items-center justify-between border-t border-slate-850/80">
+              {(!compField.trim() || !compProduct.trim() || !compAddress.trim()) && (
+                <p className="text-xs text-amber-400 flex items-center gap-1.5">
+                  <span>⚠</span> Lengkapi field bertanda <span className="text-red-400 font-bold">*</span> sebelum menyimpan
+                </p>
+              )}
+              <div className="ml-auto">
+                <button onClick={handleSaveCompany} disabled={saving || !compField.trim() || !compProduct.trim() || !compAddress.trim()}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-650 text-sm font-semibold rounded-xl text-white hover:bg-indigo-600 transition-colors cursor-pointer shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                  <Save className="h-4 w-4" />
+                  {saving ? 'Menyimpan...' : 'Simpan Profil'}
+                </button>
+              </div>
             </div>
           </div>
         )}
