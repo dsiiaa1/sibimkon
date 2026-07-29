@@ -108,18 +108,16 @@ export default function ControlPage() {
                const ap = missingActionPlans.find((a: ActionPlan) => a.id === t.action_plan_id)
                const startDate = ap?.start_date ? new Date(ap.start_date) : new Date()
 
-               let count = 1
-               if (ap?.start_date && ap?.end_date) {
-                 const start = new Date(ap.start_date)
-                 const end = new Date(ap.end_date)
-                 const diffTime = Math.abs(end.getTime() - start.getTime())
-                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-                 count = Math.max(1, Math.round(diffDays / 30))
-               }
+               let count = Number(t.duration) || 1
+               const baseDate = ap?.end_date ? new Date(ap.end_date) : new Date()
 
                for(let i=1; i<=count; i++) {
-                 const dueDate = new Date(startDate.getTime())
-                 dueDate.setMonth(dueDate.getMonth() + i)
+                 const dueDate = new Date(baseDate.getTime())
+                 if (t.duration_unit === 'minggu') {
+                    dueDate.setDate(dueDate.getDate() + (i * 7))
+                 } else {
+                    dueDate.setMonth(dueDate.getMonth() + i)
+                 }
                  
                  newActuals.push({
                    id: crypto.randomUUID?.() || 'act-' + Math.random(),
@@ -738,20 +736,9 @@ export default function ControlPage() {
                            </p>
                         </div>
                         <div className="bg-slate-900 border border-slate-800 p-2.5 rounded-lg">
-                           <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1" title="Durasi Target Bisnis">Durasi (Dari Timeline)</p>
+                           <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1" title="Durasi Target Bisnis">Durasi Target</p>
                            <p className="text-xs font-medium text-slate-300 flex items-center gap-2">
-                             {(() => {
-                               if (!ap?.start_date || !ap?.end_date) return '-'
-                               const start = new Date(ap.start_date)
-                               const end = new Date(ap.end_date)
-                               const diffTime = Math.abs(end.getTime() - start.getTime())
-                               const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-                               if (diffDays < 30) {
-                                  return Math.ceil(diffDays / 7) + ' minggu'
-                               } else {
-                                  return Math.round(diffDays / 30) + ' bulan'
-                               }
-                             })()}
+                             {t.duration} {t.duration_unit}
                            </p>
                         </div>
                       </div>
