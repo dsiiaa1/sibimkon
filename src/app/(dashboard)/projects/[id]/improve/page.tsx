@@ -65,12 +65,20 @@ export default function ImprovePage() {
   const [attemptedAiIds, setAttemptedAiIds] = useState<Set<string>>(new Set())
   const [attemptedStepIds, setAttemptedStepIds] = useState<Set<string>>(new Set())
   const [editingRoiId, setEditingRoiId] = useState<string | null>(null)
-  const [roiEditForm, setRoiEditForm] = useState({
+  const [roiEditForm, setRoiEditForm] = useState<{
+    estimasi_penghematan_tahunan: number
+    roi_persen: number
+    biaya_implementasi: number
+    target_efisiensi: string
+    manfaat: string
+    rincian_items: { item: string; jumlah: number; sumber: 'bukti' | 'estimasi'; keterangan: string }[]
+  }>({
     estimasi_penghematan_tahunan: 0,
     roi_persen: 0,
     biaya_implementasi: 0,
     target_efisiensi: '',
-    manfaat: ''
+    manfaat: '',
+    rincian_items: []
   })
   const [expandedActionIds, setExpandedActionIds] = useState<Set<string>>(new Set())
 
@@ -579,8 +587,9 @@ export default function ImprovePage() {
               roi_persen: roiEditForm.roi_persen
             },
             biaya: {
-              rincian: (act.ai_analysis?.biaya as any)?.rincian || '',
-              estimasi: roiEditForm.biaya_implementasi
+              rincian: roiEditForm.rincian_items.map(r => `${r.item}: Rp${r.jumlah.toLocaleString('id-ID')}`).join(', ') || (act.ai_analysis?.biaya as any)?.rincian || '',
+              estimasi: roiEditForm.biaya_implementasi,
+              rincian_items: roiEditForm.rincian_items
             },
             target_efisiensi: roiEditForm.target_efisiensi,
             manfaat: {
@@ -1296,7 +1305,8 @@ export default function ImprovePage() {
                                         roi_persen: act.ai_analysis?.roi?.roi_persen || 0,
                                         biaya_implementasi: act.ai_analysis?.biaya?.estimasi || 0,
                                         target_efisiensi: act.ai_analysis?.target_efisiensi || '',
-                                        manfaat: typeof act.ai_analysis?.manfaat === 'object' ? `${act.ai_analysis.manfaat.kualitatif} - ${act.ai_analysis.manfaat.kuantitatif}` : (act.ai_analysis?.manfaat || '')
+                                        manfaat: typeof act.ai_analysis?.manfaat === 'object' ? `${act.ai_analysis.manfaat.kualitatif} - ${act.ai_analysis.manfaat.kuantitatif}` : (act.ai_analysis?.manfaat || ''),
+                                        rincian_items: (act.ai_analysis?.biaya?.rincian_items || []).map((r: any) => ({ item: r.item || '', jumlah: r.jumlah || 0, sumber: r.sumber || 'estimasi', keterangan: r.keterangan || '' }))
                                       })
                                       setEditingRoiId(act.id)
                                     }} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-all cursor-pointer">Edit</button>
@@ -1310,7 +1320,7 @@ export default function ImprovePage() {
                                         {generatingAiIds[act.id] ? 'Memproses...' : 'Lihat Hasil'}
                                       </button>
                                       <button onClick={() => {
-                                        setRoiEditForm({ estimasi_penghematan_tahunan: 0, roi_persen: 0, biaya_implementasi: 0, target_efisiensi: '', manfaat: '' })
+                                        setRoiEditForm({ estimasi_penghematan_tahunan: 0, roi_persen: 0, biaya_implementasi: 0, target_efisiensi: '', manfaat: '', rincian_items: [] })
                                         setEditingRoiId(act.id)
                                       }} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-all cursor-pointer">Input Manual</button>
                                     </>
@@ -1350,6 +1360,72 @@ export default function ImprovePage() {
                                     <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Manfaat</label>
                                     <textarea value={roiEditForm.manfaat} onChange={e => setRoiEditForm({...roiEditForm, manfaat: e.target.value})} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 h-16 resize-none" />
                                   </div>
+                                  {/* Rincian Biaya editable */}
+                                  <div className="sm:col-span-2">
+                                    <div className="flex items-center justify-between mb-1">
+                                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Rincian Biaya (Opsional)</label>
+                                      <button type="button" onClick={() => setRoiEditForm(prev => ({ ...prev, rincian_items: [...prev.rincian_items, { item: '', jumlah: 0, sumber: 'estimasi', keterangan: '' }] }))}
+                                        className="text-[10px] px-2 py-0.5 bg-indigo-600/20 text-indigo-300 rounded hover:bg-indigo-600/40 cursor-pointer">+ Tambah Item</button>
+                                    </div>
+                                    {roiEditForm.rincian_items.length === 0 ? (
+                                      <p className="text-[10px] text-slate-600 italic">Belum ada rincian. Klik &quot;+ Tambah Item&quot; untuk menambahkan.</p>
+                                    ) : (
+                                      <div className="space-y-2">
+                                        {roiEditForm.rincian_items.map((item, idx) => (
+                                          <div key={idx} className="flex items-center gap-2 bg-slate-900/60 p-2 rounded-lg border border-slate-700/50">
+                                            <input
+                                              type="text"
+                                              placeholder="Nama item (mis: Pelatihan)"
+                                              value={item.item}
+                                              onChange={e => {
+                                                const updated = [...roiEditForm.rincian_items]
+                                                updated[idx] = { ...updated[idx], item: e.target.value }
+                                                setRoiEditForm(prev => ({ ...prev, rincian_items: updated }))
+                                              }}
+                                              className="flex-1 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-[11px] text-slate-200 min-w-0"
+                                            />
+                                            <input
+                                              type="number"
+                                              placeholder="Jumlah (Rp)"
+                                              value={item.jumlah}
+                                              onChange={e => {
+                                                const updated = [...roiEditForm.rincian_items]
+                                                updated[idx] = { ...updated[idx], jumlah: Number(e.target.value) }
+                                                const total = updated.reduce((s, r) => s + (r.jumlah || 0), 0)
+                                                setRoiEditForm(prev => {
+                                                  const saving = prev.estimasi_penghematan_tahunan
+                                                  const roi = total > 0 ? Math.round(((saving - total) / total) * 100) : 0
+                                                  return { ...prev, rincian_items: updated, biaya_implementasi: total, roi_persen: roi }
+                                                })
+                                              }}
+                                              className="w-28 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-[11px] text-slate-200"
+                                            />
+                                            <select
+                                              value={item.sumber}
+                                              onChange={e => {
+                                                const updated = [...roiEditForm.rincian_items]
+                                                updated[idx] = { ...updated[idx], sumber: e.target.value as 'bukti' | 'estimasi' }
+                                                setRoiEditForm(prev => ({ ...prev, rincian_items: updated }))
+                                              }}
+                                              className="bg-slate-800 border border-slate-600 rounded px-1 py-1 text-[11px] text-slate-300"
+                                            >
+                                              <option value="estimasi">estimasi</option>
+                                              <option value="bukti">bukti</option>
+                                            </select>
+                                            <button type="button" onClick={() => {
+                                              const updated = roiEditForm.rincian_items.filter((_, i) => i !== idx)
+                                              const total = updated.reduce((s, r) => s + (r.jumlah || 0), 0)
+                                              setRoiEditForm(prev => {
+                                                const saving = prev.estimasi_penghematan_tahunan
+                                                const roi = total > 0 ? Math.round(((saving - total) / total) * 100) : 0
+                                                return { ...prev, rincian_items: updated, biaya_implementasi: total, roi_persen: roi }
+                                              })
+                                            }} className="text-red-400 hover:text-red-300 cursor-pointer shrink-0">✕</button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               ) : (
                                 act.ai_analysis ? (
@@ -1369,8 +1445,15 @@ export default function ImprovePage() {
                                         {/* Blok Estimasi ROI */}
                                         <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60 relative overflow-hidden group">
                                           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Estimasi ROI</span>
-                                          <p className="text-xs text-emerald-400 font-semibold cursor-help" title={typeof act.ai_analysis.roi === 'object' ? (act.ai_analysis.roi.catatan || '') + (act.ai_analysis.roi.bukti_digunakan?.length ? `\nBukti: ${act.ai_analysis.roi.bukti_digunakan.join(', ')}` : '') : ''}>
-                                            {typeof act.ai_analysis.roi === 'object' ? `${act.ai_analysis.roi.roi_persen}% (Hemat Rp${Number(act.ai_analysis.roi.estimasi_penghematan_tahunan || 0).toLocaleString('id-ID')})` : act.ai_analysis.roi}
+                                          <p className="text-lg font-bold text-emerald-400 cursor-help" title={typeof act.ai_analysis.roi === 'object' ? (act.ai_analysis.roi.catatan || '') + (act.ai_analysis.roi.bukti_digunakan?.length ? `\nBukti: ${act.ai_analysis.roi.bukti_digunakan.join(', ')}` : '') : ''}>
+                                            {typeof act.ai_analysis.roi === 'object' ? `${act.ai_analysis.roi.roi_persen}%` : act.ai_analysis.roi}
+                                          </p>
+                                        </div>
+                                        {/* Penghematan Tahunan — kartu terpisah */}
+                                        <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
+                                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Penghematan Tahunan</span>
+                                          <p className="text-lg font-bold text-emerald-300">
+                                            {typeof act.ai_analysis.roi === 'object' ? `Rp${Number(act.ai_analysis.roi.estimasi_penghematan_tahunan || 0).toLocaleString('id-ID')}` : '—'}
                                           </p>
                                         </div>
                                         {/* Blok Kebutuhan Biaya */}
