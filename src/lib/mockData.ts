@@ -277,6 +277,7 @@ export interface ImproveAiAnalysis {
   biaya: {
     estimasi: number
     rincian: string
+    rincian_items?: { item: string; jumlah: number; sumber?: 'bukti' | 'estimasi'; keterangan?: string }[]
   }
   manfaat: {
     kualitatif: string
@@ -287,7 +288,14 @@ export interface ImproveAiAnalysis {
     estimasi_penghematan_tahunan: number
     biaya_implementasi: number
     roi_persen: number
-    catatan: string
+    catatan?: string
+    bukti_digunakan?: string[]
+  }
+  langkah_dianalisis?: {
+    total: number
+    selesai_dengan_bukti: number
+    selesai_tanpa_bukti: number
+    belum_selesai: number
   }
 }
 

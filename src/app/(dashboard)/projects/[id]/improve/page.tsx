@@ -528,7 +528,18 @@ export default function ImprovePage() {
           problem: act.description,
           pic: act.pic_name,
           timeline: `${act.start_date} s/d ${act.end_date}`,
-          context_data: contextData
+          context_data: contextData,
+          steps: (act.steps || []).map(step => ({
+            id: step.id,
+            description: step.description,
+            is_completed: step.is_completed,
+            evidence: (checklistEvidenceMap[step.id] || []).map(ev => ({
+              file_name: ev.file_name,
+              file_url: ev.file_url,
+              file_type: ev.file_type,
+              verification_status: ev.verification_status
+            }))
+          }))
         })
       })
 
@@ -1339,34 +1350,56 @@ export default function ImprovePage() {
                                 </div>
                               ) : (
                                 act.ai_analysis ? (
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
-                                    {/* Blok Estimasi ROI */}
-                                    <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60 relative overflow-hidden">
-                                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Estimasi ROI</span>
-                                      <p className="text-xs text-emerald-400 font-semibold">
-                                        {typeof act.ai_analysis.roi === 'object' ? `${act.ai_analysis.roi.roi_persen}% (Hemat Rp${Number(act.ai_analysis.roi.estimasi_penghematan_tahunan || 0).toLocaleString('id-ID')})` : act.ai_analysis.roi}
-                                      </p>
+                                    <div className="mb-2">
+                                      {act.ai_analysis.langkah_dianalisis && (
+                                        <div className="mb-3 p-2 bg-indigo-900/20 rounded-lg border border-indigo-500/20 text-xs text-indigo-300">
+                                          <span className="font-bold">{act.ai_analysis.langkah_dianalisis.selesai_dengan_bukti} dari {act.ai_analysis.langkah_dianalisis.total}</span> langkah sudah memiliki bukti terverifikasi. Hasil analisis akan makin akurat jika seluruh langkah diunggah buktinya.
+                                        </div>
+                                      )}
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
+                                        {/* Blok Estimasi ROI */}
+                                        <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60 relative overflow-hidden group">
+                                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Estimasi ROI</span>
+                                          <p className="text-xs text-emerald-400 font-semibold cursor-help" title={typeof act.ai_analysis.roi === 'object' ? (act.ai_analysis.roi.catatan || '') + (act.ai_analysis.roi.bukti_digunakan?.length ? `\nBukti: ${act.ai_analysis.roi.bukti_digunakan.join(', ')}` : '') : ''}>
+                                            {typeof act.ai_analysis.roi === 'object' ? `${act.ai_analysis.roi.roi_persen}% (Hemat Rp${Number(act.ai_analysis.roi.estimasi_penghematan_tahunan || 0).toLocaleString('id-ID')})` : act.ai_analysis.roi}
+                                          </p>
+                                        </div>
+                                        {/* Blok Kebutuhan Biaya */}
+                                        <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60 relative overflow-hidden">
+                                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Kebutuhan Biaya / Investasi</span>
+                                          <p className="text-xs text-rose-400 font-semibold">
+                                            {typeof act.ai_analysis.biaya === 'object' ? `Rp${Number(act.ai_analysis.biaya.estimasi || 0).toLocaleString('id-ID')}` : act.ai_analysis.biaya}
+                                          </p>
+                                          {typeof act.ai_analysis.biaya === 'object' && Array.isArray(act.ai_analysis.biaya.rincian_items) && act.ai_analysis.biaya.rincian_items.length > 0 && (
+                                            <ul className="mt-2 space-y-1">
+                                              {act.ai_analysis.biaya.rincian_items.map((item: any, i: number) => (
+                                                <li key={i} className="text-[10px] flex items-center justify-between text-slate-300">
+                                                  <span className="truncate pr-2" title={item.keterangan || item.item}>• {item.item}</span>
+                                                  <div className="flex items-center space-x-2 shrink-0">
+                                                    <span className="font-mono">Rp{Number(item.jumlah || 0).toLocaleString('id-ID')}</span>
+                                                    <span className={`text-[8px] px-1 py-0.5 rounded ${item.sumber === 'bukti' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-700/50 text-slate-400'}`}>
+                                                      {item.sumber === 'bukti' ? 'bukti' : 'estimasi'}
+                                                    </span>
+                                                  </div>
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          )}
+                                        </div>
+                                        {/* Target Efisiensi */}
+                                        <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
+                                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Target Efisiensi</span>
+                                          <p className="text-xs text-indigo-400 font-semibold">{act.ai_analysis.target_efisiensi}</p>
+                                        </div>
+                                        {/* Manfaat */}
+                                        <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
+                                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Manfaat</span>
+                                          <p className="text-xs text-slate-300">
+                                            {typeof act.ai_analysis.manfaat === 'object' ? `${act.ai_analysis.manfaat.kualitatif} - ${act.ai_analysis.manfaat.kuantitatif}` : act.ai_analysis.manfaat}
+                                          </p>
+                                        </div>
+                                      </div>
                                     </div>
-                                    {/* Blok Kebutuhan Biaya */}
-                                    <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60 relative overflow-hidden">
-                                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Kebutuhan Biaya / Investasi</span>
-                                      <p className="text-xs text-rose-400 font-semibold">
-                                        {typeof act.ai_analysis.biaya === 'object' ? `Rp${Number(act.ai_analysis.biaya.estimasi || 0).toLocaleString('id-ID')}` : act.ai_analysis.biaya}
-                                      </p>
-                                    </div>
-                                    {/* Target Efisiensi */}
-                                    <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
-                                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Target Efisiensi</span>
-                                      <p className="text-xs text-indigo-400 font-semibold">{act.ai_analysis.target_efisiensi}</p>
-                                    </div>
-                                    {/* Manfaat */}
-                                    <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
-                                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Manfaat</span>
-                                      <p className="text-xs text-slate-300">
-                                        {typeof act.ai_analysis.manfaat === 'object' ? `${act.ai_analysis.manfaat.kualitatif} - ${act.ai_analysis.manfaat.kuantitatif}` : act.ai_analysis.manfaat}
-                                      </p>
-                                    </div>
-                                  </div>
                                 ) : (
                                   <div className="text-xs text-slate-500 italic p-3 bg-slate-900/40 rounded-xl border border-slate-800/80 mb-2">
                                     Belum ada data Analisis & ROI. Silakan gunakan Input Manual.

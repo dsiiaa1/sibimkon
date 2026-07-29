@@ -518,7 +518,15 @@ export async function getActionPlans(projectId: string): Promise<ActionPlan[]> {
       pic_name: d.pic_name, start_date: d.start_date,
       end_date: d.end_date, status: d.status, progress_percentage: d.progress_percentage,
       ai_analysis: typeof d.ai_analysis === 'string' ? (function(){ try { return JSON.parse(d.ai_analysis) } catch { return d.ai_analysis } })() : d.ai_analysis,
-      steps: hasSteps ? (d.steps || []) : []
+      steps: hasSteps ? (d.steps || []).sort((a: any, b: any) => {
+        if (a.step_order != null && b.step_order != null && a.step_order !== b.step_order) {
+          return a.step_order - b.step_order
+        }
+        const matchA = (a.description || a.action || '').match(/Langkah\s*(\d+)/i)
+        const matchB = (b.description || b.action || '').match(/Langkah\s*(\d+)/i)
+        if (matchA && matchB) return parseInt(matchA[1]) - parseInt(matchB[1])
+        return 0
+      }) : []
     }))
   } catch (err) {
     console.warn('[getActionPlans] fallback to mockDB:', err)
