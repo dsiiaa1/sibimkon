@@ -29,7 +29,7 @@ function GenericAnalyzeComponent({
   const { structure_type, data } = recommendation
 
   if (!structure_type || !data) {
-    return <div className="text-xs text-slate-500 italic mt-2">Data analisis belum di-generate. Silakan klik "Generate Ulang Rekomendasi" di atas.</div>
+    return <div className="text-xs text-slate-500 italic mt-2">Data analisis belum di-generate atau kosong.</div>
   }
 
   const uid = () => Math.random().toString(36).substr(2, 9)
@@ -709,17 +709,19 @@ export default function AnalyzePage() {
                       {showAddCustom ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
                       {showAddCustom ? 'Batal' : 'Tambah Manual'}
                     </button>
-                    <button
-                      onClick={async () => {
-                        if (await showConfirm('Generate ulang akan menimpa semua data analisis saat ini. Lanjutkan?')) {
-                          handleTriggerAnalyzeAI()
-                        }
-                      }}
-                      className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-xs font-semibold rounded-lg text-indigo-400 border border-indigo-500/20 transition-all cursor-pointer"
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                      Generate Ulang Rekomendasi
-                    </button>
+                    {isKonsultan && (
+                      <button
+                        onClick={async () => {
+                          if (await showConfirm('Generate ulang akan menimpa semua data analisis saat ini. Lanjutkan?')) {
+                            handleTriggerAnalyzeAI()
+                          }
+                        }}
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-xs font-semibold rounded-lg text-indigo-400 border border-indigo-500/20 transition-all cursor-pointer"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Generate Ulang Rekomendasi
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -840,7 +842,7 @@ export default function AnalyzePage() {
 
                 {(analyzeResult.recommendations || []).length === 0 && (
                   <div className="text-center py-10 text-xs text-slate-500 border border-dashed border-slate-800 rounded-2xl">
-                    Belum ada data analisis. Klik "Tambah Manual" atau "Generate Ulang Rekomendasi".
+                    Belum ada data analisis. {isKonsultan && 'Klik "Tambah Manual" atau "Generate Ulang Rekomendasi".'}
                   </div>
                 )}
 
