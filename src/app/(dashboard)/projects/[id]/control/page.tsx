@@ -142,7 +142,17 @@ export default function ControlPage() {
           setIsGenerating(false)
         }
       }
-      setTargets(dbTargets)
+
+      // Clean dirty data: deduplicate targets by action_plan_id, keeping the most recent one
+      const targetMap = new Map()
+      // Urutkan dari yang paling lama ke paling baru, lalu masukkan ke map (sehingga yang terakhir/terbaru menimpa yang lama)
+      const sortedDbTargets = [...dbTargets].sort((a: any, b: any) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
+      for (const t of sortedDbTargets) {
+        targetMap.set(t.action_plan_id, t)
+      }
+      const cleanedTargets = Array.from(targetMap.values())
+
+      setTargets(cleanedTargets)
       setChangeRequests(await getApprovalRequests(projectId))
     }
     loadData()

@@ -61,6 +61,8 @@ Tugas Anda adalah mengekstrak data berikut dari masing-masing kalimat:
 - duration (Number): Lama waktu target harus dicapai.
 - duration_unit (String): Satuan waktu (hanya boleh "minggu", "bulan", atau "tahun").
 
+- HANYA KEMBALIKAN MAKSIMAL 1 OBJEK untuk setiap Action Plan. Jika terdapat lebih dari satu metrik (misalnya jangka pendek dan jangka panjang), pilih metrik jangka pendek yang paling terukur. JANGAN membuat lebih dari 1 objek untuk action_plan_id yang sama.
+
 Jika Anda tidak dapat menemukan baseline_value di dalam teks, berikan nilai null (tidak apa-apa).
 Jika Anda merasa teks target sangat tidak spesifik atau tidak menyebutkan target angka sama sekali, set "needs_manual_review": true.
 
@@ -75,14 +77,13 @@ PENTING: DILARANG KERAS menambahkan teks seperti "Berikut adalah...", DILARANG m
     "action_plan_id": "<action_plan_id_dari_input>",
     "project_id": "<project_id_dari_input>",
     "raw_text": "<raw_text_dari_input>",
-    "metric_name": "<nama metrik>",
+    "metric_name": "<nama metrik utama>",
     "baseline_value": null,
     "target_value": <number_persentase>,
     "duration": <number_durasi>,
     "duration_unit": "<minggu/bulan/tahun>",
     "needs_manual_review": <true/false>
-  },
-  ...
+  }
 ]
 `
 
@@ -100,19 +101,27 @@ PENTING: DILARANG KERAS menambahkan teks seperti "Berikut adalah...", DILARANG m
        extracted = [extracted]
     }
 
-    // Validate and sanitize data
-    const finalTargets = extracted.map((item: any) => ({
-      id: crypto.randomUUID(),
-      action_plan_id: item.action_plan_id,
-      project_id: item.project_id,
-      raw_text: item.raw_text || '',
-      metric_name: item.metric_name || 'Metrik belum ditentukan',
-      baseline_value: item.baseline_value ?? null,
-      target_value: Number(item.target_value) || 0,
-      duration: Number(item.duration) || 1,
-      duration_unit: (item.duration_unit || 'bulan').toLowerCase().includes('minggu') ? 'minggu' : (item.duration_unit || 'bulan').toLowerCase().includes('tahun') ? 'tahun' : 'bulan',
-      needs_manual_review: Boolean(item.needs_manual_review)
-    }))
+    // Validate, sanitize data, and deduplicate by action_plan_id
+    const finalTargets: any[] = []
+    const seenActionPlanIds = new Set()
+
+    for (const item of extracted) {
+      if (!seenActionPlanIds.has(item.action_plan_id)) {
+        seenActionPlanIds.add(item.action_plan_id)
+        finalTargets.push({
+          id: crypto.randomUUID(),
+          action_plan_id: item.action_plan_id,
+          project_id: item.project_id,
+          raw_text: item.raw_text || '',
+          metric_name: item.metric_name || 'Metrik belum ditentukan',
+          baseline_value: item.baseline_value ?? null,
+          target_value: Number(item.target_value) || 0,
+          duration: Number(item.duration) || 1,
+          duration_unit: (item.duration_unit || 'bulan').toLowerCase().includes('minggu') ? 'minggu' : (item.duration_unit || 'bulan').toLowerCase().includes('tahun') ? 'tahun' : 'bulan',
+          needs_manual_review: Boolean(item.needs_manual_review)
+        })
+      }
+    }
 
     return NextResponse.json({ targets: finalTargets })
 
