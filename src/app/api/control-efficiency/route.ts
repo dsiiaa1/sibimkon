@@ -63,6 +63,10 @@ Tugas Anda adalah mengekstrak data berikut dari masing-masing kalimat:
 
 - HANYA KEMBALIKAN MAKSIMAL 1 OBJEK untuk setiap Action Plan. Jika terdapat lebih dari satu metrik (misalnya jangka pendek dan jangka panjang), pilih metrik jangka pendek yang paling terukur. JANGAN membuat lebih dari 1 objek untuk action_plan_id yang sama.
 
+ATURAN PENTING UNTUK ANGKA TARGET (target_value):
+1. Jika target berupa ANGKA ABSOLUT (misal: "produksi mencapai 1000 unit"), isi target_value dengan angka tersebut (1000).
+2. Jika target berupa PERSENTASE PENURUNAN/KENAIKAN dari baseline (misal: "penurunan kecelakaan 50%"), KOSONGKAN target_value (set null), set needs_manual_review ke true, dan tambahkan keterangan di metric_name (contoh: "Tingkat Kecelakaan (Target: Penurunan 50%)"). Ini karena AI tidak tahu baseline-nya, sehingga sistem mewajibkan manusia untuk menghitungnya sendiri.
+
 Jika Anda tidak dapat menemukan baseline_value di dalam teks, berikan nilai null (tidak apa-apa).
 Jika Anda merasa teks target sangat tidak spesifik atau tidak menyebutkan target angka sama sekali, set "needs_manual_review": true.
 
