@@ -127,6 +127,7 @@ INSTRUKSI TAMBAHAN:
 - Jika sebuah langkah BELUM selesai atau belum ada bukti, gunakan estimasi wajar dan tandai jelas sebagai "estimasi" pada field terkait (bukan seolah-olah sudah terjadi).
 - Untuk field "biaya", kembalikan RINCIAN PER ITEM (array), bukan hanya 1 angka total. Setiap item cantumkan sumbernya: dari "bukti" nyata (sebutkan nama file di keterangan) atau "estimasi".
 - Untuk field "roi.estimasi_penghematan_tahunan", selain mencantumkan total penghematan tahunan, berikan rincian penghematannya dalam "roi.rincian_penghematan_items". Tiap item cantumkan sumbernya ("bukti" atau "estimasi"). Jelaskan dasar perhitungannya di "roi.catatan".
+- PENTING: Untuk field "target_efisiensi", apabila Anda menemukan angka BASELINE (kondisi awal sebelum perbaikan) dari bukti lampiran atau konteks masalah (misalnya: "tercatat 6 kecelakaan", "waktu awal 50 menit"), ANDA WAJIB menuliskannya secara eksplisit. Contoh: "Target: Penurunan kecelakaan 50%. (Baseline saat ini: 6 kejadian)".
 
 Lengkapi analisis Lean Six Sigma berikut dalam format JSON. Jika Anda tidak punya data persis, gunakan estimasi kasar dan tulis asumsinya, jangan mengosongkannya.
 

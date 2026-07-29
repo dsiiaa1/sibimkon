@@ -65,7 +65,10 @@ Tugas Anda adalah mengekstrak data berikut dari masing-masing kalimat:
 
 ATURAN PENTING UNTUK ANGKA TARGET (target_value):
 1. Jika target berupa ANGKA ABSOLUT (misal: "produksi mencapai 1000 unit"), isi target_value dengan angka tersebut (1000).
-2. Jika target berupa PERSENTASE PENURUNAN/KENAIKAN dari baseline (misal: "penurunan kecelakaan 50%"), KOSONGKAN target_value (set null), set needs_manual_review ke true, dan tambahkan keterangan di metric_name (contoh: "Tingkat Kecelakaan (Target: Penurunan 50%)"). Ini karena AI tidak tahu baseline-nya, sehingga sistem mewajibkan manusia untuk menghitungnya sendiri.
+2. Jika di dalam teks TERDAPAT INFORMASI BASELINE (misal: "Baseline: 6") DAN target berupa PERSENTASE PENURUNAN/KENAIKAN (misal: "penurunan 50%"), maka:
+   - Ekstrak baseline tersebut ke field "baseline_value" (misal: 6).
+   - HITUNG SECARA MATEMATIS target_value-nya. (Contoh: Baseline 6, target turun 50%, maka target_value = 3). JANGAN KOSONGKAN target_value!
+3. Jika target berupa PERSENTASE tetapi teks TIDAK MENYEBUTKAN BASELINE SAMA SEKALI, KOSONGKAN target_value (set null), set needs_manual_review ke true, dan tambahkan keterangan di metric_name (contoh: "Tingkat Kecelakaan (Target: Penurunan 50%)"). Ini karena AI tidak tahu baseline-nya, sehingga sistem mewajibkan manusia untuk menghitungnya sendiri.
 
 Jika Anda tidak dapat menemukan baseline_value di dalam teks, berikan nilai null (tidak apa-apa).
 Jika Anda merasa teks target sangat tidak spesifik atau tidak menyebutkan target angka sama sekali, set "needs_manual_review": true.
