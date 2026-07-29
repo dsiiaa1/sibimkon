@@ -183,6 +183,20 @@ CONTOH FORMAT OUTPUT:
       belum_selesai: belumSelesai
     }
 
+    // Jika ada file bukti yang berhasil diunduh & dianalisis AI,
+    // tandai seluruh rincian_items sebagai 'bukti' — bukan sekadar estimasi.
+    const hasAnalyzedEvidence = imageParts.length > 0
+    if (
+      hasAnalyzedEvidence &&
+      result.biaya?.rincian_items &&
+      Array.isArray(result.biaya.rincian_items)
+    ) {
+      result.biaya.rincian_items = result.biaya.rincian_items.map((item: any) => ({
+        ...item,
+        sumber: 'bukti'
+      }))
+    }
+
     return NextResponse.json(result)
 
   } catch (error: any) {

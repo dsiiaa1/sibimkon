@@ -1300,13 +1300,23 @@ export default function ImprovePage() {
                                     </>
                                   ) : act.ai_analysis ? (
                                     <button onClick={() => {
+                                      // Cek apakah ada langkah yang sudah punya bukti terverifikasi
+                                      const hasApprovedEvidence = (act.steps || []).some(s =>
+                                        (checklistEvidenceMap[s.id] || []).some(ev => ev.verification_status === 'approved')
+                                      )
                                       setRoiEditForm({
                                         estimasi_penghematan_tahunan: act.ai_analysis?.roi?.estimasi_penghematan_tahunan || 0,
                                         roi_persen: act.ai_analysis?.roi?.roi_persen || 0,
                                         biaya_implementasi: act.ai_analysis?.biaya?.estimasi || 0,
                                         target_efisiensi: act.ai_analysis?.target_efisiensi || '',
                                         manfaat: typeof act.ai_analysis?.manfaat === 'object' ? `${act.ai_analysis.manfaat.kualitatif} - ${act.ai_analysis.manfaat.kuantitatif}` : (act.ai_analysis?.manfaat || ''),
-                                        rincian_items: (act.ai_analysis?.biaya?.rincian_items || []).map((r: any) => ({ item: r.item || '', jumlah: r.jumlah || 0, sumber: r.sumber || 'estimasi', keterangan: r.keterangan || '' }))
+                                        rincian_items: (act.ai_analysis?.biaya?.rincian_items || []).map((r: any) => ({
+                                          item: r.item || '',
+                                          jumlah: r.jumlah || 0,
+                                          // Auto-upgrade ke 'bukti' jika ada evidence yang disetujui
+                                          sumber: hasApprovedEvidence ? 'bukti' : (r.sumber || 'estimasi'),
+                                          keterangan: r.keterangan || ''
+                                        }))
                                       })
                                       setEditingRoiId(act.id)
                                     }} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-all cursor-pointer">Edit</button>
