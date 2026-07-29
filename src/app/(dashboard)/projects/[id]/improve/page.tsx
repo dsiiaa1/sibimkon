@@ -859,10 +859,13 @@ export default function ImprovePage() {
     })
 
     if (newEv.id) {
+      const scrollY = window.scrollY
       setChecklistEvidenceMap(prev => {
         const oldArr = prev[uploadChecklistStep.stepId] || []
         return { ...prev, [uploadChecklistStep.stepId]: [newEv, ...oldArr] }
       })
+      // Restore scroll position after state update so the page doesn't jump
+      requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: 'instant' }))
     }
 
     setChkUploading(false)
@@ -1351,11 +1354,17 @@ export default function ImprovePage() {
                               ) : (
                                 act.ai_analysis ? (
                                     <div className="mb-2">
-                                      {act.ai_analysis.langkah_dianalisis && (
-                                        <div className="mb-3 p-2 bg-indigo-900/20 rounded-lg border border-indigo-500/20 text-xs text-indigo-300">
-                                          <span className="font-bold">{act.ai_analysis.langkah_dianalisis.selesai_dengan_bukti} dari {act.ai_analysis.langkah_dianalisis.total}</span> langkah sudah memiliki bukti terverifikasi. Hasil analisis akan makin akurat jika seluruh langkah diunggah buktinya.
-                                        </div>
-                                      )}
+                                      {(() => {
+                                        const steps = act.steps || []
+                                        const totalSteps = steps.length
+                                        const withBukti = steps.filter(s => (checklistEvidenceMap[s.id] || []).some(ev => ev.verification_status === 'approved')).length
+                                        if (totalSteps === 0) return null
+                                        return (
+                                          <div className="mb-3 p-2 bg-indigo-900/20 rounded-lg border border-indigo-500/20 text-xs text-indigo-300">
+                                            <span className="font-bold">{withBukti} dari {totalSteps}</span> langkah sudah memiliki bukti terverifikasi. Hasil analisis akan makin akurat jika seluruh langkah diunggah buktinya.
+                                          </div>
+                                        )
+                                      })()}
                                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
                                         {/* Blok Estimasi ROI */}
                                         <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60 relative overflow-hidden group">
@@ -1685,7 +1694,7 @@ export default function ImprovePage() {
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">File Bukti (Max 10MB)</label>
                 <div className="flex gap-2">
                   <input ref={chkFileInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" className="hidden" onChange={(e) => setChkEvidenceFile(e.target.files?.[0] ?? null)} />
-                  <button onClick={() => chkFileInputRef.current?.click()} className="flex-1 flex items-center justify-center gap-2 border border-dashed border-slate-700 hover:border-indigo-500 rounded-xl py-3 text-xs text-slate-400 hover:text-indigo-400 cursor-pointer transition-all">
+                  <button type="button" onClick={(e) => { e.preventDefault(); chkFileInputRef.current?.click(); }} className="flex-1 flex items-center justify-center gap-2 border border-dashed border-slate-700 hover:border-indigo-500 rounded-xl py-3 text-xs text-slate-400 hover:text-indigo-400 cursor-pointer transition-all">
                     <Upload className="h-4 w-4" />
                     {chkEvidenceFile ? chkEvidenceFile.name : 'Pilih file (Gambar, PDF, Dokumen)'}
                   </button>
@@ -1693,8 +1702,8 @@ export default function ImprovePage() {
               </div>
 
               <div className="flex justify-end gap-3 border-t border-slate-800 pt-4 mt-2">
-                <button onClick={() => { setUploadChecklistStep(null); setChkEvidenceFile(null); }} className="px-4 py-2 text-xs text-slate-400 cursor-pointer">Batal</button>
-                <button onClick={handleUploadChecklistEvidence} disabled={chkUploading || !chkEvidenceFile}
+                <button type="button" onClick={() => { setUploadChecklistStep(null); setChkEvidenceFile(null); }} className="px-4 py-2 text-xs text-slate-400 cursor-pointer">Batal</button>
+                <button type="button" onClick={handleUploadChecklistEvidence} disabled={chkUploading || !chkEvidenceFile}
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-xs font-bold rounded-xl text-white cursor-pointer disabled:opacity-50">
                   {chkUploading ? 'Mengupload...' : <><Upload className="h-3.5 w-3.5" /> Submit Bukti</>}
                 </button>
