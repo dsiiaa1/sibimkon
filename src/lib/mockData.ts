@@ -290,6 +290,7 @@ export interface ImproveAiAnalysis {
     roi_persen: number
     catatan?: string
     bukti_digunakan?: string[]
+    rincian_penghematan_items?: { item: string; jumlah: number; sumber?: 'bukti' | 'estimasi'; keterangan?: string }[]
   }
   langkah_dianalisis?: {
     total: number
