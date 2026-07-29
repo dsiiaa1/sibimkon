@@ -1098,6 +1098,7 @@ export default function ImprovePage() {
                         const calculatedKpiActualRaw = (progress / 100) * (kpiTargetNum - kpiBaselineNum) + kpiBaselineNum;
                         const calculatedKpiActual = Number.isInteger(calculatedKpiActualRaw) ? calculatedKpiActualRaw : Number(calculatedKpiActualRaw.toFixed(2));
                         
+                        const hasApprovedEvidence = (act.steps || []).filter(s => (checklistEvidenceMap[s.id] || []).some(ev => ev.verification_status === 'approved')).length > 0;
                         return (
                           <div key={act.id} className="relative glass-card rounded-2xl border border-slate-800 bg-slate-950/50 p-5 sm:p-6 space-y-5">
                             {/* Card Header */}
