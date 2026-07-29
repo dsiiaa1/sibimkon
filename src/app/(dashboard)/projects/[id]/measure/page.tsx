@@ -39,12 +39,31 @@ const BADGE_COLORS: Record<string, string> = {
   emerald: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
 }
 
-const GROUP_BADGES: Record<string, { label: string; style: string }> = {
-  primary_defect: { label: 'Data Utama - Defect', style: 'bg-red-500/10 text-red-400 border-red-500/20' },
-  primary_volume: { label: 'Data Utama - Volume', style: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
-  primary_ctq: { label: 'Data Utama - CTQ', style: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-  supporting: { label: 'Data Pendukung (KPI)', style: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
-  context: { label: 'Data Konteks', style: 'bg-slate-700/50 text-slate-300 border-slate-700' },
+// Label dinamis per grup sesuai kategori masalah proyek
+function getGroupBadges(category: string = 'quality'): Record<string, { label: string; style: string }> {
+  const defectLabel: Record<string, string> = {
+    quality:    'Data Utama - Defect/Cacat',
+    delivery:   'Data Utama - Keterlambatan',
+    cost:       'Data Utama - Pemborosan/Overrun',
+    production: 'Data Utama - Downtime',
+    safety:     'Data Utama - Insiden/Kecelakaan',
+    morale:     'Data Utama - Karyawan Keluar',
+  }
+  const volumeLabel: Record<string, string> = {
+    quality:    'Data Utama - Volume Produksi',
+    delivery:   'Data Utama - Total Pengiriman',
+    cost:       'Data Utama - Total Anggaran',
+    production: 'Data Utama - Jam Produksi',
+    safety:     'Data Utama - Total Karyawan/Jam Kerja',
+    morale:     'Data Utama - Total Karyawan',
+  }
+  return {
+    primary_defect: { label: defectLabel[category] || 'Data Utama - Defect', style: 'bg-red-500/10 text-red-400 border-red-500/20' },
+    primary_volume: { label: volumeLabel[category] || 'Data Utama - Volume', style: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
+    primary_ctq:    { label: 'Data Utama - CTQ',          style: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
+    supporting:     { label: 'Data Pendukung (KPI)',       style: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+    context:        { label: 'Data Konteks',               style: 'bg-slate-700/50 text-slate-300 border-slate-700' },
+  }
 }
 
 export default function MeasurePage() {
@@ -93,6 +112,7 @@ export default function MeasurePage() {
     ch: ProjectCharter,
     projectTitle: string,
     compName: string,
+    problemCategory: string = 'quality',
   ) => {
     setAnalyzing(true)
     setSaveMsg(null)
@@ -107,6 +127,7 @@ export default function MeasurePage() {
           scope: ch.scope,
           company_name: compName || 'Perusahaan',
           project_title: projectTitle,
+          problem_category: problemCategory,
         }),
       })
       const data = await res.json()
@@ -164,7 +185,7 @@ export default function MeasurePage() {
         setDataReqs(saved)
       } else if (ch?.problem_statement && !aiTriggered.current) {
         aiTriggered.current = true
-        await runAiDataNeedAnalysis(ch, proj.title, cName)
+        await runAiDataNeedAnalysis(ch, proj.title, cName, proj.problem_category || 'quality')
       }
       
       const reqs = await getApprovalRequests(projectId)
@@ -188,7 +209,7 @@ export default function MeasurePage() {
       await sb.from('measure_data_requirements').delete().eq('project_id', projectId)
     } catch { /* ignore */ }
     setDataReqs([])
-    await runAiDataNeedAnalysis(charter, project.title, companyName)
+    await runAiDataNeedAnalysis(charter, project.title, companyName, project.problem_category || 'quality')
   }
 
   const dataReqsRef = useRef(dataReqs)
@@ -565,10 +586,11 @@ export default function MeasurePage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             problem_statement: charter.problem_statement || '',
-            method: 'Aggregated Sigma Level',
+            method: result.primary_metric?.method_used || 'Kalkulasi Kontekstual',
             calculation_results: result,
-            data_name: 'Keseluruhan Data (Gabungan)',
-            is_simple: companyTier === 'simple'
+            data_name: result.primary_metric?.name || 'Keseluruhan Data (Gabungan)',
+            is_simple: companyTier === 'simple',
+            problem_category: project?.problem_category || 'quality',
           }),
         })
         const data = await res.json()
@@ -774,18 +796,19 @@ export default function MeasurePage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-bold text-slate-200">{idx + 1}. {req.name}</span>
                         {req.source === 'ai' && <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-400 text-[10px] font-bold">Auto</span>}
-                        {req.group && GROUP_BADGES[req.group] && (() => {
+                        {req.group && getGroupBadges(project?.problem_category || 'quality')[req.group] && (() => {
+                          const badges = getGroupBadges(project?.problem_category || 'quality')
                           const getTooltipText = (g: string) => {
-                            if (g === 'primary_defect') return 'Cacat produksi atau ketidaksesuaian standar (Defect)'
-                            if (g === 'primary_volume') return 'Jumlah total barang/jasa yang diproduksi atau dikerjakan (Volume)'
+                            if (g === 'primary_defect') return 'Data utama sebagai pembilang (numerator) dalam rumus kalkulasi metrik'
+                            if (g === 'primary_volume') return 'Data utama sebagai penyebut (denominator) dalam rumus kalkulasi metrik'
                             if (g === 'primary_ctq') return 'Critical to Quality: Atribut hasil produksi yang paling penting bagi pelanggan'
                             if (g === 'supporting') return 'Key Performance Indicator: Indikator Kinerja Utama yang mendukung proses'
                             return null
                           }
                           const tt = getTooltipText(req.group)
                           return (
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${GROUP_BADGES[req.group].style}`}>
-                              {tt ? <Tooltip text={tt}>{GROUP_BADGES[req.group].label}</Tooltip> : GROUP_BADGES[req.group].label}
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${badges[req.group].style}`}>
+                              {tt ? <Tooltip text={tt}>{badges[req.group].label}</Tooltip> : badges[req.group].label}
                             </span>
                           )
                         })()}
