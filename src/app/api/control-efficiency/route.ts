@@ -122,7 +122,7 @@ PENTING: DILARANG KERAS menambahkan teks seperti "Berikut adalah...", DILARANG m
           raw_text: item.raw_text || '',
           metric_name: item.metric_name || 'Metrik belum ditentukan',
           baseline_value: item.baseline_value ?? null,
-          target_value: Number(item.target_value) || 0,
+          target_value: (item.target_value === null || item.target_value === undefined) ? null : Number(item.target_value),
           duration: Number(item.duration) || 1,
           duration_unit: (item.duration_unit || 'bulan').toLowerCase().includes('minggu') ? 'minggu' : (item.duration_unit || 'bulan').toLowerCase().includes('tahun') ? 'tahun' : 'bulan',
           needs_manual_review: Boolean(item.needs_manual_review)
