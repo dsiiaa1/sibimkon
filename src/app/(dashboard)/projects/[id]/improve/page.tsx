@@ -1519,6 +1519,7 @@ export default function ImprovePage() {
                                         const steps = act.steps || []
                                         const totalSteps = steps.length
                                         const withBukti = steps.filter(s => (checklistEvidenceMap[s.id] || []).some(ev => ev.verification_status === 'approved')).length
+                                        const hasApprovedEvidence = withBukti > 0
                                         if (totalSteps === 0) return null
                                         return (
                                           <div className="mb-3 p-2 bg-indigo-900/20 rounded-lg border border-indigo-500/20 text-xs text-indigo-300">
@@ -1547,8 +1548,8 @@ export default function ImprovePage() {
                                                   <span className="truncate pr-2" title={item.keterangan || item.item}>• {item.item}</span>
                                                   <div className="flex items-center space-x-2 shrink-0">
                                                     <span className="font-mono">Rp{Number(item.jumlah || 0).toLocaleString('id-ID')}</span>
-                                                    <span className={`text-[8px] px-1 py-0.5 rounded ${item.sumber === 'bukti' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-700/50 text-slate-400'}`}>
-                                                      {item.sumber === 'bukti' ? 'bukti' : 'estimasi'}
+                                                    <span className={`text-[8px] px-1 py-0.5 rounded ${(hasApprovedEvidence || item.sumber === 'bukti') ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-700/50 text-slate-400'}`}>
+                                                      {(hasApprovedEvidence || item.sumber === 'bukti') ? 'bukti' : 'estimasi'}
                                                     </span>
                                                   </div>
                                                 </li>
@@ -1569,8 +1570,8 @@ export default function ImprovePage() {
                                                   <span className="truncate pr-2" title={item.keterangan || item.item}>• {item.item}</span>
                                                   <div className="flex items-center space-x-2 shrink-0">
                                                     <span className="font-mono">Rp{Number(item.jumlah || 0).toLocaleString('id-ID')}</span>
-                                                    <span className={`text-[8px] px-1 py-0.5 rounded ${item.sumber === 'bukti' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-700/50 text-slate-400'}`}>
-                                                      {item.sumber === 'bukti' ? 'bukti' : 'estimasi'}
+                                                    <span className={`text-[8px] px-1 py-0.5 rounded ${(hasApprovedEvidence || item.sumber === 'bukti') ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-700/50 text-slate-400'}`}>
+                                                      {(hasApprovedEvidence || item.sumber === 'bukti') ? 'bukti' : 'estimasi'}
                                                     </span>
                                                   </div>
                                                 </li>
