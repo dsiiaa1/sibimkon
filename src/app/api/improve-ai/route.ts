@@ -126,7 +126,7 @@ INSTRUKSI TAMBAHAN:
 - Jika sebuah langkah SUDAH selesai dan ada buktinya, gunakan informasi dari bukti tersebut sebagai dasar utama perhitungan biaya & manfaat, BUKAN karangan.
 - Jika sebuah langkah BELUM selesai atau belum ada bukti, gunakan estimasi wajar dan tandai jelas sebagai "estimasi" pada field terkait (bukan seolah-olah sudah terjadi).
 - Untuk field "biaya", kembalikan RINCIAN PER ITEM (array), bukan hanya 1 angka total. Setiap item cantumkan sumbernya: dari "bukti" nyata (sebutkan nama file di keterangan) atau "estimasi".
-- Untuk field "roi.estimasi_penghematan_tahunan", jelaskan dasar perhitungannya di "roi.catatan", termasuk bukti mana yang dipakai (pada array "roi.bukti_digunakan").
+- Untuk field "roi.estimasi_penghematan_tahunan", selain mencantumkan total penghematan tahunan, berikan rincian penghematannya dalam "roi.rincian_penghematan_items". Tiap item cantumkan sumbernya ("bukti" atau "estimasi"). Jelaskan dasar perhitungannya di "roi.catatan".
 
 Lengkapi analisis Lean Six Sigma berikut dalam format JSON. Jika Anda tidak punya data persis, gunakan estimasi kasar dan tulis asumsinya, jangan mengosongkannya.
 
@@ -154,6 +154,10 @@ CONTOH FORMAT OUTPUT:
   "target_efisiensi": "...",
   "roi": {
     "estimasi_penghematan_tahunan": 10000000,
+    "rincian_penghematan_items": [
+      { "item": "Listrik Mesin", "jumlah": 8000000, "sumber": "estimasi", "keterangan": "Berdasarkan pengurangan jam mesin" },
+      { "item": "Biaya Lembur", "jumlah": 2000000, "sumber": "bukti", "keterangan": "Berdasarkan slip-gaji.pdf" }
+    ],
     "biaya_implementasi": 5000000,
     "roi_persen": 100,
     "catatan": "Dasar perhitungan...",
@@ -184,17 +188,15 @@ CONTOH FORMAT OUTPUT:
     }
 
     // Jika ada file bukti yang berhasil diunduh & dianalisis AI,
-    // tandai seluruh rincian_items sebagai 'bukti' — bukan sekadar estimasi.
+    // tandai seluruh rincian_items dan rincian_penghematan_items sebagai 'bukti' — bukan sekadar estimasi.
     const hasAnalyzedEvidence = imageParts.length > 0
-    if (
-      hasAnalyzedEvidence &&
-      result.biaya?.rincian_items &&
-      Array.isArray(result.biaya.rincian_items)
-    ) {
-      result.biaya.rincian_items = result.biaya.rincian_items.map((item: any) => ({
-        ...item,
-        sumber: 'bukti'
-      }))
+    if (hasAnalyzedEvidence) {
+      if (result.biaya?.rincian_items && Array.isArray(result.biaya.rincian_items)) {
+        result.biaya.rincian_items = result.biaya.rincian_items.map((item: any) => ({ ...item, sumber: 'bukti' }))
+      }
+      if (result.roi?.rincian_penghematan_items && Array.isArray(result.roi.rincian_penghematan_items)) {
+        result.roi.rincian_penghematan_items = result.roi.rincian_penghematan_items.map((item: any) => ({ ...item, sumber: 'bukti' }))
+      }
     }
 
     return NextResponse.json(result)

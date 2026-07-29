@@ -72,13 +72,15 @@ export default function ImprovePage() {
     target_efisiensi: string
     manfaat: string
     rincian_items: { item: string; jumlah: number; sumber: 'bukti' | 'estimasi'; keterangan: string }[]
+    rincian_penghematan_items: { item: string; jumlah: number; sumber: 'bukti' | 'estimasi'; keterangan: string }[]
   }>({
     estimasi_penghematan_tahunan: 0,
     roi_persen: 0,
     biaya_implementasi: 0,
     target_efisiensi: '',
     manfaat: '',
-    rincian_items: []
+    rincian_items: [],
+    rincian_penghematan_items: []
   })
   const [expandedActionIds, setExpandedActionIds] = useState<Set<string>>(new Set())
 
@@ -584,7 +586,8 @@ export default function ImprovePage() {
               biaya_implementasi: roiEditForm.biaya_implementasi,
               catatan: (act.ai_analysis?.roi as any)?.catatan || '',
               estimasi_penghematan_tahunan: roiEditForm.estimasi_penghematan_tahunan,
-              roi_persen: roiEditForm.roi_persen
+              roi_persen: roiEditForm.roi_persen,
+              rincian_penghematan_items: roiEditForm.rincian_penghematan_items
             },
             biaya: {
               rincian: roiEditForm.rincian_items.map(r => `${r.item}: Rp${r.jumlah.toLocaleString('id-ID')}`).join(', ') || (act.ai_analysis?.biaya as any)?.rincian || '',
@@ -1316,6 +1319,12 @@ export default function ImprovePage() {
                                           // Auto-upgrade ke 'bukti' jika ada evidence yang disetujui
                                           sumber: hasApprovedEvidence ? 'bukti' : (r.sumber || 'estimasi'),
                                           keterangan: r.keterangan || ''
+                                        })),
+                                        rincian_penghematan_items: (act.ai_analysis?.roi?.rincian_penghematan_items || []).map((r: any) => ({
+                                          item: r.item || '',
+                                          jumlah: r.jumlah || 0,
+                                          sumber: hasApprovedEvidence ? 'bukti' : (r.sumber || 'estimasi'),
+                                          keterangan: r.keterangan || ''
                                         }))
                                       })
                                       setEditingRoiId(act.id)
@@ -1330,7 +1339,7 @@ export default function ImprovePage() {
                                         {generatingAiIds[act.id] ? 'Memproses...' : 'Lihat Hasil'}
                                       </button>
                                       <button onClick={() => {
-                                        setRoiEditForm({ estimasi_penghematan_tahunan: 0, roi_persen: 0, biaya_implementasi: 0, target_efisiensi: '', manfaat: '', rincian_items: [] })
+                                        setRoiEditForm({ estimasi_penghematan_tahunan: 0, roi_persen: 0, biaya_implementasi: 0, target_efisiensi: '', manfaat: '', rincian_items: [], rincian_penghematan_items: [] })
                                         setEditingRoiId(act.id)
                                       }} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-all cursor-pointer">Input Manual</button>
                                     </>
@@ -1436,6 +1445,72 @@ export default function ImprovePage() {
                                       </div>
                                     )}
                                   </div>
+                                  {/* Rincian Penghematan editable */}
+                                  <div className="sm:col-span-2">
+                                    <div className="flex items-center justify-between mb-1 mt-2 border-t border-slate-700/50 pt-2">
+                                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Rincian Penghematan (Opsional)</label>
+                                      <button type="button" onClick={() => setRoiEditForm(prev => ({ ...prev, rincian_penghematan_items: [...prev.rincian_penghematan_items, { item: '', jumlah: 0, sumber: 'estimasi', keterangan: '' }] }))}
+                                        className="text-[10px] px-2 py-0.5 bg-emerald-600/20 text-emerald-300 rounded hover:bg-emerald-600/40 cursor-pointer">+ Tambah Penghematan</button>
+                                    </div>
+                                    {roiEditForm.rincian_penghematan_items.length === 0 ? (
+                                      <p className="text-[10px] text-slate-600 italic">Belum ada rincian penghematan. Klik &quot;+ Tambah Penghematan&quot;.</p>
+                                    ) : (
+                                      <div className="space-y-2">
+                                        {roiEditForm.rincian_penghematan_items.map((item, idx) => (
+                                          <div key={`penghematan-${idx}`} className="flex items-center gap-2 bg-slate-900/60 p-2 rounded-lg border border-slate-700/50">
+                                            <input
+                                              type="text"
+                                              placeholder="Sumber hemat (mis: Listrik)"
+                                              value={item.item}
+                                              onChange={e => {
+                                                const updated = [...roiEditForm.rincian_penghematan_items]
+                                                updated[idx] = { ...updated[idx], item: e.target.value }
+                                                setRoiEditForm(prev => ({ ...prev, rincian_penghematan_items: updated }))
+                                              }}
+                                              className="flex-1 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-[11px] text-slate-200 min-w-0"
+                                            />
+                                            <input
+                                              type="number"
+                                              placeholder="Jumlah (Rp)"
+                                              value={item.jumlah}
+                                              onChange={e => {
+                                                const updated = [...roiEditForm.rincian_penghematan_items]
+                                                updated[idx] = { ...updated[idx], jumlah: Number(e.target.value) }
+                                                const total = updated.reduce((s, r) => s + (r.jumlah || 0), 0)
+                                                setRoiEditForm(prev => {
+                                                  const invest = prev.biaya_implementasi
+                                                  const roi = invest > 0 ? Math.round(((total - invest) / invest) * 100) : 0
+                                                  return { ...prev, rincian_penghematan_items: updated, estimasi_penghematan_tahunan: total, roi_persen: roi }
+                                                })
+                                              }}
+                                              className="w-28 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-[11px] text-slate-200"
+                                            />
+                                            <select
+                                              value={item.sumber}
+                                              onChange={e => {
+                                                const updated = [...roiEditForm.rincian_penghematan_items]
+                                                updated[idx] = { ...updated[idx], sumber: e.target.value as 'bukti' | 'estimasi' }
+                                                setRoiEditForm(prev => ({ ...prev, rincian_penghematan_items: updated }))
+                                              }}
+                                              className="bg-slate-800 border border-slate-600 rounded px-1 py-1 text-[11px] text-slate-300"
+                                            >
+                                              <option value="estimasi">estimasi</option>
+                                              <option value="bukti">bukti</option>
+                                            </select>
+                                            <button type="button" onClick={() => {
+                                              const updated = roiEditForm.rincian_penghematan_items.filter((_, i) => i !== idx)
+                                              const total = updated.reduce((s, r) => s + (r.jumlah || 0), 0)
+                                              setRoiEditForm(prev => {
+                                                const invest = prev.biaya_implementasi
+                                                const roi = invest > 0 ? Math.round(((total - invest) / invest) * 100) : 0
+                                                return { ...prev, rincian_penghematan_items: updated, estimasi_penghematan_tahunan: total, roi_persen: roi }
+                                              })
+                                            }} className="text-red-400 hover:text-red-300 cursor-pointer shrink-0">✕</button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               ) : (
                                 act.ai_analysis ? (
@@ -1460,11 +1535,26 @@ export default function ImprovePage() {
                                           </p>
                                         </div>
                                         {/* Penghematan Tahunan — kartu terpisah */}
-                                        <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60">
+                                        <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60 relative overflow-hidden">
                                           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Penghematan Tahunan</span>
                                           <p className="text-lg font-bold text-emerald-300">
                                             {typeof act.ai_analysis.roi === 'object' ? `Rp${Number(act.ai_analysis.roi.estimasi_penghematan_tahunan || 0).toLocaleString('id-ID')}` : '—'}
                                           </p>
+                                          {typeof act.ai_analysis.roi === 'object' && Array.isArray(act.ai_analysis.roi.rincian_penghematan_items) && act.ai_analysis.roi.rincian_penghematan_items.length > 0 && (
+                                            <ul className="mt-2 space-y-1">
+                                              {act.ai_analysis.roi.rincian_penghematan_items.map((item: any, i: number) => (
+                                                <li key={`penghematan-view-${i}`} className="text-[10px] flex items-center justify-between text-slate-300">
+                                                  <span className="truncate pr-2" title={item.keterangan || item.item}>• {item.item}</span>
+                                                  <div className="flex items-center space-x-2 shrink-0">
+                                                    <span className="font-mono">Rp{Number(item.jumlah || 0).toLocaleString('id-ID')}</span>
+                                                    <span className={`text-[8px] px-1 py-0.5 rounded ${item.sumber === 'bukti' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-700/50 text-slate-400'}`}>
+                                                      {item.sumber === 'bukti' ? 'bukti' : 'estimasi'}
+                                                    </span>
+                                                  </div>
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          )}
                                         </div>
                                         {/* Blok Kebutuhan Biaya */}
                                         <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/60 relative overflow-hidden">
