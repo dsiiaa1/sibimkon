@@ -215,6 +215,24 @@ export default function MeasurePage() {
   const dataReqsRef = useRef(dataReqs)
   useEffect(() => { dataReqsRef.current = dataReqs }, [dataReqs])
 
+  // Auto-backfill kategori masalah untuk proyek lama
+  useEffect(() => {
+    if (project && charter && !project.problem_category) {
+      const text = `${project.title} ${charter.problem_statement}`.toLowerCase()
+      let cat = 'quality'
+      if (text.match(/kecelakaan|safety|k3|insiden|cidera|luka/)) cat = 'safety'
+      else if (text.match(/terlambat|delay|waktu|pengiriman|lama/)) cat = 'delivery'
+      else if (text.match(/downtime|breakdown|mesin|oee/)) cat = 'production'
+      else if (text.match(/biaya|cost|pemborosan|anggaran/)) cat = 'cost'
+      else if (text.match(/resign|turnover|moral/)) cat = 'morale'
+      
+      import('@/lib/db').then(({ updateProjectDetails }) => {
+        updateProjectDetails(project.id, { problem_category: cat })
+        setProject(p => p ? { ...p, problem_category: cat } : p)
+      })
+    }
+  }, [project, charter])
+
   const handleToggleRelevant = async (reqId: string, current: boolean | undefined) => {
     const isNowRelevant = !(current ?? true)
     const updated = dataReqs.map(r => {
@@ -663,6 +681,9 @@ export default function MeasurePage() {
           <p className="text-xs text-slate-500 mt-0.5">
             Fase MEASURE — Pengumpulan data, validasi, perhitungan level masalah & rekomendasi sistem
           </p>
+          <div className="mt-3 text-xs font-semibold text-slate-400">
+            Kategori Masalah: <span className="text-indigo-400 capitalize">{project.problem_category || 'Memuat...'}</span>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {isKonsultan && (
