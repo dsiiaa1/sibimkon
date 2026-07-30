@@ -170,9 +170,9 @@ export default function ReportsPage() {
       const kpiAkhirScore = totalChecklistPoints > 0 ? (approvedCount / totalChecklistPoints) * 100 : 0
       setComputedKpiAkhir(kpiAkhirScore)
 
-      // Sync current_score ke Supabase/mockDB dari KPI aktual yang sudah ada
-      // Ini memastikan field DB tetap up-to-date meski user tidak buka Improve lagi
-      if (plans.some(a => a.kpi_actual !== undefined)) {
+      // Sync current_score ke Supabase/mockDB menggunakan afterScore jika belum tersimpan
+      // Ini memastikan field DB tetap up-to-date
+      if (plans.some(a => (a.verified_kpi_actual ?? a.kpi_actual) !== undefined) || totalChecklistPoints > 0) {
         updateProjectScore(projectId, plans).catch(console.warn)
       }
     }
@@ -249,22 +249,13 @@ export default function ReportsPage() {
       return { costSaving: totalManualSaving, investment: totalManualInvestment, roi, isManual: true }
     }
 
-    // Fallback 1: Gunakan estimasi dari AI (tahap Improve) jika ada
-    const totalAiSaving = actionPlans.reduce((acc, act) => acc + Number((act.ai_analysis?.roi as any)?.estimasi_penghematan_tahunan || 0), 0)
-    const totalAiInvestment = actionPlans.reduce((acc, act) => acc + Number((act.ai_analysis?.biaya as any)?.estimasi || 0), 0)
-    const hasAiData = totalAiSaving > 0 || totalAiInvestment > 0
-    
-    if (hasAiData) {
-      const roi = totalAiInvestment > 0 ? totalAiSaving / totalAiInvestment : 0
-      return { costSaving: totalAiSaving, investment: totalAiInvestment, roi, isManual: false }
-    }
-
     // Fallback 2: estimasi otomatis dari perbaikan KPI
     const costSaving = actionPlans.reduce((acc, act) => {
-      if (act.kpi_actual === undefined) return acc
+      const kpiActual = act.verified_kpi_actual ?? act.kpi_actual
+      if (kpiActual === undefined) return acc
       const achieved = act.kpi_target > act.kpi_baseline
-        ? Math.max(0, act.kpi_actual - act.kpi_baseline)   // higher is better
-        : Math.max(0, act.kpi_baseline - act.kpi_actual)   // lower is better
+        ? Math.max(0, (kpiActual as number) - act.kpi_baseline)   // higher is better
+        : Math.max(0, act.kpi_baseline - (kpiActual as number))   // lower is better
       const unitValue = 500000 // Rp 500rb per unit perbaikan KPI (estimasi default)
       return acc + achieved * unitValue
     }, 0)

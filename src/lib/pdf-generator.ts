@@ -530,33 +530,21 @@ export async function generateFinalReport(
     roi = investment > 0 ? (costSaving / investment).toFixed(1) : '0'
     noteStr = 'Catatan: Angka cost saving dan investasi merupakan nilai riil/estimasi yang telah diinput dan divalidasi oleh konsultan.'
   } else {
-    // Fallback 1: Gunakan estimasi dari AI (tahap Improve) jika ada
-    const totalAiSaving = actionPlans.reduce((acc, act) => acc + Number(((act as any).ai_analysis?.roi as any)?.estimasi_penghematan_tahunan || 0), 0)
-    const totalAiInvestment = actionPlans.reduce((acc, act) => acc + Number(((act as any).ai_analysis?.biaya as any)?.estimasi || 0), 0)
-    const hasAiData = totalAiSaving > 0 || totalAiInvestment > 0
-
-    if (hasAiData) {
-      costSaving = totalAiSaving
-      investment = totalAiInvestment
-      roi = investment > 0 ? (costSaving / investment).toFixed(1) : '0'
-      noteStr = 'Catatan: Angka cost saving dan investasi merupakan estimasi prediktif otomatis yang di-generate oleh AI.'
-    } else {
-      // Fallback 2: estimasi otomatis dari perbaikan KPI
-      costSaving = actionPlans.reduce((acc, act) => {
-        const kpiActual = act.verified_kpi_actual ?? act.kpi_actual
-        if (kpiActual === undefined) return acc
-        const achieved =
-          act.kpi_target > act.kpi_baseline
-            ? Math.max(0, (kpiActual as number) - act.kpi_baseline)
-            : Math.max(0, act.kpi_baseline - (kpiActual as number))
-        return acc + achieved * 500000
-      }, 0)
-      investment = actionPlans.filter(a => a.status !== 'belum_mulai').length * 2500000
-      roi = investment > 0 ? (costSaving / investment).toFixed(1) : '0'
-      noteStr = 'Catatan: Estimasi cost saving dihitung berdasarkan selisih KPI aktual terhadap baseline, ' +
-        'dikalikan nilai unit perbaikan Rp 500.000 per unit. Investasi program dihitung sebesar ' +
-        'Rp 2.500.000 per action plan yang sudah berjalan. Angka merupakan estimasi indikatif.'
-    }
+    // Fallback 2: estimasi otomatis dari perbaikan KPI
+    costSaving = actionPlans.reduce((acc, act) => {
+      const kpiActual = act.verified_kpi_actual ?? act.kpi_actual
+      if (kpiActual === undefined) return acc
+      const achieved =
+        act.kpi_target > act.kpi_baseline
+          ? Math.max(0, (kpiActual as number) - act.kpi_baseline)
+          : Math.max(0, act.kpi_baseline - (kpiActual as number))
+      return acc + achieved * 500000
+    }, 0)
+    investment = actionPlans.filter(a => a.status !== 'belum_mulai').length * 2500000
+    roi = investment > 0 ? (costSaving / investment).toFixed(1) : '0'
+    noteStr = 'Catatan: Estimasi cost saving dihitung berdasarkan selisih KPI aktual terhadap baseline, ' +
+      'dikalikan nilai unit perbaikan Rp 500.000 per unit. Investasi program dihitung sebesar ' +
+      'Rp 2.500.000 per action plan yang sudah berjalan. Angka merupakan estimasi indikatif.'
   }
 
   autoTable(doc, {
