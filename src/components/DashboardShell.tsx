@@ -18,7 +18,8 @@ import {
   Building,
   Menu,
   X,
-  FileText
+  FileText,
+  Trophy
 } from 'lucide-react'
 import { useLanguage } from '@/lib/i18n/LanguageContext'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -271,6 +272,8 @@ export default function DashboardShell({
     { name: 'Baseline Assessment', href: '/companies/assessments', icon: FileCheck, roles: ['konsultan', 'admin'] },
     { name: t('nav.profile'), href: '/profile', icon: Building, roles: ['perusahaan'] },
     { name: t('nav.projects'), href: '/projects', icon: FolderKanban },
+    // PRD productivity_awards §4.1 — nav item Awards (konsultan/admin only)
+    { name: 'Productivity Awards', href: '/awards', icon: Trophy, roles: ['konsultan', 'admin'] },
     { name: t('nav.admin'), href: '/admin', icon: Activity, roles: ['admin'] },
   ]
 

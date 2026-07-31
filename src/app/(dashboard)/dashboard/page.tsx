@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { getProjects, getCompanies } from '@/lib/db'
+import { getProjects, getCompanies, getActionPlansForProjects } from '@/lib/db'
 import { Project, Company } from '@/lib/mockData'
+import { calculateProjectRoi } from '@/lib/roi'
 import {
   Plus,
   TrendingUp,
@@ -14,6 +15,7 @@ import {
   FolderOpen,
   BarChart3,
   Info,
+  Trophy,
 } from 'lucide-react'
 import { PROJECT_STATUS_LABELS } from '@/lib/utils'
 import CreateProjectModal from '@/components/CreateProjectModal'
@@ -128,6 +130,8 @@ export default function DashboardPage() {
   const [currentUserId, setCurrentUserId] = useState<string>('unknown')
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [hoveredProject, setHoveredProject] = useState<string | null>(null)
+  // PRD productivity_awards §4.5 — widget ringkas Top 3 Awards
+  const [awardsTop3, setAwardsTop3] = useState<{ companyName: string; avgRoi: number; totalCostSaving: number }[]>([])
 
   useEffect(() => {
     async function loadData() {
@@ -141,6 +145,42 @@ export default function DashboardPage() {
       const [projs, comps] = await Promise.all([getProjects(), getCompanies()])
       setProjects(projs)
       setCompanies(comps)
+
+      // PRD productivity_awards §4.5 — hitung Top 3 Awards (tahun terbaru dengan data)
+      // ASUMSI: hanya visible untuk konsultan/admin, cek dilakukan di render
+      try {
+        const completedWithDate = projs.filter(p => p.status === 'completed' && p.completed_at)
+        if (completedWithDate.length > 0) {
+          const years = completedWithDate.map(p => new Date(p.completed_at!).getFullYear())
+          const latestYear = Math.max(...years)
+          const eligibleProjs = completedWithDate.filter(p =>
+            new Date(p.completed_at!).getFullYear() === latestYear
+          )
+          const actionPlansByProject = await getActionPlansForProjects(eligibleProjs.map(p => p.id))
+          const byCompany: Record<string, typeof projs> = {}
+          for (const p of eligibleProjs) {
+            if (!byCompany[p.company_id]) byCompany[p.company_id] = []
+            byCompany[p.company_id].push(p)
+          }
+          const scores = Object.entries(byCompany).map(([companyId, ps]) => {
+            const roiResults = ps.map(p => calculateProjectRoi(actionPlansByProject[p.id] || []))
+            const validRoi = roiResults.filter(r => r.roi > 0)
+            if (validRoi.length === 0) return null
+            const avgRoi = validRoi.reduce((a, r) => a + r.roi, 0) / validRoi.length
+            const totalCostSaving = roiResults.reduce((a, r) => a + r.costSaving, 0)
+            const companyName = comps.find(c => c.id === companyId)?.name || ps[0]?.company_name || companyId
+            return { companyName, avgRoi, totalCostSaving }
+          }).filter(Boolean) as { companyName: string; avgRoi: number; totalCostSaving: number }[]
+          scores.sort((a, b) => {
+            if (Math.abs(b.avgRoi - a.avgRoi) > 0.0001) return b.avgRoi - a.avgRoi
+            return b.totalCostSaving - a.totalCostSaving
+          })
+          setAwardsTop3(scores.slice(0, 3))
+        }
+      } catch (e) {
+        // Jika gagal (misal belum ada data), diam saja — widget tidak ditampilkan
+        console.warn('[Dashboard] Awards widget load failed:', e)
+      }
     }
     loadData()
   }, [])
@@ -389,6 +429,41 @@ export default function DashboardPage() {
         </div>
       </div>
 
+
+      {/* PRD productivity_awards §4.5 — Widget Ringkas Top 3 Awards
+          Hanya visible untuk konsultan/admin. Jika tidak ada data, section ini tidak ditampilkan. */}
+      {currentUser?.role !== 'perusahaan' && awardsTop3.length > 0 && (
+        <div className="rounded-2xl border border-yellow-600/20 bg-yellow-950/5 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Trophy className="h-4 w-4 text-yellow-400" />
+              <h2 className="text-sm font-bold text-slate-200">🏆 Productivity Awards — Top 3 Tahun Ini</h2>
+            </div>
+            <Link
+              href="/awards"
+              className="text-[11px] font-bold text-yellow-500 hover:text-yellow-400 transition-colors flex items-center gap-1"
+            >
+              Lihat Selengkapnya <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {awardsTop3.map((s, i) => (
+              <div key={s.companyName} className="flex items-center gap-3 py-2 px-3 rounded-xl bg-slate-950/40 border border-slate-800/50">
+                <span className="text-base shrink-0">
+                  {i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}
+                </span>
+                <span className="font-semibold text-slate-200 text-sm flex-1 truncate">{s.companyName}</span>
+                <span className="text-xs font-bold text-yellow-400">{s.avgRoi.toFixed(1)}× ROI</span>
+                <span className="text-[10px] text-emerald-400">
+                  Rp {s.totalCostSaving >= 1_000_000
+                    ? `${(s.totalCostSaving / 1_000_000).toFixed(0)} Jt`
+                    : s.totalCostSaving.toLocaleString('id-ID')}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ═══════════════════════════════════════════════════
           PRD 8.5: PROJECT LIST (dengan negative overlap)

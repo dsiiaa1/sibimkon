@@ -694,15 +694,85 @@ export async function saveControlPsi(projectId: string, psi: { people: number; p
 export type DmaicPhase = 'draft' | 'define' | 'measure' | 'analyze' | 'improve' | 'control' | 'completed'
 
 export async function updateProjectPhase(projectId: string, newPhase: DmaicPhase): Promise<void> {
+  // ASUMSI (PRD productivity_awards §5.2): set completed_at hanya saat baru pertama kali
+  // menjadi 'completed'. Idempotent — tidak overwrite jika sudah ada nilai sebelumnya.
+  const now = new Date().toISOString()
   try {
     const sb = getSupabase()
     if (!sb) throw new Error('No Supabase client')
-    const { error } = await sb.from('bimkon_projects').update({ status: newPhase, current_phase: newPhase }).eq('id', projectId)
+    // Cek apakah sudah punya completed_at agar tidak di-overwrite
+    let updatePayload: any = { status: newPhase, current_phase: newPhase }
+    if (newPhase === 'completed') {
+      const { data: existing } = await sb.from('bimkon_projects').select('completed_at').eq('id', projectId).single()
+      if (!existing?.completed_at) {
+        updatePayload.completed_at = now
+      }
+    }
+    const { error } = await sb.from('bimkon_projects').update(updatePayload).eq('id', projectId)
     if (error) handleDbError(error)
   } catch (err) {
     console.warn('[updateProjectPhase] fallback to mockDB:', err)
     const db = getMockDB()
-    updateMockDB('projects', db.projects.map((p: Project) => p.id === projectId ? { ...p, status: newPhase } : p))
+    updateMockDB('projects', db.projects.map((p: Project) => {
+      if (p.id !== projectId) return p
+      // Idempotent: set completed_at hanya jika belum ada
+      const completedAt = newPhase === 'completed' && !p.completed_at ? now : p.completed_at
+      return { ...p, status: newPhase, completed_at: completedAt }
+    }))
+  }
+}
+
+/**
+ * getActionPlansForProjects
+ *
+ * Bulk fetch action plans untuk banyak project sekaligus dalam 1 Supabase query.
+ * Dibutuhkan oleh fitur Total ROI Perusahaan & Productivity Awards agar tidak
+ * melakukan N+1 round-trip request (1 request per proyek).
+ *
+ * Mapping field identik dengan getActionPlans() — tanpa steps join (tidak dibutuhkan
+ * untuk kalkulasi ROI, demi performa).
+ */
+export async function getActionPlansForProjects(projectIds: string[]): Promise<Record<string, ActionPlan[]>> {
+  if (projectIds.length === 0) return {}
+  try {
+    const sb = getSupabase()
+    if (!sb) throw new Error('No Supabase client')
+
+    const { data, error } = await sb
+      .from('improve_actions')
+      .select('*') // skip steps join — tidak dibutuhkan untuk kalkulasi ROI
+      .in('project_id', projectIds)
+    if (error) handleDbError(error)
+
+    const grouped: Record<string, ActionPlan[]> = {}
+    for (const d of (data || [])) {
+      const mapped: ActionPlan = {
+        id: d.id, project_id: d.project_id, problem_title: d.problem_title, title: d.action_title,
+        description: d.description, methodology: d.methodology, dimension: d.dimension,
+        kpi_name: d.kpi_name, kpi_baseline: Number(d.kpi_baseline || 0),
+        kpi_target: Number(d.kpi_target || 0), kpi_unit: d.kpi_unit,
+        kpi_actual: d.kpi_actual != null ? Number(d.kpi_actual) : undefined,
+        verified_kpi_actual: d.verified_kpi_actual != null ? Number(d.verified_kpi_actual) : undefined,
+        verified_by: d.verified_by, verified_at: d.verified_at,
+        cost_saving_manual: d.cost_saving_manual != null ? Number(d.cost_saving_manual) : undefined,
+        investment_manual: d.investment_manual != null ? Number(d.investment_manual) : undefined,
+        pic_name: d.pic_name, start_date: d.start_date,
+        end_date: d.end_date, status: d.status, progress_percentage: d.progress_percentage,
+        ai_analysis: typeof d.ai_analysis === 'string'
+          ? (() => { try { return JSON.parse(d.ai_analysis) } catch { return d.ai_analysis } })()
+          : d.ai_analysis,
+        steps: [], // steps tidak di-join untuk performa
+      }
+      if (!grouped[d.project_id]) grouped[d.project_id] = []
+      grouped[d.project_id].push(mapped)
+    }
+    return grouped
+  } catch (err) {
+    console.warn('[getActionPlansForProjects] fallback to mockDB:', err)
+    const db = getMockDB()
+    const result: Record<string, ActionPlan[]> = {}
+    for (const id of projectIds) result[id] = db.actionPlans[id] || []
+    return result
   }
 }
 

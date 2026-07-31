@@ -138,6 +138,11 @@ export interface Project {
   improve_is_locked?: boolean
   control_is_locked?: boolean
   problem_category?: string
+  /** Timestamp saat proyek di-set ke status completed (ISO string).
+   * Dibutuhkan untuk fitur Productivity Awards (ranking per periode tahunan).
+   * Diisi otomatis oleh updateProjectPhase() — jangan overwrite jika sudah ada.
+   */
+  completed_at?: string
 }
 
 export interface ProjectCharter {

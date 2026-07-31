@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { getProjects, getAssessments, getActionPlans, getMeasureProblems, updateProjectScore, getChecklistEvidences } from '@/lib/db'
 import { Project, ActionPlan, Assessment, MeasureProblem } from '@/lib/mockData'
+import { calculateProjectRoi } from '@/lib/roi'
 import { generateFinalReport, generateCertificate } from '@/lib/pdf-generator'
 import { FileText, Award, ShieldCheck, Download, Edit3, CheckCircle2, Loader2, X } from 'lucide-react'
 import { useUserRole } from '@/hooks/useUserRole'
@@ -234,35 +235,10 @@ export default function ReportsPage() {
   }
 
   // ── ROI dari data KPI aktual vs baseline ──
-  // Prioritas: gunakan nilai manual (cost_saving_manual / investment_manual) jika ada,
-  // fallback ke estimasi otomatis hanya jika belum ada input manual sama sekali.
-  const roiData = (() => {
-    if (actionPlans.length === 0) return { costSaving: 0, investment: 0, roi: 0, isManual: false }
-
-    const totalManualSaving = actionPlans.reduce((acc, a) => acc + (a.cost_saving_manual ?? 0), 0)
-    const totalManualInvestment = actionPlans.reduce((acc, a) => acc + (a.investment_manual ?? 0), 0)
-    const hasManualData = totalManualSaving > 0 || totalManualInvestment > 0
-
-    if (hasManualData) {
-      // Gunakan nilai yang diinput langsung oleh konsultan
-      const roi = totalManualInvestment > 0 ? totalManualSaving / totalManualInvestment : 0
-      return { costSaving: totalManualSaving, investment: totalManualInvestment, roi, isManual: true }
-    }
-
-    // Fallback 2: estimasi otomatis dari perbaikan KPI
-    const costSaving = actionPlans.reduce((acc, act) => {
-      const kpiActual = act.verified_kpi_actual ?? act.kpi_actual
-      if (kpiActual === undefined) return acc
-      const achieved = act.kpi_target > act.kpi_baseline
-        ? Math.max(0, (kpiActual as number) - act.kpi_baseline)   // higher is better
-        : Math.max(0, act.kpi_baseline - (kpiActual as number))   // lower is better
-      const unitValue = 500000 // Rp 500rb per unit perbaikan KPI (estimasi default)
-      return acc + achieved * unitValue
-    }, 0)
-    const investment = actionPlans.filter(a => a.status !== 'belum_mulai').length * 2500000
-    const roi = investment > 0 ? costSaving / investment : 0
-    return { costSaving, investment, roi, isManual: false }
-  })()
+  // Menggunakan calculateProjectRoi() dari @/lib/roi (diekstrak dari sini).
+  // Prioritas: nilai manual konsultan (cost_saving_manual/investment_manual).
+  // Fallback: estimasi otomatis dari perbaikan KPI aktual vs baseline.
+  const roiData = calculateProjectRoi(actionPlans)
 
   // === BASELINE & AKTUAL berbasis Skor Proyek ===
   const beforeScore = project?.baseline_score || 0

@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { getCompanies, getProjects, getCompanyBaselineAssessment, getAiIdentifiedProblems, saveAiIdentifiedProblems, updateAiIdentifiedProblemStatus, createProject, saveProjectCharter, updateProjectDetails, saveProjectEditLog } from '@/lib/db'
+import { getCompanies, getProjects, getCompanyBaselineAssessment, getAiIdentifiedProblems, saveAiIdentifiedProblems, updateAiIdentifiedProblemStatus, createProject, saveProjectCharter, updateProjectDetails, saveProjectEditLog, getActionPlansForProjects } from '@/lib/db'
 import { Company, Project, CompanyBaselineAssessment, AiIdentifiedProblem } from '@/lib/mockData'
-import { Building, ArrowLeft, Plus, User, Phone, Mail, ArrowRight, BrainCircuit, FileText, CheckCircle2, Pencil, X, MapPin, Trash2 } from 'lucide-react'
+import { calculateProjectRoi, ProjectRoiResult } from '@/lib/roi'
+import { Building, ArrowLeft, Plus, User, Phone, Mail, ArrowRight, BrainCircuit, FileText, CheckCircle2, Pencil, X, MapPin, Trash2, TrendingUp } from 'lucide-react'
 import { PROJECT_STATUS_LABELS, inferPQCDSMDimension } from '@/lib/utils'
 import CreateProjectModal from '@/components/CreateProjectModal'
 import { useDialog } from '@/hooks/useDialog'
@@ -105,6 +106,20 @@ export default function CompanyDetailPage() {
   // §6.3 PRD — readiness gate state
   const [readinessGateOpen, setReadinessGateOpen] = useState<boolean | null>(null)
 
+  // PRD productivity_awards §3 — ROI agregat per perusahaan
+  const [companyRoi, setCompanyRoi] = useState<{
+    totalCostSaving: number
+    totalInvestment: number
+    avgRoi: number
+    completedCount: number
+    totalCount: number
+    hasManualMix: boolean // true jika campuran manual & estimasi
+    roiLoading: boolean
+  }>({
+    totalCostSaving: 0, totalInvestment: 0, avgRoi: 0,
+    completedCount: 0, totalCount: 0, hasManualMix: false, roiLoading: true
+  })
+
   useEffect(() => {
     async function loadData() {
       const localUser = localStorage.getItem('smartproductive_user')
@@ -131,6 +146,30 @@ export default function CompanyDetailPage() {
       ])
       setAssessment(ass)
       setAiProblems(probs)
+
+      // PRD productivity_awards §3 — hitung ROI agregat per perusahaan
+      const completedProjs = compProjects.filter(p => p.status === 'completed')
+      if (completedProjs.length > 0) {
+        const actionPlansByProject = await getActionPlansForProjects(completedProjs.map(p => p.id))
+        const perProjectRoi = completedProjs.map(p => calculateProjectRoi(actionPlansByProject[p.id] || []))
+        const totalCostSaving = perProjectRoi.reduce((acc, r) => acc + r.costSaving, 0)
+        const totalInvestment = perProjectRoi.reduce((acc, r) => acc + r.investment, 0)
+        // A3: hanya ROI > 0 ikut rata-rata (0 berarti belum ada data, bukan performa buruk)
+        const validRoi = perProjectRoi.filter(r => r.roi > 0)
+        const avgRoi = validRoi.length > 0 ? validRoi.reduce((a, r) => a + r.roi, 0) / validRoi.length : 0
+        // A3 campuran: label jika ada yang manual dan ada yang estimasi
+        const hasManual = perProjectRoi.some(r => r.isManual)
+        const hasAuto = perProjectRoi.some(r => !r.isManual)
+        setCompanyRoi({
+          totalCostSaving, totalInvestment, avgRoi,
+          completedCount: completedProjs.length,
+          totalCount: compProjects.length,
+          hasManualMix: hasManual && hasAuto,
+          roiLoading: false
+        })
+      } else {
+        setCompanyRoi(prev => ({ ...prev, totalCount: compProjects.length, roiLoading: false }))
+      }
 
       // §6.3 PRD — load readiness gate status untuk tier simple
       if (comp?.tier === 'simple') {
@@ -583,6 +622,68 @@ export default function CompanyDetailPage() {
           )
         })()}
       </div>
+
+      {/* Projects List Panel */}
+      {/* PRD productivity_awards §3 — Card Total Dampak Ekonomi & ROI per Perusahaan */}
+      {isKonsultan && (
+        <div className="rounded-3xl border border-emerald-800/30 bg-emerald-950/10 p-6 md:p-8 space-y-4 relative overflow-hidden">
+          <div className="absolute right-0 top-0 w-48 h-48 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none" />
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+              <TrendingUp className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-100">Total Dampak Ekonomi &amp; ROI — Seluruh Proyek</h2>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Agregasi dari seluruh proyek <strong className="text-slate-400">Completed</strong> milik perusahaan ini
+              </p>
+            </div>
+            <span className="ml-auto text-[10px] px-2.5 py-1 rounded-full border border-slate-700 text-slate-400 font-semibold">
+              {companyRoi.roiLoading ? '...' : `${companyRoi.completedCount} dari ${companyRoi.totalCount} proyek selesai`}
+            </span>
+          </div>
+
+          {companyRoi.roiLoading ? (
+            <div className="text-sm text-slate-500 py-4 text-center">Menghitung data ROI...</div>
+          ) : companyRoi.completedCount === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-800 p-6 text-center">
+              <p className="text-sm text-slate-400 font-medium">Belum ada proyek selesai</p>
+              <p className="text-xs text-slate-600 mt-1">Total ROI akan muncul setelah proyek pertama mencapai status Completed.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="bg-slate-950/60 border border-slate-800/60 rounded-2xl p-4 space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Cost Saving</p>
+                <p className="text-xl font-black text-emerald-400">
+                  {companyRoi.totalCostSaving > 0
+                    ? `Rp ${companyRoi.totalCostSaving.toLocaleString('id-ID')}`
+                    : <span className="text-slate-500 text-sm italic">Belum ada data KPI</span>}
+                </p>
+              </div>
+              <div className="bg-slate-950/60 border border-slate-800/60 rounded-2xl p-4 space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Investasi Program</p>
+                <p className="text-xl font-black text-indigo-400">
+                  {companyRoi.totalInvestment > 0
+                    ? `Rp ${companyRoi.totalInvestment.toLocaleString('id-ID')}`
+                    : <span className="text-slate-500 text-sm italic">Belum ada action plan aktif</span>}
+                </p>
+              </div>
+              <div className="bg-indigo-500/5 border border-indigo-500/15 rounded-2xl p-4 space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">Rata-rata ROI</p>
+                <p className="text-xl font-black text-white">
+                  {companyRoi.avgRoi > 0 ? `${companyRoi.avgRoi.toFixed(1)}× Lipat` : '—'}
+                </p>
+              </div>
+            </div>
+          )}
+          {/* Label campuran manual/estimasi (A3 §3.4) */}
+          {!companyRoi.roiLoading && companyRoi.hasManualMix && (
+            <p className="text-[10px] text-slate-500 italic">
+              * Sebagian dari input manual konsultan, sebagian estimasi KPI otomatis.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Projects List Panel */}
       <div className="rounded-3xl border border-slate-850 bg-slate-950/20 p-6 md:p-8 space-y-6">
