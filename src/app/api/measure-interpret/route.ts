@@ -77,10 +77,13 @@ function buildPrompt(body: {
   let extraRule = ''
 
   if (body.is_simple) {
-    levelInstruction = `  "level_assessment": "",`
-    extraRule = `\n4. KARENA INI PROYEK SIMPLE, tidak ada data kuantitatif volume, kosongkan level_assessment. Fokus interpretasi kualitatif pada problem statement.`
+    levelInstruction = `  "level_assessment": "",
+  "estimated_baseline_score": 50,`
+    extraRule = `\n4. KARENA INI PROYEK SIMPLE, tidak ada data kuantitatif volume, kosongkan level_assessment. Tetapkan estimated_baseline_score ke angka default 50. Fokus interpretasi kualitatif pada problem statement.`
   } else {
-    levelInstruction = `  "level_assessment": "Ringkasan singkat level permasalahan menggunakan metrik ${cfg.metricName} (contoh: '${cfg.levelExampleGood}' atau '${cfg.levelExampleBad}')",`
+    levelInstruction = `  "level_assessment": "Ringkasan singkat level permasalahan menggunakan metrik ${cfg.metricName} (contoh: '${cfg.levelExampleGood}' atau '${cfg.levelExampleBad}')",
+  "estimated_baseline_score": <angka_0_sampai_100>,`
+    extraRule = `\n4. Anda wajib menyertakan 'estimated_baseline_score' berupa angka (0-100) yang merepresentasikan Indeks Produktivitas. 100 berarti kondisi sempurna (Zero defect/accident, dsb). 0 berarti kondisi sangat kritis/buruk.`
   }
 
   return `Anda adalah konsultan produktivitas senior dari firma konsultan Link Productive Indonesia.
@@ -138,6 +141,7 @@ function buildFallback(category: string): object {
   const cfg = CATEGORY_INTERPRET_CONFIG[category] || CATEGORY_INTERPRET_CONFIG['quality']
   return {
     level_assessment: 'Interpretasi AI tidak tersedia — silakan lihat angka perhitungan di atas.',
+    estimated_baseline_score: 50,
     standard_used: cfg.standardUsed,
     interpretation: 'Sistem telah menghitung metrik berdasarkan data yang diberikan. Silakan konsultasikan hasil angka di atas dengan konsultan untuk interpretasi lebih lanjut.',
     analyze_recommendation: 'Lanjutkan ke tahap Analyze untuk mendalami akar penyebab berdasarkan hasil pengukuran.',

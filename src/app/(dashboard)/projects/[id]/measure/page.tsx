@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import {
   getProjects, getProjectCharter, getCompanies,
   getMeasureDataRequirements, saveMeasureDataRequirements, updateProjectPhase, saveProjectCharter,
-  setProjectPhaseLock, submitApprovalRequest, cancelApprovalRequest, getApprovalRequests
+  setProjectPhaseLock, submitApprovalRequest, cancelApprovalRequest, getApprovalRequests, updateProjectBaseline
 } from '@/lib/db'
 import { Project, ProjectCharter, MeasureDataRequirement, GenericApprovalRequest } from '@/lib/mockData'
 import {
@@ -612,7 +612,18 @@ export default function MeasurePage() {
           }),
         })
         const data = await res.json()
-        if (data.interpretation) aiInterpretation = data.interpretation
+        if (data.interpretation) {
+           aiInterpretation = data.interpretation
+           if (typeof data.interpretation.estimated_baseline_score === 'number') {
+              await updateProjectBaseline(
+                projectId, 
+                data.interpretation.estimated_baseline_score, 
+                "Diestimasi otomatis oleh AI berdasarkan interpretasi kalkulasi metrik."
+              )
+              // Update local state so it doesn't need a hard refresh
+              setProject((prev: any) => prev ? { ...prev, baseline_score: data.interpretation.estimated_baseline_score } : prev)
+           }
+        }
       } catch (aiErr) {
         console.warn('AI interpretation failed:', aiErr)
       }
