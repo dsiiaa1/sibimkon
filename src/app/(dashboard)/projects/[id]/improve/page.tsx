@@ -1033,8 +1033,8 @@ export default function ImprovePage() {
       </div>
 
       <fieldset disabled={isLocked && !isKonsultan} className="group disabled:opacity-80">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        <div className="lg:col-span-8 space-y-4">
+      <div className="space-y-4">
+        <div className="space-y-4">
           {actionPlans.filter(a => !a.is_deleted).length === 0 ? (
             <div className="p-12 text-center bg-slate-950/40 border border-dashed border-slate-800 rounded-3xl space-y-2">
               <h3 className="font-bold text-slate-350">Belum ada Rencana Perbaikan</h3>
@@ -1611,18 +1611,6 @@ export default function ImprovePage() {
             })
           )}
         </div>
-        
-        {isKonsultan && (
-          <div className="lg:col-span-4 bg-slate-950/40 border border-slate-800 p-5 rounded-3xl">
-            <h3 className="text-sm font-bold text-slate-200">Metode Teridentifikasi</h3>
-            {derivedRecommendations.map((rec, i) => (
-              <div key={i} className="mt-3 p-3 bg-slate-900 border border-slate-800 rounded-xl">
-                <span className="text-xs font-bold text-indigo-300">{rec.method}</span>
-                <button onClick={() => handlePrefillAction(rec)} className="w-full mt-2 text-center py-1.5 bg-indigo-600/20 rounded-lg text-[10px] font-bold text-indigo-300">Jadikan Action Plan</button>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
       </fieldset>
 
