@@ -208,7 +208,7 @@ export default function PQCDSMCalculator({ initialLines, onScrollToContact }: PQ
           </p>
         </div>
 
-        <div className="grid xl:grid-cols-3 gap-6 lg:gap-8 mb-10">
+        <div className="grid lg:grid-cols-3 gap-6 lg:gap-8 mb-10">
           {/* ── Panel Kiri: Kondisi Saat Ini ── */}
           <div className="bg-[#0d1728] border border-[#1e3055] rounded-3xl p-6 lg:p-8 shadow-xl">
             <h3 className="text-sm font-bold text-teal-400 tracking-widest uppercase mb-8 flex items-center gap-2">
