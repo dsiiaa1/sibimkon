@@ -190,7 +190,7 @@ export async function POST(req: Request) {
     const aiRes = await generateWithFallback(prompt, {
       model: 'llama-3.1-8b-instant',
       temperature: 0.1,
-      maxTokens: 2048
+      maxTokens: 4096
     })
     const rawText = aiRes.text
     let parsed = extractJson(rawText)
