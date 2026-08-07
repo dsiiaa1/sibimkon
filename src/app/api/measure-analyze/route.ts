@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { generateWithFallback } from '@/lib/ai-providers/orchestrator'
+import { pqcdsmTools } from '@/lib/pqcdsmTools'
 
 /**
  * POST /api/measure-analyze
@@ -26,6 +27,9 @@ function buildPrompt(charter: {
     charter.productivity_target && `\nTARGET PRODUKTIVITAS:\n${charter.productivity_target}`,
     charter.scope             && `\nRUANG LINGKUP:\n${charter.scope}`,
   ].filter(Boolean).join('\n')
+  
+  // Ambil daftar tool yang tersedia dari master list untuk disertakan di prompt
+  const toolList = pqcdsmTools.map(t => `- [${t.category.toUpperCase()}] ${t.name}: ${t.description}`).join('\n')
 
   return `Anda adalah konsultan produktivitas senior dari firma konsultan Link Productive Indonesia.
 
@@ -51,6 +55,8 @@ Baca seluruh teks di atas dengan seksama. Kemudian:
 
 3. Rekomendasikan 3-5 metode/program penanganan. WAJIB mengikuti aturan ini:
    - BACA masalahnya dulu, BARU tentukan metode
+   - ANDA HANYA BOLEH MEMILIH DARI MASTER LIST TOOLS BERIKUT INI:
+\n${toolList}\n
    - Masalah pemasaran/penjualan → rekomendasikan Digital Marketing, CRM, Sales Methodology, dll — BUKAN Lean Manufacturing atau TPM
    - Masalah SDM/karyawan → rekomendasikan metode HR, Training, Coaching — BUKAN metode produksi
    - Masalah kualitas produk → rekomendasikan QCC, Six Sigma, Poka-Yoke
