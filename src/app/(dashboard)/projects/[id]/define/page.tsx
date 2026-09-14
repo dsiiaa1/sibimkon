@@ -203,6 +203,8 @@ export default function DefinePage() {
         setProject(prev => prev ? { ...prev, define_is_locked: true } : null)
       }
       showSave('Profil perusahaan berhasil disimpan!')
+    } catch (err: any) {
+      await showAlert('Gagal menyimpan profil: ' + (err.message || 'Terjadi kesalahan pada database.'))
     } finally {
       setSaving(false)
     }
@@ -268,8 +270,8 @@ export default function DefinePage() {
       }
     }
 
-    if (!compName.trim() || !compField.trim() || !compAddress.trim()) {
-      await showAlert('Harap lengkapi Profil Perusahaan (Nama, Bidang Usaha, dan Alamat wajib diisi) sebelum melanjutkan ke fase MEASURE.')
+    if (!compName.trim() || !compField.trim() || !compProduct.trim() || !compAddress.trim()) {
+      await showAlert('Harap lengkapi Profil Perusahaan (Bidang Usaha, Produk Utama, dan Alamat wajib diisi) sebelum melanjutkan ke fase MEASURE.')
       setActiveTab('profile')
       return
     }
@@ -453,6 +455,7 @@ export default function DefinePage() {
                     !compProduct.trim() ? 'border-red-500/60 bg-red-950/10' : 'border-slate-800'
                   }`} />
                 {!compProduct.trim() && <p className="text-[10px] text-red-400 mt-1">⚠ Wajib diisi</p>}
+                {compProduct.trim() && <p className="text-[10px] text-slate-600 mt-1">Berdasarkan data awal (dapat disesuaikan).</p>}
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Jumlah Karyawan</label>
@@ -468,6 +471,7 @@ export default function DefinePage() {
                     !compAddress.trim() ? 'border-red-500/60 bg-red-950/10' : 'border-slate-800'
                   }`} />
                 {!compAddress.trim() && <p className="text-[10px] text-red-400 mt-1">⚠ Wajib diisi</p>}
+                {compAddress.trim() && <p className="text-[10px] text-slate-600 mt-1">Berdasarkan data awal (dapat disesuaikan).</p>}
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Keanggotaan KADIN/APINDO</label>

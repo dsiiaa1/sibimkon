@@ -115,6 +115,10 @@ export default function CompanyProfilePage() {
         address: compAddress,
         total_employees: Number(compEmployees),
         business_field: compField,
+        main_product: compProduct,
+        kadin_membership: compKadin,
+        labor_union: compUnion,
+        pkb_status: compPkb,
         certifications: compCertifications,
         pic_name: picName,
         pic_position: picPosition,
@@ -217,6 +221,7 @@ export default function CompanyProfilePage() {
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Produk Utama</label>
               <input type="text" placeholder="Misal: Pakaian Jadi, Keripik Tempe" value={compProduct} onChange={(e) => setCompProduct(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-350 focus:outline-none focus:border-indigo-500 text-sm" />
+              <p className="text-[10px] text-slate-600 mt-1">Berdasarkan data awal (dapat disesuaikan).</p>
             </div>
 
             <div>
@@ -229,6 +234,7 @@ export default function CompanyProfilePage() {
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Alamat Lengkap Perusahaan</label>
               <textarea required value={compAddress} onChange={(e) => setCompAddress(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-350 focus:outline-none focus:border-indigo-500 text-sm h-18" />
+              <p className="text-[10px] text-slate-600 mt-1">Berdasarkan data awal (dapat disesuaikan).</p>
             </div>
 
             <div>

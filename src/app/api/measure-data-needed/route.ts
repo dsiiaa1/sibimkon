@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { generateWithFallback } from '@/lib/ai-providers/orchestrator'
 
+export const dynamic = 'force-dynamic'
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Konfigurasi grup data per kategori masalah (PQCDSM)
 // Sumber data tetap dari file upload — hanya panduan pengelompokan yang berbeda
