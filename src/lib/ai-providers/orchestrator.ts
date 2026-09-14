@@ -12,11 +12,12 @@ export async function generateWithFallback(prompt: string, options?: GenerateOpt
 
   for (const provider of availableProviders) {
     try {
-      // console.warn(`[AI-Fallback] Mencoba generate dengan provider: ${provider.name}`);
-      const response = await provider.generate(prompt, options);
-      return response;
+      console.log(`[AI Orchestrator] Trying provider: ${provider.name}...`);
+      const result = await provider.generate(prompt, options);
+      console.log(`[AI Orchestrator] Success with provider: ${provider.name}. Output length: ${result.text.length} chars.`);
+      return result;
     } catch (err: any) {
-      // console.warn(`[AI-Fallback] Provider ${provider.name} gagal:`, err.message);
+      console.warn(`[AI Orchestrator] Provider ${provider.name} failed:`, err.message);
       errors.push(`${provider.name}: ${err.message}`);
       // Lanjut ke provider berikutnya
     }

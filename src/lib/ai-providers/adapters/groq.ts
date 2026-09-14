@@ -4,7 +4,7 @@ export class GroqAdapter implements AIProvider {
   name = 'Groq';
   
   // Model default Groq
-  private defaultModel = 'llama-3.3-70b-versatile';
+  private defaultModel = 'openai/gpt-oss-20b';
 
   isAvailable(): boolean {
     return !!process.env.GROQ_API_KEY;

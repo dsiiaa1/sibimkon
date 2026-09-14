@@ -123,10 +123,20 @@ function extractJson(raw: string): any {
   const firstBrace = trimmed.indexOf('{')
   const lastBrace  = trimmed.lastIndexOf('}')
   if (firstBrace !== -1 && lastBrace > firstBrace) {
-    try { return JSON.parse(trimmed.substring(firstBrace, lastBrace + 1)) } catch { /* lanjut */ }
+    try { return JSON.parse(trimmed.substring(firstBrace, lastBrace + 1)) } catch (err) {
+      console.error('[extractJson] JSON.parse failed on substring. Error:', err);
+    }
   }
 
-  throw new Error(`Cannot extract JSON from: ${raw.substring(0, 200)}`)
+  // Coba bersihkan trailing koma
+  try {
+    const cleaned = trimmed.substring(firstBrace, lastBrace + 1)
+      .replace(/,\s*([\]}])/g, '$1') // hapus trailing koma
+    return JSON.parse(cleaned);
+  } catch (e: any) {
+    console.error('[extractJson] Raw AI Output:', raw);
+    throw new Error(`Parse error: ${e.message} | Cannot extract JSON from: ${raw.substring(0, 200)}`)
+  }
 }
 
 export async function POST(req: Request) {
@@ -151,7 +161,7 @@ export async function POST(req: Request) {
     const aiRes = await generateWithFallback(prompt, {
       model: 'llama-3.1-8b-instant',
       temperature: 0.1,
-      maxTokens: 2048
+      maxTokens: 8192
     })
     const rawText = aiRes.text
     const parsed = extractJson(rawText)

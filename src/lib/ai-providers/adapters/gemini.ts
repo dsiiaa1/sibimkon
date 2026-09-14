@@ -4,7 +4,7 @@ export class GeminiAdapter implements AIProvider {
   name = 'Gemini';
   
   // Model default Gemini — abaikan model dari options karena tiap provider punya nama model sendiri
-  private defaultModel = 'gemini-2.0-flash';
+  private defaultModel = 'gemini-3.6-flash';
 
   isAvailable(): boolean {
     return !!process.env.GEMINI_API_KEY;
@@ -18,16 +18,18 @@ export class GeminiAdapter implements AIProvider {
     const timeout = setTimeout(() => controller.abort(), options?.timeoutMs || 30000);
 
     try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${this.defaultModel}:generateContent?key=${apiKey}`, {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${this.defaultModel}:generateContent`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
         },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: options?.temperature ?? 0.1,
             maxOutputTokens: options?.maxTokens ?? 2048,
+            ...(prompt.includes('JSON') ? { responseMimeType: 'application/json' } : {})
           }
         }),
         signal: controller.signal
@@ -65,16 +67,18 @@ export class GeminiAdapter implements AIProvider {
     }
 
     try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${this.defaultModel}:generateContent?key=${apiKey}`, {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${this.defaultModel}:generateContent`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
         },
         body: JSON.stringify({
           contents: [{ parts }],
           generationConfig: {
             temperature: options?.temperature ?? 0.1,
             maxOutputTokens: options?.maxTokens ?? 2048,
+            ...(prompt.includes('JSON') ? { responseMimeType: 'application/json' } : {})
           }
         }),
         signal: controller.signal

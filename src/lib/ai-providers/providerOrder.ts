@@ -7,8 +7,8 @@ import { MistralAdapter } from './adapters/mistral';
 import { OpenCodeAdapter } from './adapters/opencode';
 
 export const providerOrder: AIProvider[] = [
-  new OpenRouterAdapter(),
   new GeminiAdapter(),
+  new OpenRouterAdapter(),
   new DeepSeekAdapter(),
   new GroqAdapter(),
   new MistralAdapter(),

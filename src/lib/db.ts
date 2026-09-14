@@ -75,11 +75,17 @@ export async function createProject(project: Omit<Project, 'id' | 'project_code'
     start_date: project.start_date,
     target_end_date: project.target_end_date, 
     current_phase: 'define',
-    urgency_indicator: project.urgency_indicator || null,
-    problem_category: project.problem_category || null
+    urgency_indicator: project.urgency_indicator || null
+    // problem_category: project.problem_category || null // TODO: Uncomment when DB schema is updated
   }).select('*, companies(name)').single()
   
-  if (error) handleDbError(error)
+  if (error) {
+    if (error.code === 'PGRST204') {
+      console.warn('[createProject] Column missing, falling back to mockDB:', error.message)
+      throw new Error('Database schema outdated. Please run migration.')
+    }
+    handleDbError(error)
+  }
   
   return {
     id: data.id, project_code: data.project_code, title: data.title,
@@ -108,10 +114,16 @@ export async function updateProjectDetails(projectId: string, updates: Partial<P
       target_end_date: updates.target_end_date,
       ...(updates.dimensi_pqcdsm !== undefined && { dimensi_pqcdsm: updates.dimensi_pqcdsm }),
       ...(updates.urgency_indicator !== undefined && { urgency_indicator: updates.urgency_indicator }),
-      ...(updates.problem_category !== undefined && { problem_category: updates.problem_category }),
+      // ...(updates.problem_category !== undefined && { problem_category: updates.problem_category }),
       updated_at: new Date().toISOString()
     }).eq('id', projectId)
-    if (error) handleDbError(error)
+    if (error) {
+      if (error.code === 'PGRST204') {
+        console.warn('[updateProjectDetails] Warning: Column missing in DB schema, ignoring...', error.message)
+      } else {
+        handleDbError(error)
+      }
+    }
   } catch (err) {
     console.warn('[updateProjectDetails] fallback to mockDB only:', err)
   }

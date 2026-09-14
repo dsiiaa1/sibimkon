@@ -4,7 +4,7 @@ export class OpenRouterAdapter implements AIProvider {
   name = 'OpenRouter';
   
   // Model default OpenRouter — abaikan model dari options karena tiap provider punya nama model sendiri
-  private defaultModel = 'google/gemini-2.0-flash-001';
+  private defaultModel = 'google/gemini-3.6-flash';
 
   isAvailable(): boolean {
     return !!process.env.OPENROUTER_API_KEY;
@@ -29,6 +29,7 @@ export class OpenRouterAdapter implements AIProvider {
           messages: [{ role: 'user', content: prompt }],
           temperature: options?.temperature ?? 0.1,
           max_tokens: options?.maxTokens ?? 2048,
+          ...(prompt.includes('JSON') ? { response_format: { type: 'json_object' } } : {})
         }),
         signal: controller.signal
       });
@@ -78,6 +79,7 @@ export class OpenRouterAdapter implements AIProvider {
           messages: [{ role: 'user', content: contentParts }],
           temperature: options?.temperature ?? 0.1,
           max_tokens: options?.maxTokens ?? 2048,
+          ...(prompt.includes('JSON') ? { response_format: { type: 'json_object' } } : {})
         }),
         signal: controller.signal
       });
