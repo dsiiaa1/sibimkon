@@ -118,30 +118,30 @@ function LoginForm() {
       </div>
 
       {/* Role Tab Selector */}
-      <div className="mb-6 bg-slate-100 p-1.5 rounded-xl flex gap-1">
+      <div className="mb-8 bg-slate-100/80 p-1.5 rounded-2xl flex gap-1 shadow-inner border border-slate-200/50">
         <button
           type="button"
           onClick={() => setRoleSelection('perusahaan')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
+          className={`relative flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all duration-300 ${
             roleSelection === 'perusahaan'
-              ? 'bg-[#0a1628] text-white shadow-md'
-              : 'text-slate-600 hover:text-slate-800 hover:bg-slate-200/50'
+              ? 'bg-white text-[#0a1628] shadow-[0_2px_10px_rgba(0,0,0,0.06)]'
+              : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
           }`}
         >
-          <Building2 className="h-3.5 w-3.5" />
+          <Building2 className={`h-4 w-4 transition-colors ${roleSelection === 'perusahaan' ? 'text-amber-500' : 'text-slate-400'}`} />
           Perusahaan (Klien)
         </button>
         <button
           type="button"
           onClick={() => setRoleSelection('konsultan')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
+          className={`relative flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all duration-300 ${
             roleSelection === 'konsultan'
-              ? 'bg-[#0a1628] text-white shadow-md'
-              : 'text-slate-600 hover:text-slate-800 hover:bg-slate-200/50'
+              ? 'bg-white text-[#0a1628] shadow-[0_2px_10px_rgba(0,0,0,0.06)]'
+              : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
           }`}
         >
-          <User className="h-3.5 w-3.5" />
-          Konsultan Smart Productive
+          <User className={`h-4 w-4 transition-colors ${roleSelection === 'konsultan' ? 'text-amber-500' : 'text-slate-400'}`} />
+          Konsultan
         </button>
       </div>
 
@@ -182,12 +182,8 @@ function LoginForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder={roleSelection === 'perusahaan' ? 'nama@perusahaan.com' : 'konsultan@bimkon.com'}
-              className="block w-full rounded-xl pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 text-sm focus:bg-white transition-all outline-none"
-              style={{
-                backgroundColor: '#f8fafc',
-                color: '#0f172a',
-                borderColor: '#cbd5e1'
-              }}
+              className="block w-full rounded-xl pl-11 pr-4 py-3.5 bg-slate-100 border border-transparent text-slate-800 placeholder-slate-400 text-sm focus:bg-white focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500 transition-all duration-300 outline-none shadow-sm"
+              style={{ color: '#1e293b' }}
             />
           </div>
         </div>
@@ -218,12 +214,8 @@ function LoginForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="block w-full rounded-xl pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 text-sm focus:bg-white transition-all outline-none"
-              style={{
-                backgroundColor: '#f8fafc',
-                color: '#0f172a',
-                borderColor: '#cbd5e1'
-              }}
+              className="block w-full rounded-xl pl-11 pr-11 py-3.5 bg-slate-100 border border-transparent text-slate-800 placeholder-slate-400 text-sm focus:bg-white focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500 transition-all duration-300 outline-none shadow-sm"
+              style={{ color: '#1e293b' }}
             />
             <button
               type="button"
@@ -241,14 +233,9 @@ function LoginForm() {
             id="remember-me"
             name="remember-me"
             type="checkbox"
-            className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-800 accent-[#0a1628]"
-            style={{
-              backgroundColor: '#ffffff',
-              color: '#0a1628',
-              borderColor: '#cbd5e1'
-            }}
+            className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500/30 transition-all cursor-pointer"
           />
-          <label htmlFor="remember-me" className="ml-2.5 block text-xs font-semibold text-slate-500">
+          <label htmlFor="remember-me" className="ml-2.5 block text-xs font-bold" style={{ color: '#475569' }}>
             Ingat Sesi Masuk Saya
           </label>
         </div>
@@ -258,12 +245,10 @@ function LoginForm() {
           <button
             type="submit"
             disabled={loading}
-            className="flex w-full justify-center items-center gap-2 rounded-xl py-3 text-sm font-bold text-white transition-all cursor-pointer bg-[#0a1628] hover:bg-[#142642] border border-amber-500/20 active:scale-[0.98] disabled:opacity-50"
-            style={{
-              backgroundColor: '#0a1628',
-              color: '#ffffff'
-            }}
+            className="group relative flex w-full justify-center items-center gap-2 rounded-xl py-3.5 text-sm font-bold text-white transition-all duration-300 cursor-pointer bg-gradient-to-r from-[#0a1628] to-[#1e3a66] hover:shadow-lg hover:shadow-[#0a1628]/20 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed overflow-hidden"
           >
+            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
+            <span className="relative z-10 flex items-center gap-2">
             {loading ? (
               <>
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -272,9 +257,10 @@ function LoginForm() {
             ) : (
               <>
                 <span>Masuk Aplikasi</span>
-                <ArrowRight className="h-4 w-4" />
+                <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
               </>
             )}
+            </span>
           </button>
         </div>
       </form>
@@ -298,99 +284,90 @@ export default function LoginPage() {
     <div className="grid grid-cols-1 lg:grid-cols-12 min-h-screen w-full bg-[#050a18]">
       
       {/* LEFT COLUMN: BRANDING & ILLUST (Navy & Gold) */}
-      <div className="hidden lg:flex lg:col-span-7 flex-col justify-between p-12 relative overflow-hidden bg-gradient-to-br from-[#050a18] via-[#09142c] to-[#040814] border-r border-slate-800/60 text-white">
+      <div className="hidden lg:flex lg:col-span-7 relative overflow-hidden bg-gradient-to-br from-[#050a18] via-[#09142c] to-[#040814] border-r border-slate-800/60 text-white">
         {/* Glow decoration */}
         <div className="absolute top-[-10%] left-[-10%] w-[600px] h-[600px] rounded-full bg-gradient-to-r from-amber-500/10 to-transparent blur-[100px] pointer-events-none" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full bg-gradient-to-l from-[#1e4080]/15 to-transparent blur-[80px] pointer-events-none" />
         
-        {/* Top Branding Logo */}
-        <div className="flex items-center gap-4 z-10">
-          <Image src="/sibimkonicon.png" alt="Logo" width={40} height={40} className="h-10 w-10 object-contain" />
-          <div>
-            <h1 className="text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-200">
-              Smart Productive
-            </h1>
-            <p className="text-[10px] uppercase tracking-widest text-slate-400">
-              Link Productive
-            </p>
-          </div>
-        </div>
-
-        {/* Center Mockup Info/Graphics */}
-        <div className="z-10 max-w-lg my-auto space-y-8">
-          <div className="space-y-4">
-            <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-amber-500/10 border border-amber-500/20 text-[#f4c430] inline-block tracking-wider uppercase">
-              DMAIC Framework
-            </span>
-            <h2 className="text-4xl font-extrabold leading-tight text-slate-100">
-              Transformasikan Produktivitas Bisnis Anda secara Terukur
-            </h2>
-            <p className="text-slate-400 text-sm leading-relaxed">
-              Platform konsultansi bimbingan peningkatan produktivitas berbasis metodologi DMAIC untuk hasil optimal dan berkelanjutan.
-            </p>
-          </div>
-
-          {/* Premium illustration box */}
-          <div className="glass-card rounded-2xl p-6 border border-amber-500/15 relative overflow-hidden" style={{ background: 'rgba(10,22,40,0.4)', backdropFilter: 'blur(10px)' }}>
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-xs font-bold text-slate-350">PROYEK Smart Productive AKTIF</span>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">FASE IMPROVE</span>
+        {/* Content Wrapper (Centered to reduce gap to the right column) */}
+        <div className="w-full max-w-2xl mx-auto flex flex-col justify-between p-12 z-10 h-full relative">
+          
+          {/* Top Branding Logo */}
+          <div className="flex items-center gap-4">
+            <Image src="/sibimkonicon.png" alt="Logo" width={40} height={40} className="h-10 w-10 object-contain" />
+            <div>
+              <h1 className="text-xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-200">
+                Smart Productive
+              </h1>
+              <p className="text-[10px] uppercase tracking-widest text-slate-400">
+                Link Productive
+              </p>
             </div>
-            
-            {/* DMAIC flow visualization */}
-            <div className="flex justify-between items-center relative py-4">
-              {/* Connecting line */}
-              <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-slate-800 -translate-y-1/2 z-0" />
-              <div className="absolute top-1/2 left-0 w-3/4 h-0.5 bg-gradient-to-r from-amber-500 to-amber-400 -translate-y-1/2 z-0" />
+          </div>
 
-              {['D', 'M', 'A', 'I', 'C'].map((phase, idx) => {
-                const active = idx === 3 // I (Improve) is active
-                const completed = idx < 3
-                return (
-                  <div key={phase} className="relative z-10 flex flex-col items-center">
-                    <div 
-                      className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-black transition-all ${
-                        active 
-                          ? 'bg-amber-400 text-[#050a18] ring-4 ring-amber-400/20 scale-110 shadow-lg shadow-amber-400/30' 
-                          : completed 
-                            ? 'bg-amber-600/80 text-white' 
-                            : 'bg-slate-900 text-slate-500 border border-slate-800'
-                      }`}
-                    >
-                      {phase}
+          {/* Center Mockup Info/Graphics */}
+          <div className="max-w-md my-auto space-y-6">
+            <div className="space-y-3">
+              <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-amber-500/10 border border-amber-500/20 text-amber-400 inline-block tracking-widest uppercase">
+                Metodologi DMAIC
+              </span>
+              <h2 className="text-3xl font-extrabold leading-tight text-white">
+                Transformasi Bisnis secara Terukur
+              </h2>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                Tingkatkan produktivitas perusahaan Anda melalui tahapan yang jelas, terstruktur, dan berbasis data.
+              </p>
+            </div>
+
+            {/* Premium illustration box */}
+            <div className="rounded-2xl p-6 border border-slate-700/50 relative overflow-hidden" style={{ background: 'linear-gradient(145deg, rgba(15,23,42,0.6) 0%, rgba(5,10,24,0.4) 100%)', backdropFilter: 'blur(12px)' }}>
+              <div className="flex justify-between items-center mb-6">
+                <span className="text-[10px] font-bold text-slate-400 tracking-wider">SIKLUS PROYEK</span>
+                <span className="text-[9px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold uppercase tracking-wider">Tahap Aktif</span>
+              </div>
+              
+              {/* DMAIC flow visualization */}
+              <div className="flex justify-between items-center relative py-2">
+                {/* Connecting line */}
+                <div className="absolute top-[18px] left-[10%] right-[10%] h-[2px] bg-slate-800 z-0" />
+                <div className="absolute top-[18px] left-[10%] w-[60%] h-[2px] bg-gradient-to-r from-amber-600 to-amber-400 z-0 shadow-[0_0_8px_rgba(251,191,36,0.5)]" />
+
+                {['D', 'M', 'A', 'I', 'C'].map((phase, idx) => {
+                  const active = idx === 3 // I (Improve) is active
+                  const completed = idx < 3
+                  return (
+                    <div key={phase} className="relative z-10 flex flex-col items-center gap-2">
+                      <div 
+                        className={`h-9 w-9 rounded-full flex items-center justify-center text-sm font-black transition-all ${
+                          active 
+                            ? 'bg-amber-400 text-[#050a18] ring-[3px] ring-[#050a18] outline outline-2 outline-amber-400 scale-110 shadow-lg shadow-amber-400/40' 
+                            : completed 
+                              ? 'bg-amber-500 text-[#050a18] ring-[3px] ring-[#050a18]' 
+                              : 'bg-slate-800 text-slate-500 ring-[3px] ring-[#050a18]'
+                        }`}
+                      >
+                        {phase}
+                      </div>
+                      <span className={`text-[9px] font-bold tracking-wider ${active ? 'text-amber-400' : completed ? 'text-slate-300' : 'text-slate-600'}`}>
+                        {idx === 0 ? 'Define' : idx === 1 ? 'Measure' : idx === 2 ? 'Analyze' : idx === 3 ? 'Improve' : 'Control'}
+                      </span>
                     </div>
-                    <span className="text-[9px] mt-1.5 font-bold tracking-wider text-slate-400">
-                      {idx === 0 ? 'Define' : idx === 1 ? 'Measure' : idx === 2 ? 'Analyze' : idx === 3 ? 'Improve' : 'Control'}
-                    </span>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Footer Brand Info */}
-        <div className="flex items-center justify-between text-xs text-slate-400 border-t border-slate-800/40 pt-6 z-10">
-          <span>Smart Productive — Link Productive</span>
-          <span>© 2026 Link Productive</span>
+          {/* Footer Brand Info */}
+          <div className="flex items-center justify-between text-xs text-slate-400 border-t border-slate-800/40 pt-6">
+            <span>Smart Productive — Link Productive</span>
+            <span>© 2026 Link Productive</span>
+          </div>
         </div>
       </div>
 
       {/* RIGHT COLUMN: WHITE FORM CONTAINER */}
-      <div 
-        className="col-span-1 lg:col-span-5 flex flex-col justify-center py-12 px-6 sm:px-12 md:px-20 bg-white"
-        style={{
-          '--background': '#ffffff',
-          '--foreground': '#0f172a',
-          '--text-primary': '#0f172a',
-          '--text-secondary': '#475569',
-          '--text-muted': '#94a3b8',
-          '--border-base': '#e2e8f0',
-          '--navy-900': '#f8fafc',
-          background: '#ffffff',
-          color: '#0f172a'
-        } as any}
-      >
+      <div className="col-span-1 lg:col-span-5 flex flex-col justify-center py-12 px-6 sm:px-12 md:px-20 bg-white text-slate-900">
         <Suspense fallback={
           <div className="w-full flex flex-col items-center justify-center py-12">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-[#0a1628]" />

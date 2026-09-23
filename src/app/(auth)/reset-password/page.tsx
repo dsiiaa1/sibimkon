@@ -2,14 +2,32 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
 
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setSent(true)
+    setLoading(true)
+    setError(null)
+
+    try {
+      const supabase = createClient()
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password/update`,
+      })
+
+      if (resetError) throw resetError
+      setSent(true)
+    } catch (err: any) {
+      setError(err.message || 'Gagal mengirim link reset password. Pastikan email terdaftar.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -32,6 +50,11 @@ export default function ResetPasswordPage() {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
+              {error && (
+                <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-3 text-xs text-rose-400">
+                  {error}
+                </div>
+              )}
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-slate-300">
                   Masukkan Email Akun Anda
@@ -50,9 +73,10 @@ export default function ResetPasswordPage() {
               <div>
                 <button
                   type="submit"
-                  className="flex w-full justify-center rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:from-indigo-600 hover:to-cyan-600 transition-all cursor-pointer"
+                  disabled={loading}
+                  className="flex w-full justify-center rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white shadow-lg hover:from-indigo-600 hover:to-cyan-600 transition-all cursor-pointer disabled:opacity-50"
                 >
-                  Kirim Instruksi Reset
+                  {loading ? 'Memproses...' : 'Kirim Instruksi Reset'}
                 </button>
               </div>
 

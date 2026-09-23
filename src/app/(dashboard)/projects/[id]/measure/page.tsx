@@ -17,7 +17,6 @@ import {
 import { useUserRole } from '@/hooks/useUserRole'
 import { useDialog } from '@/hooks/useDialog'
 import Papa from 'papaparse'
-import * as XLSX from 'xlsx'
 import { Tooltip } from '@/components/Tooltip'
 import {
   matchMethodToWhitelist, SUPPORTED_METHODS, validateDataForMethod,
@@ -334,8 +333,9 @@ export default function MeasurePage() {
     if (fileInputRef.current) fileInputRef.current.click()
   }
 
-  const handleDownloadTemplate = (req: MeasureDataRequirement) => {
+  const handleDownloadTemplate = async (req: MeasureDataRequirement) => {
     if (!req.example_columns || req.example_columns.length === 0) return
+    const XLSX = await import('xlsx')
 
     const data: any[][] = []
     data.push(req.example_columns)
@@ -389,6 +389,7 @@ export default function MeasurePage() {
         })
       } else if (file.name.match(/\.xlsx?$/)) {
         const buffer = await file.arrayBuffer()
+        const XLSX = await import('xlsx')
         const wb = XLSX.read(buffer, { type: 'array' })
         const wsName = wb.SheetNames[0]
         parsedData = XLSX.utils.sheet_to_json(wb.Sheets[wsName])

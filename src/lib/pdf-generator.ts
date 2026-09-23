@@ -1,7 +1,6 @@
 'use client'
 
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+import type jsPDFType from 'jspdf'
 import QRCode from 'qrcode'
 
 // ── Helper: generate QR code sebagai data URL (PNG base64) ──
@@ -68,7 +67,7 @@ const C_ROW_ALT: [number, number, number] = [245, 247, 252]
 // Font Embedding Dinonaktifkan (Menggunakan Helvetica bawaan)
 // ============================================================
 
-async function embedNotoSans(_doc: jsPDF): Promise<boolean> {
+async function embedNotoSans(_doc: jsPDFType): Promise<boolean> {
   // Menonaktifkan custom font untuk menghindari bug encoding &K&P&I& di jsPDF
   // jsPDF akan otomatis menggunakan 'helvetica' yang 100% stabil.
   return false
@@ -127,6 +126,8 @@ export async function generateFinalReport(
   actionPlans: ActionPlanData[],
   signatures?: SignatureData
 ) {
+  const jsPDF = (await import('jspdf')).default
+  const autoTable = (await import('jspdf-autotable')).default
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pageW  = doc.internal.pageSize.getWidth()   // 210
   const pageH  = doc.internal.pageSize.getHeight()  // 297
@@ -757,6 +758,7 @@ export async function generateCertificate(
   project: ProjectData,
   signatures?: SignatureData
 ) {
+  const jsPDF = (await import('jspdf')).default
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const pageW = doc.internal.pageSize.getWidth()   // 297
   const pageH = doc.internal.pageSize.getHeight()  // 210
