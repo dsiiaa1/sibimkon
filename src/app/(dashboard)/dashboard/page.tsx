@@ -198,8 +198,18 @@ export default function DashboardPage() {
   )
 
   const activeProjectsCount = viewableProjects.filter(p => p.status !== 'completed').length
-  const avgImprovement = viewableProjects.reduce((acc, p) => acc + ((p.current_score || 0) - (p.baseline_score || 0)), 0) / (viewableProjects.length || 1)
-  const avgIndex = viewableProjects.reduce((acc, p) => acc + (p.current_score || 0), 0) / (viewableProjects.length || 1)
+  const scoredProjects = viewableProjects.filter(p => (p.current_score || 0) > 0 || (p.baseline_score || 0) > 0)
+  const validCount = scoredProjects.length || 1
+  
+  const avgImprovement = scoredProjects.reduce((acc, p) => {
+    const current = (p.current_score || 0) > 0 ? (p.current_score || 0) : (p.baseline_score || 0)
+    return acc + (current - (p.baseline_score || 0))
+  }, 0) / validCount
+  
+  const avgIndex = scoredProjects.reduce((acc, p) => {
+    const current = (p.current_score || 0) > 0 ? (p.current_score || 0) : (p.baseline_score || 0)
+    return acc + current
+  }, 0) / validCount
   const userCompany = companies.find(c => c.name.toLowerCase() === currentUser?.organization?.toLowerCase())
 
   /* ── PRD 8.2: compute DMAIC distribution ── */
@@ -212,9 +222,12 @@ export default function DashboardPage() {
     : 0
 
   /* ── Sparkline data from projects ── */
-  const sparklineData = viewableProjects.length > 0
-    ? viewableProjects.map(p => p.current_score || 0).sort((a, b) => a - b)
-    : [0, 10, 25, 40, 60]
+  const validSparklineData = viewableProjects.map(p => p.current_score || 0).filter(score => score > 0).sort((a, b) => a - b)
+  const sparklineData = validSparklineData.length > 1
+    ? validSparklineData
+    : validSparklineData.length === 1 
+      ? [validSparklineData[0] * 0.8, validSparklineData[0]] 
+      : [0, 10, 25, 40, 60]
 
   /* ── Animated values (PRD 8.6) ── */
   const animatedIndex = useCountUp(isNaN(avgIndex) ? 0 : avgIndex, 1400, 1)
